@@ -1,0 +1,15 @@
+{
+  "name": "cte-compound",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Criterion Echelon HTL Asset Analytical Compound for live OANDA completed-candle analysis.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "node --check src/worker.js && node scripts/check-html.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.28.1"
+  }
+}
