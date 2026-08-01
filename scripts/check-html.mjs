@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 
 const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
-for (const required of ["Timeframe Signal Schedule","Interactive Analytical Chart","oandaRuntimeStatus","void connect();","S5","W","COMBO · CSF"]) {
+for (const required of ["Timeframe Signal Schedule","Interactive Analytical Chart","oandaRuntimeStatus","void connect();","errorCode","diagnosticId","S5","W","COMBO · CSF"]) {
   if (!html.includes(required)) throw new Error(`Missing required HTML feature: ${required}`);
 }
 for (const forbidden of ["X-OANDA-Token","X-OANDA-Account-ID",'id="token"','id="accountId"']) {
