@@ -120,6 +120,26 @@
       .chart-summary { grid-template-columns:1fr 1fr; }
       .chart-stage { height:430px; }
     }
+
+    .app-tabs{display:flex;gap:6px;border:1px solid var(--line2);background:#0c1118;padding:6px;overflow:auto}
+    .app-tab[aria-selected="true"]{color:#10141b;background:var(--gold);border-color:var(--gold)}
+    .tab-panel[hidden]{display:none}
+    .event-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+    .event-grid{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:8px;padding:12px 14px}
+    .event-card{border:1px solid var(--line);background:#0b1016;padding:10px;min-height:76px}
+    .event-card span{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .event-card strong{display:block;margin-top:7px;font-size:14px}
+    .event-card small{display:block;color:var(--muted);margin-top:4px;font-size:9px}
+    .event-chart-stage{height:360px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);position:relative;background:#080c12}
+    #eventChart{width:100%;height:100%;display:block}
+    .event-table-wrap{overflow:auto;max-height:420px}
+    .event-table{width:100%;border-collapse:collapse;font-size:10px;white-space:nowrap}
+    .event-table th,.event-table td{padding:7px 8px;border:1px solid var(--line);text-align:right}
+    .event-table th:first-child,.event-table td:first-child{text-align:left}
+    .event-table thead{position:sticky;top:0;background:#141c27;z-index:1}
+    .event-note{padding:10px 14px;color:var(--muted);font-size:10px}
+    .event-section-title{padding:10px 14px;margin:0;border-top:1px solid var(--line);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+    @media(max-width:900px){.event-grid{grid-template-columns:repeat(2,minmax(120px,1fr))}.event-chart-stage{height:300px}}
   </style>
 </head>
 <body>
@@ -158,7 +178,13 @@
       </form>
     </header>
 
+
+    <nav class="app-tabs" role="tablist" aria-label="Analytical compound facilities">
+      <button class="app-tab" id="analysisTab" role="tab" aria-selected="true" aria-controls="analysisPanel" type="button">ANALYTICAL COMPOUND</button>
+      <button class="app-tab" id="eventTab" role="tab" aria-selected="false" aria-controls="eventPanel" type="button">HTL EVENT FORECAST</button>
+    </nav>
     <main>
+      <div class="tab-panel" id="analysisPanel" role="tabpanel" aria-labelledby="analysisTab">
       <section class="panel" aria-labelledby="scheduleTitle">
         <div class="panel-head">
           <div class="panel-title">
@@ -218,6 +244,25 @@
           <div class="chart-message" id="chartMessage">Connect live OANDA credentials to load completed candles.</div>
         </div>
         <div class="compartments" id="compartments"></div>
+      </section>
+      </div>
+
+      <section class="panel tab-panel" id="eventPanel" role="tabpanel" aria-labelledby="eventTab" hidden>
+        <div class="panel-head"><div class="panel-title"><h2>HTL Asset Event Forecast</h2><p>Canonical Asset / Inverse Asset episodes · completed OANDA candles · empirical next-event distributions.</p></div><div class="event-controls"><label class="field"><span>Currency pair</span><select id="eventPair"></select></label><label class="field"><span>Timeframe</span><select id="eventTimeframe"></select></label><label class="field"><span>HTL length</span><input id="eventLength" type="number" min="3" max="200" value="50"></label><button id="loadEvents" type="button" disabled>Forecast events</button></div></div>
+        <div class="event-grid">
+          <article class="event-card"><span>Current event</span><strong id="eventCurrent">—</strong><small id="eventCurrentMeta">Not loaded</small></article>
+          <article class="event-card"><span>Location</span><strong id="eventLocation">—</strong><small>AA = Above Average · BA = Below Average</small></article>
+          <article class="event-card"><span>Next HTL event</span><strong id="eventNext">—</strong><small id="eventNextMeta">Awaiting event history</small></article>
+          <article class="event-card"><span>Completion ≤ 5 bars</span><strong id="eventP5">—</strong><small>Conditional on elapsed duration</small></article>
+          <article class="event-card"><span>Completion ≤ 10 bars</span><strong id="eventP10">—</strong><small>Conditional empirical probability</small></article>
+          <article class="event-card"><span>Forecast envelope</span><strong id="eventEnvelope">—</strong><small id="eventEnvelopeMeta">Next-event high / low</small></article>
+        </div>
+        <div class="event-chart-stage"><canvas id="eventChart" aria-label="HTL Asset and Inverse Asset event chart"></canvas><div class="chart-message" id="eventMessage">Connect live OANDA to calculate HTL events.</div></div>
+        <h3 class="event-section-title">Event Ledger</h3>
+        <div class="event-table-wrap"><table class="event-table"><thead><tr><th>Event</th><th>Status</th><th>Start</th><th>Bars</th><th>High</th><th>Low</th><th>Spread μ</th><th>Spread σ²</th><th>Slope</th><th>Area</th><th>Source crosses</th></tr></thead><tbody id="eventLedger"></tbody></table></div>
+        <h3 class="event-section-title">Walk-forward validation</h3>
+        <div class="event-grid"><article class="event-card"><span>Eligible completed events</span><strong id="eventSample">0</strong></article><article class="event-card"><span>Duration MAE</span><strong id="eventDurationMae">—</strong></article><article class="event-card"><span>Onset Brier score</span><strong id="eventBrier">—</strong></article><article class="event-card"><span>Envelope MAE</span><strong id="eventEnvelopeMae">—</strong></article><article class="event-card"><span>Validation mode</span><strong>Rolling origin</strong><small>Past events only; no random split</small></article><article class="event-card"><span>Censoring</span><strong>Right-censored</strong><small>Provisional event excluded from completed targets</small></article></div>
+        <p class="event-note" id="eventMethod">The forecast remains unavailable until sufficient completed events exist. No synthetic or practice data is used.</p>
       </section>
     </main>
 
@@ -514,6 +559,7 @@
       el("disconnectButton").disabled=false;
       el("refreshSchedule").disabled=false;
       el("refreshChart").disabled=false;
+      el("loadEvents").disabled=false;
       el("accountFacts").hidden=false;
       el("factAccount").textContent=payload.account.alias||payload.account.id||"Live account";
       el("factCurrency").textContent=payload.account.currency||"—";
@@ -537,7 +583,7 @@
     state.connected=false; state.scheduleCandles.clear(); state.scheduleEvaluations.clear();
     state.chartCandles=[]; state.chartAnalysis=null; state.crosshair=null;
     el("accountFacts").hidden=true;
-    el("connectButton").disabled=false; el("disconnectButton").disabled=true; el("refreshSchedule").disabled=true; el("refreshChart").disabled=true;
+    el("connectButton").disabled=false; el("disconnectButton").disabled=true; el("refreshSchedule").disabled=true; el("refreshChart").disabled=true; el("loadEvents").disabled=true;
     el("oandaRuntimeStatus").textContent="Paused locally";
     setConnectionStatus("Paused. Encrypted Worker credentials remain server-side.");
     resetMatrix(); updateChartSummary(); updateCompartments(); drawChart();
@@ -748,10 +794,72 @@
     }
   }
 
+
+  function htlSeriesAverage(values,length){let total=0;return values.map(function(value,index){total+=value;if(index>=length)total-=values[index-length];return total/length;});}
+  function htlSeriesStdev(values,length){const out=Array(values.length).fill(null);for(let i=length-1;i<values.length;i++){const w=values.slice(i-length+1,i+1);if(!w.every(Number.isFinite))continue;const m=w.reduce((a,b)=>a+b,0)/length;out[i]=Math.sqrt(w.reduce((s,v)=>s+(v-m)*(v-m),0)/length);}return out;}
+  function htlSeriesWma(values,length){const out=Array(values.length).fill(null),den=length*(length+1)/2;for(let i=length-1;i<values.length;i++){let sum=0,ok=true;for(let j=0;j<length;j++){const v=values[i-length+1+j];if(!Number.isFinite(v)){ok=false;break;}sum+=(j+1)*v;}if(ok)out[i]=sum/den;}return out;}
+  function htlPairAverage(left,right){return left.map(function(v,i){return Number.isFinite(v)&&Number.isFinite(right[i])?(v+right[i])/2:null;});}
+  function htlNorm(left,right,deviation){return left.map(function(v,i){return Number.isFinite(v)&&Number.isFinite(right[i])&&Number.isFinite(deviation[i])&&deviation[i]!==0?(v-right[i])/deviation[i]:null;});}
+  function htlInverse(z,deviation,center){return z.map(function(v,i){return Number.isFinite(v)&&Number.isFinite(deviation[i])&&Number.isFinite(center[i])?(-v*deviation[i])+center[i]:null;});}
+  function htlCross(left,right,index){if(index<1)return 0;const v=[left[index],right[index],left[index-1],right[index-1]];if(!v.every(Number.isFinite))return 0;if(left[index]>right[index]&&left[index-1]<=right[index-1])return 1;if(left[index]<right[index]&&left[index-1]>=right[index-1])return -1;return 0;}
+  function htlCore(data,length){
+    const close=data.map(c=>c.close),high=data.map(c=>c.high),low=data.map(c=>c.low);
+    const average=htlSeriesAverage(close,length),deviation=htlSeriesStdev(close,length);
+    const zero=deviation.map(s=>Number.isFinite(s)&&s!==0?0:null);
+    const u=zero.map((v,i)=>Number.isFinite(v)&&Number.isFinite(deviation[i])?(v*deviation[i])+average[i]:null);
+    const wmaU=htlSeriesWma(u,length),zu=htlNorm(u,wmaU,deviation),i=htlInverse(zu,deviation,wmaU);
+    const hl2=high.map((v,i)=>(v+low[i])/2),mui=htlPairAverage(i,u),wmaMui=htlSeriesWma(mui,length);
+    const zui=htlNorm(mui,wmaMui,deviation),iuz=zui.map(v=>Number.isFinite(v)?-v:null),ui=htlInverse(zui,deviation,wmaMui);
+    const uim=htlPairAverage(mui,ui),wmaUim=htlSeriesWma(uim,length),zim=htlNorm(uim,wmaUim,deviation),uir=htlInverse(zim,deviation,wmaUim);
+    const miu=htlPairAverage(uim,uir),wmaMiu=htlSeriesWma(miu,length),zmiu=htlNorm(miu,wmaMiu,deviation);
+    const ia=zmiu.map((v,i)=>Number.isFinite(v)&&Number.isFinite(deviation[i])&&Number.isFinite(wmaMiu[i])?((v+1)*deviation[i])+wmaMiu[i]:null);
+    const id=zmiu.map((v,i)=>Number.isFinite(v)&&Number.isFinite(deviation[i])&&Number.isFinite(wmaMiu[i])?((v-1)*deviation[i])+wmaMiu[i]:null);
+    const up=htlPairAverage(ia,id),wmaUp=htlSeriesWma(up,length),zup=htlNorm(close,wmaUp,deviation),upr=htlInverse(zup,deviation,wmaUp);
+    return {hl2:hl2,mui:mui,zui:zui,iuz:iuz,ui:ui,upr:upr};
+  }
+  function htlBuild(data,length){
+    const series=htlCore(data,length),families=[[series.hl2,series.upr],[series.mui,series.ui],[series.zui,series.iuz]],sourceCrosses=[];
+    for(let index=1;index<data.length;index++){const dirs=families.map(pair=>htlCross(pair[0],pair[1],index)).filter(Boolean);const vote=dirs.reduce((a,b)=>a+b,0);if(vote)sourceCrosses.push({index:index,direction:Math.sign(vote)});}
+    const anchors=[];let active=null;
+    function finalize(ep,end,status){let price=ep.direction>0?-Infinity:Infinity,extremeIndex=ep.index;for(let i=ep.index;i<=end;i++){const v=ep.direction>0?data[i].high:data[i].low;if((ep.direction>0&&v>price)||(ep.direction<0&&v<price)){price=v;extremeIndex=i;}}return {index:extremeIndex,price:price,direction:ep.direction,status:status};}
+    sourceCrosses.forEach(function(ev){if(active&&ev.direction!==active.direction){anchors.push(finalize(active,Math.max(active.index,ev.index-1),"FINAL"));active=ev;}else if(!active)active=ev;});
+    if(active)anchors.push(finalize(active,data.length-1,"PROVISIONAL"));
+    anchors.sort((a,b)=>a.index-b.index);const dedup=[];anchors.forEach(a=>{if(dedup.length&&dedup.at(-1).index===a.index)dedup[dedup.length-1]=a;else dedup.push(a);});
+    const asset=Array(data.length).fill(null);
+    if(dedup.length){for(let i=0;i<=dedup[0].index;i++)asset[i]=dedup[0].price;for(let p=1;p<dedup.length;p++){const from=dedup[p-1],to=dedup[p],span=Math.max(1,to.index-from.index);for(let i=from.index;i<=to.index;i++)asset[i]=from.price+(to.price-from.price)*((i-from.index)/span);}const last=dedup.at(-1);for(let i=last.index;i<data.length;i++)asset[i]=last.price;}
+    const assetMean=htlSeriesWma(asset,length),inverse=asset.map((v,i)=>Number.isFinite(v)&&Number.isFinite(assetMean[i])?(2*assetMean[i])-v:null);
+    return {asset:asset,inverse:inverse,assetMean:assetMean,anchors:dedup,sourceCrosses:sourceCrosses};
+  }
+  function eventMean(values){return values.length?values.reduce((a,b)=>a+b,0)/values.length:0;}
+  function eventMedian(values){if(!values.length)return null;const x=[...values].sort((a,b)=>a-b),m=Math.floor(x.length/2);return x.length%2?x[m]:(x[m-1]+x[m])/2;}
+  function eventSlope(values){if(values.length<2)return 0;const xm=(values.length-1)/2,ym=eventMean(values);let n=0,d=0;values.forEach((v,i)=>{n+=(i-xm)*(v-ym);d+=(i-xm)*(i-xm);});return d?n/d:0;}
+  function eventFeatures(data,htl){
+    const crosses=[];for(let i=1;i<data.length;i++){const d=htlCross(htl.asset,htl.inverse,i);if(d)crosses.push({index:i,direction:d});}
+    const events=[];crosses.forEach(function(cross,pos){const end=pos+1<crosses.length?crosses[pos+1].index-1:data.length-1,status=pos+1<crosses.length?"FINAL":"PROVISIONAL";const segment=data.slice(cross.index,end+1),spreads=htl.asset.slice(cross.index,end+1).map((v,j)=>v-htl.inverse[cross.index+j]).filter(Number.isFinite);const closes=segment.map(c=>c.close),start=segment[0]?.close||0;const high=Math.max(...segment.map(c=>c.high)),low=Math.min(...segment.map(c=>c.low)),sm=eventMean(spreads),variance=eventMean(spreads.map(v=>(v-sm)*(v-sm)));events.push({number:pos+1,direction:cross.direction,startIndex:cross.index,endIndex:end,status:status,startTime:data[cross.index].time,endTime:data[end].time,bars:end-cross.index+1,high:high,low:low,upBps:start?((high/start)-1)*10000:0,downBps:start?((low/start)-1)*10000:0,mean:sm,variance:variance,slope:eventSlope(spreads),area:spreads.reduce((s,v)=>s+Math.abs(v),0),sourceCrosses:htl.sourceCrosses.filter(e=>e.index>=cross.index&&e.index<=end).length});});
+    return events;
+  }
+  function eventForecast(events,data){
+    const completed=events.filter(e=>e.status==="FINAL"),current=events.at(-1)||null;if(!current)return {completed:completed,current:null};
+    const same=completed.filter(e=>e.direction===current.direction),eligible=same.filter(e=>e.bars>current.bars),prob=h=>eligible.length?eligible.filter(e=>e.bars-current.bars<=h).length/eligible.length:null;
+    const nextDirection=-current.direction,nextSample=completed.filter(e=>e.direction===nextDirection),duration=eventMedian(nextSample.map(e=>e.bars)),up=eventMedian(nextSample.map(e=>e.upBps)),down=eventMedian(nextSample.map(e=>e.downBps));
+    const durationErrors=[],envelopeErrors=[],brier=[];for(let i=5;i<completed.length;i++){const prior=completed.slice(0,i),target=completed[i],matching=prior.filter(e=>e.direction===target.direction);if(matching.length<2)continue;durationErrors.push(Math.abs(target.bars-eventMedian(matching.map(e=>e.bars))));envelopeErrors.push((Math.abs(target.upBps-eventMedian(matching.map(e=>e.upBps)))+Math.abs(target.downBps-eventMedian(matching.map(e=>e.downBps))))/2);const p=matching.filter(e=>e.bars<=10).length/matching.length;brier.push((p-(target.bars<=10?1:0))**2);}
+    return {completed:completed,current:current,prob5:prob(5),prob10:prob(10),nextDirection:nextDirection,duration:duration,up:up,down:down,durationMae:eventMean(durationErrors),envelopeMae:eventMean(envelopeErrors),brier:eventMean(brier),validationN:durationErrors.length};
+  }
+  function eventFmt(value,digits){return Number.isFinite(value)?Number(value).toFixed(digits):"—";}
+  function eventDraw(data,htl,events){
+    const canvas=el("eventChart"),rect=canvas.getBoundingClientRect(),dpr=Math.max(1,devicePixelRatio||1),w=Math.max(320,Math.round(rect.width)),h=Math.max(250,Math.round(rect.height));canvas.width=w*dpr;canvas.height=h*dpr;const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#080c12";ctx.fillRect(0,0,w,h);const start=Math.max(0,data.length-240),series=[htl.asset.slice(start),htl.inverse.slice(start)].flat().filter(Number.isFinite);if(!series.length)return;let lo=Math.min(...series),hi=Math.max(...series),pad=Math.max((hi-lo)*.08,1e-8);lo-=pad;hi+=pad;const x=i=>12+i/(Math.max(1,data.length-start-1))*(w-88),y=v=>12+(hi-v)/(hi-lo)*(h-34);ctx.strokeStyle="#1c2632";for(let i=0;i<=5;i++){const yy=12+i*(h-34)/5;ctx.beginPath();ctx.moveTo(12,yy);ctx.lineTo(w-72,yy);ctx.stroke();ctx.fillStyle="#8b98aa";ctx.fillText(eventFmt(hi-(hi-lo)*i/5,5),w-66,yy+3);}[[htl.asset,"#d7a85c"],[htl.inverse,"#8aa8d8"]].forEach(function(item){ctx.strokeStyle=item[1];ctx.lineWidth=1.5;ctx.beginPath();let begun=false;for(let i=start;i<data.length;i++){const v=item[0][i];if(!Number.isFinite(v))continue;const xx=x(i-start),yy=y(v);if(!begun){ctx.moveTo(xx,yy);begun=true;}else ctx.lineTo(xx,yy);}ctx.stroke();});events.forEach(function(ev){if(ev.startIndex<start)return;const xx=x(ev.startIndex-start);ctx.strokeStyle=ev.direction>0?"#48c78e":"#ef6b73";ctx.beginPath();ctx.moveTo(xx,12);ctx.lineTo(xx,h-22);ctx.stroke();});}
+  async function loadEventForecast(){
+    if(!state.connected)return;const pair=el("eventPair").value,timeframe=el("eventTimeframe").value,length=clamp(Math.trunc(Number(el("eventLength").value)||50),3,200);el("loadEvents").disabled=true;el("eventMessage").hidden=false;el("eventMessage").textContent="Calculating canonical HTL Asset events…";
+    try{const payload=await api("/api/oanda/candles?instrument="+encodeURIComponent(pair)+"&granularity="+encodeURIComponent(timeframe)+"&count=650");const data=payload.candles,htl=htlBuild(data,length),events=eventFeatures(data,htl),forecast=eventForecast(events,data),current=forecast.current,latest=data.at(-1),mean=eventMean(data.map(c=>c.close)),location=latest.close>mean?"AA":"BA";el("eventLocation").textContent=location;el("eventCurrent").textContent=current?(current.direction>0?"BUY":"SELL")+" · "+current.status:"NO EVENT";el("eventCurrentMeta").textContent=current?current.bars+" completed bars · "+current.sourceCrosses+" source crosses":"No canonical crossing in window";el("eventNext").textContent=current?(forecast.nextDirection>0?"BUY":"SELL"):"—";el("eventNextMeta").textContent=Number.isFinite(forecast.duration)?"median duration "+eventFmt(forecast.duration,1)+" bars":"insufficient opposite events";el("eventP5").textContent=forecast.prob5==null?"—":eventFmt(forecast.prob5*100,1)+"%";el("eventP10").textContent=forecast.prob10==null?"—":eventFmt(forecast.prob10*100,1)+"%";if(Number.isFinite(forecast.up)&&Number.isFinite(forecast.down)){const high=latest.close*(1+forecast.up/10000),low=latest.close*(1+forecast.down/10000);el("eventEnvelope").textContent=eventFmt(low,5)+" — "+eventFmt(high,5);el("eventEnvelopeMeta").textContent=eventFmt(forecast.down,1)+" / +"+eventFmt(forecast.up,1)+" bps";}else{el("eventEnvelope").textContent="—";el("eventEnvelopeMeta").textContent="Insufficient completed events";}el("eventSample").textContent=String(forecast.completed.length);el("eventDurationMae").textContent=forecast.validationN?eventFmt(forecast.durationMae,2)+" bars":"—";el("eventBrier").textContent=forecast.validationN?eventFmt(forecast.brier,4):"—";el("eventEnvelopeMae").textContent=forecast.validationN?eventFmt(forecast.envelopeMae,1)+" bps":"—";el("eventLedger").innerHTML=events.slice(-40).reverse().map(e=>"<tr><td>"+(e.direction>0?"BUY ":"SELL ")+e.number+"</td><td>"+e.status+"</td><td>"+new Date(e.startTime).toLocaleString()+"</td><td>"+e.bars+"</td><td>"+eventFmt(e.high,5)+"</td><td>"+eventFmt(e.low,5)+"</td><td>"+eventFmt(e.mean,6)+"</td><td>"+eventFmt(e.variance,8)+"</td><td>"+eventFmt(e.slope,7)+"</td><td>"+eventFmt(e.area,6)+"</td><td>"+e.sourceCrosses+"</td></tr>").join("");el("eventMethod").textContent="Canonical cte-horizon Asset/Inverse construction · length "+length+" · "+data.length+" completed candles · "+forecast.completed.length+" finalized events · provisional event excluded from targets.";el("eventMessage").hidden=true;eventDraw(data,htl,events);}catch(error){el("eventMessage").hidden=false;el("eventMessage").textContent=error.message||"HTL event calculation failed.";}finally{el("loadEvents").disabled=!state.connected;}}
+  function selectFacility(name){const analysis=name==="analysis";el("analysisPanel").hidden=!analysis;el("eventPanel").hidden=analysis;el("analysisTab").setAttribute("aria-selected",String(analysis));el("eventTab").setAttribute("aria-selected",String(!analysis));if(!analysis&&state.connected)loadEventForecast();}
+
   function pointerPosition(event) { const rect=el("chart").getBoundingClientRect(); return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
 
   function bindEvents() {
     el("credentialForm").addEventListener("submit",connect);
+    el("analysisTab").addEventListener("click",()=>selectFacility("analysis"));
+    el("eventTab").addEventListener("click",()=>selectFacility("event"));
+    el("loadEvents").addEventListener("click",loadEventForecast);
     el("disconnectButton").addEventListener("click",disconnect);
     el("refreshSchedule").addEventListener("click",loadSchedule);
     el("refreshChart").addEventListener("click",loadChart);
@@ -789,7 +897,7 @@
     window.addEventListener("resize",drawChart);
   }
 
-  buildSelectors(); buildMatrix(); buildCompartments(); bindEvents(); updateChartSummary(); updateCompartments(); drawChart(); void connect();
+  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; buildMatrix(); buildCompartments(); bindEvents(); updateChartSummary(); updateCompartments(); drawChart(); void connect();
   </script>
 </body>
 </html>
