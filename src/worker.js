@@ -55,7 +55,7 @@ async function oandaFetch(path,token) {
       method:"GET",
       headers:{"Authorization":"Bearer "+token,"Accept":"application/json"},
       redirect:"manual",
-      signal:AbortSignal.timeout(15000)
+      cache:"no-store"
     });
   } catch (error) {
     const timeout=error?.name==="TimeoutError"||error?.name==="AbortError";
@@ -153,6 +153,16 @@ async function mapLimit(items,limit,worker) {
 
 async function handleConnect(env) {
   const {token,accountId}=credentials(env);
+  const authorized=await oandaFetch("/v3/accounts",token);
+  const authorizedAccountIds=(authorized.accounts||[])
+    .map(account=>String(account?.id||"").trim())
+    .filter(Boolean);
+  if (!authorizedAccountIds.includes(accountId)) {
+    throw Object.assign(
+      new Error("OANDA_ACCOUNT_ID is not authorized by the configured OANDA_API_KEY."),
+      {status:409,code:"OANDA_ACCOUNT_ID_NOT_AUTHORIZED"}
+    );
+  }
   const payload=await oandaFetch(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token);
   const account=payload.account||{};
   return json({account:{
