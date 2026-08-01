@@ -14,4 +14,16 @@ if (worker.includes('"User-Agent":"cte-compound/1.0"')) {
   throw new Error("OANDA requests must use the proven minimal header set.");
 }
 
+for (const required of ["OANDA_BAD_REQUEST","OANDA_METHOD_REJECTED","upstreamErrorCode","upstreamStatus"]) {
+  if (!worker.includes(required)) throw new Error(`Missing safe OANDA diagnostic: ${required}`);
+}
+
+for (const required of ['cache:"no-store"','oandaFetch("/v3/accounts",token)',"OANDA_ACCOUNT_ID_NOT_AUTHORIZED"]) {
+  if (!worker.includes(required)) throw new Error(`Missing proven OANDA connection behavior: ${required}`);
+}
+
+if (worker.includes("AbortSignal.timeout")) {
+  throw new Error("OANDA request options must match the proven browser connection.");
+}
+
 console.log("OANDA redirect handling verified.");
