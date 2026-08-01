@@ -153,6 +153,13 @@ export default {
       if (url.pathname.startsWith("/api/")) {
         assertSameOrigin(request);
         if (request.method!=="GET") return json({error:"Method not allowed."},405,{"Allow":"GET"});
+        if (url.pathname==="/api/engine/health") {
+          if (!env.OANDA_ENGINE) return json({error:"OANDA engine service binding is not configured."},503);
+          const downstream=await env.OANDA_ENGINE.fetch(new Request("https://internal/api/health",{method:"GET"}));
+          const payload=await downstream.json().catch(()=>({}));
+          if (!downstream.ok) return json({error:"OANDA engine health check failed.",status:downstream.status},502);
+          return json({engine:"oanda-28pair-strategy",connected:true,...payload});
+        }
         if (url.pathname==="/api/oanda/connect") return await handleConnect(request);
         if (url.pathname==="/api/oanda/candles") return await handleCandles(request,url);
         if (url.pathname==="/api/oanda/schedule") return await handleSchedule(request,url);
