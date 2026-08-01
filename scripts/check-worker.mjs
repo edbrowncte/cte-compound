@@ -10,4 +10,8 @@ if (worker.includes('redirect:"error"')) {
   throw new Error('Cloudflare Workers does not support redirect:"error".');
 }
 
+if (worker.includes('"User-Agent":"cte-compound/1.0"')) {
+  throw new Error("OANDA requests must use the proven minimal header set.");
+}
+
 console.log("OANDA redirect handling verified.");

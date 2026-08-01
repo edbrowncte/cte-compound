@@ -53,7 +53,7 @@ async function oandaFetch(path,token) {
   try {
     response=await fetch(LIVE_OANDA_ORIGIN+path,{
       method:"GET",
-      headers:{"Authorization":"Bearer "+token,"Accept":"application/json","User-Agent":"cte-compound/1.0"},
+      headers:{"Authorization":"Bearer "+token,"Accept":"application/json"},
       redirect:"manual",
       signal:AbortSignal.timeout(15000)
     });
