@@ -33,22 +33,60 @@ function assertSameOrigin(request) {
 function credentials(env) {
   const token=String(env.OANDA_API_KEY||"").trim();
   const accountId=String(env.OANDA_ACCOUNT_ID||"").trim();
-  if (token.length<20) throw Object.assign(new Error("OANDA_API_KEY is not configured."),{status:503});
-  if (!/^[A-Za-z0-9-]{6,80}$/.test(accountId)) throw Object.assign(new Error("OANDA_ACCOUNT_ID is not configured."),{status:503});
+  if (token.length<20) throw Object.assign(new Error("OANDA_API_KEY is not configured."),{status:503,code:"OANDA_API_KEY_MISSING"});
+  if (!/^[A-Za-z0-9-]{6,80}$/.test(accountId)) throw Object.assign(new Error("OANDA_ACCOUNT_ID is not configured."),{status:503,code:"OANDA_ACCOUNT_ID_MISSING"});
   return {token,accountId};
 }
 
+function safeDiagnosticMessage(value) {
+  return String(value||"")
+    .replace(/https?:\/\/\S+/gi,"[url]")
+    .replace(/Bearer\s+\S+/gi,"Bearer [redacted]")
+    .replace(/\b\d{3}-\d{3}-\d{6,}-\d{3}\b/g,"[account]")
+    .replace(/[A-Za-z0-9_-]{32,}/g,"[redacted]")
+    .slice(0,180);
+}
+
 async function oandaFetch(path,token) {
-  const response=await fetch(`${LIVE_OANDA_ORIGIN}${path}`,{
-    method:"GET",
-    headers:{"Authorization":`Bearer ${token}`,"Accept":"application/json","User-Agent":"cte-compound/1.0"},
-    redirect:"error",
-    signal:AbortSignal.timeout(15000)
-  });
+  const startedAt=Date.now();
+  let response;
+  try {
+    response=await fetch(LIVE_OANDA_ORIGIN+path,{
+      method:"GET",
+      headers:{"Authorization":"Bearer "+token,"Accept":"application/json","User-Agent":"cte-compound/1.0"},
+      redirect:"error",
+      signal:AbortSignal.timeout(15000)
+    });
+  } catch (error) {
+    const timeout=error?.name==="TimeoutError"||error?.name==="AbortError";
+    throw Object.assign(
+      new Error(timeout?"OANDA request timed out.":"OANDA network request failed."),
+      {
+        status:timeout?504:502,
+        code:timeout?"OANDA_UPSTREAM_TIMEOUT":"OANDA_NETWORK_FAILURE",
+        diagnostic:{
+          phase:"fetch",
+          durationMs:Date.now()-startedAt,
+          exceptionName:String(error?.name||"Error").slice(0,80),
+          exceptionMessage:safeDiagnosticMessage(error?.message)
+        }
+      }
+    );
+  }
   const payload=await response.json().catch(()=>({}));
   if (!response.ok) {
-    const message=payload.errorMessage||payload.errorCode||`OANDA request failed (${response.status}).`;
-    throw Object.assign(new Error(message),{status:response.status===401?401:502});
+    const code=response.status===401
+      ?"OANDA_AUTHORIZATION_FAILED"
+      :response.status===404
+        ?"OANDA_ACCOUNT_OR_RESOURCE_NOT_FOUND"
+        :"OANDA_UPSTREAM_REJECTED";
+    const status=response.status===401?401:502;
+    const message=payload.errorMessage||payload.errorCode||"OANDA request failed ("+response.status+").";
+    throw Object.assign(new Error(message),{
+      status,
+      code,
+      diagnostic:{phase:"response",durationMs:Date.now()-startedAt,upstreamStatus:response.status}
+    });
   }
   return payload;
 }
@@ -149,6 +187,7 @@ function secureAssetResponse(response,url) {
 export default {
   async fetch(request,env) {
     const url=new URL(request.url);
+    const diagnosticId=crypto.randomUUID();
     try {
       if (url.pathname.startsWith("/api/")) {
         assertSameOrigin(request);
@@ -169,7 +208,29 @@ export default {
       return secureAssetResponse(response,url);
     } catch (error) {
       const status=Number(error?.status)||500;
-      return json({error:status>=500?"The analytical compound could not complete the upstream request.":error.message||"Request failed."},status);
+      const errorCode=String(error?.code||(
+        status===504?"OANDA_UPSTREAM_TIMEOUT":
+        status===503?"OANDA_CONFIGURATION_ERROR":
+        status===502?"OANDA_UPSTREAM_FAILURE":
+        "REQUEST_FAILED"
+      ));
+      const diagnostic=error?.diagnostic||{};
+      console.error(JSON.stringify({
+        event:"oanda_request_failure",
+        diagnosticId,
+        route:url.pathname,
+        status,
+        errorCode,
+        phase:diagnostic.phase||"handler",
+        durationMs:Number.isFinite(diagnostic.durationMs)?diagnostic.durationMs:null,
+        upstreamStatus:Number.isFinite(diagnostic.upstreamStatus)?diagnostic.upstreamStatus:null,
+        exceptionName:diagnostic.exceptionName||null,
+        exceptionMessage:safeDiagnosticMessage(diagnostic.exceptionMessage)
+      }));
+      const message=status>=500
+        ?"The analytical compound could not complete the upstream request."
+        :error.message||"Request failed.";
+      return json({error:message,errorCode,diagnosticId},status);
     }
   }
 };
