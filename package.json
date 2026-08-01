@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/worker.js && node scripts/check-html.mjs"
+    "check": "node --check src/worker.js && node scripts/check-worker.mjs && node scripts/check-html.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.28.1"

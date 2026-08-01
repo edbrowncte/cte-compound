@@ -54,7 +54,7 @@ async function oandaFetch(path,token) {
     response=await fetch(LIVE_OANDA_ORIGIN+path,{
       method:"GET",
       headers:{"Authorization":"Bearer "+token,"Accept":"application/json","User-Agent":"cte-compound/1.0"},
-      redirect:"error",
+      redirect:"manual",
       signal:AbortSignal.timeout(15000)
     });
   } catch (error) {
@@ -72,6 +72,13 @@ async function oandaFetch(path,token) {
         }
       }
     );
+  }
+  if (response.status>=300 && response.status<400) {
+    throw Object.assign(new Error("OANDA returned an unexpected redirect."),{
+      status:502,
+      code:"OANDA_UNEXPECTED_REDIRECT",
+      diagnostic:{phase:"response",durationMs:Date.now()-startedAt,upstreamStatus:response.status}
+    });
   }
   const payload=await response.json().catch(()=>({}));
   if (!response.ok) {
