@@ -142,17 +142,17 @@
         <div class="credential-grid">
           <div class="field">
             <span>OANDA API</span>
-            <strong class="runtime-value" id="oandaRuntimeStatus">Initializing encrypted Worker credentials…</strong>
+            <strong class="runtime-value" id="oandaRuntimeStatus">Ready to connect</strong>
           </div>
           <div class="field">
             <span>MCP dataset engine</span>
             <strong class="runtime-value" id="engineStatus">Checking private service binding…</strong>
           </div>
-          <button class="connect" id="connectButton" type="submit">Reconnect</button>
-          <button class="disconnect" id="disconnectButton" type="button" disabled>Pause</button>
+          <button class="connect" id="connectButton" type="submit">Connect</button>
+          <button class="disconnect" id="disconnectButton" type="button" disabled>Disconnect</button>
           <div class="connection-line" role="status" aria-live="polite">
             <span class="status-dot" id="statusDot"></span>
-            <span id="connectionStatus">Connecting automatically. Credentials remain encrypted and server-side.</span>
+            <span id="connectionStatus">Disconnected. Press Connect to use the server-side OANDA credentials.</span>
           </div>
         </div>
       </form>
@@ -510,7 +510,7 @@
     event?.preventDefault?.();
     el("connectButton").disabled=true;
     el("oandaRuntimeStatus").textContent="Authorizing live OANDA…";
-    setConnectionStatus("Connecting automatically with encrypted Worker secrets…");
+    setConnectionStatus("Connecting to live OANDA…");
     const engineCheck=updateEngineStatus();
     try {
       const payload=await api("/api/oanda/connect");
@@ -531,7 +531,7 @@
       state.connected=false;
       el("accountFacts").hidden=true;
       el("oandaRuntimeStatus").textContent=error.message||"Authorization failed";
-      setConnectionStatus(error.message||"Automatic OANDA connection failed.","error");
+      setConnectionStatus(error.message||"OANDA connection failed.","error");
       await engineCheck;
     } finally { el("connectButton").disabled=state.connected; }
   }
@@ -542,8 +542,8 @@
     state.chartCandles=[]; state.chartAnalysis=null; state.crosshair=null;
     el("accountFacts").hidden=true;
     el("connectButton").disabled=false; el("disconnectButton").disabled=true; el("refreshSchedule").disabled=true; el("refreshChart").disabled=true;
-    el("oandaRuntimeStatus").textContent="Paused locally";
-    setConnectionStatus("Paused. Encrypted Worker credentials remain server-side.");
+    el("oandaRuntimeStatus").textContent="Disconnected";
+    setConnectionStatus("Disconnected. Press Connect to use the server-side OANDA credentials.");
     resetMatrix(); updateChartSummary(); updateCompartments(); drawChart();
   }
 
@@ -793,7 +793,7 @@
     window.addEventListener("resize",drawChart);
   }
 
-  buildSelectors(); buildMatrix(); buildCompartments(); bindEvents(); updateChartSummary(); updateCompartments(); drawChart(); void connect();
+  buildSelectors(); buildMatrix(); buildCompartments(); bindEvents(); updateChartSummary(); updateCompartments(); drawChart(); void updateEngineStatus();
   </script>
 </body>
 </html>
