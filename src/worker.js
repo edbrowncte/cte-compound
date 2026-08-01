@@ -82,17 +82,31 @@ async function oandaFetch(path,token) {
   }
   const payload=await response.json().catch(()=>({}));
   if (!response.ok) {
-    const code=response.status===401
-      ?"OANDA_AUTHORIZATION_FAILED"
-      :response.status===404
-        ?"OANDA_ACCOUNT_OR_RESOURCE_NOT_FOUND"
-        :"OANDA_UPSTREAM_REJECTED";
+    const code=response.status===400
+      ?"OANDA_BAD_REQUEST"
+      :response.status===401
+        ?"OANDA_AUTHORIZATION_FAILED"
+        :response.status===403
+          ?"OANDA_ACCESS_FORBIDDEN"
+          :response.status===404
+            ?"OANDA_ACCOUNT_OR_RESOURCE_NOT_FOUND"
+            :response.status===405
+              ?"OANDA_METHOD_REJECTED"
+              :response.status===429
+                ?"OANDA_RATE_LIMITED"
+                :"OANDA_UPSTREAM_REJECTED";
     const status=response.status===401?401:502;
+    const upstreamErrorCode=safeDiagnosticMessage(payload.errorCode||"");
     const message=payload.errorMessage||payload.errorCode||"OANDA request failed ("+response.status+").";
     throw Object.assign(new Error(message),{
       status,
       code,
-      diagnostic:{phase:"response",durationMs:Date.now()-startedAt,upstreamStatus:response.status}
+      diagnostic:{
+        phase:"response",
+        durationMs:Date.now()-startedAt,
+        upstreamStatus:response.status,
+        upstreamErrorCode
+      }
     });
   }
   return payload;
@@ -231,13 +245,19 @@ export default {
         phase:diagnostic.phase||"handler",
         durationMs:Number.isFinite(diagnostic.durationMs)?diagnostic.durationMs:null,
         upstreamStatus:Number.isFinite(diagnostic.upstreamStatus)?diagnostic.upstreamStatus:null,
+        upstreamErrorCode:diagnostic.upstreamErrorCode||null,
         exceptionName:diagnostic.exceptionName||null,
         exceptionMessage:safeDiagnosticMessage(diagnostic.exceptionMessage)
       }));
+      const upstreamStatus=Number.isFinite(diagnostic.upstreamStatus)?diagnostic.upstreamStatus:null;
+      const upstreamErrorCode=diagnostic.upstreamErrorCode||null;
+      const publicDetail=upstreamStatus
+        ?` · OANDA HTTP ${upstreamStatus}${upstreamErrorCode?` · ${upstreamErrorCode}`:""}`
+        :"";
       const message=status>=500
-        ?"The analytical compound could not complete the upstream request."
+        ?"The analytical compound could not complete the upstream request."+publicDetail
         :error.message||"Request failed.";
-      return json({error:message,errorCode,diagnosticId},status);
+      return json({error:message,errorCode,diagnosticId,upstreamStatus,upstreamErrorCode},status);
     }
   }
 };
