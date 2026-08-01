@@ -6,3 +6,10 @@ compatibility_date = "2026-07-31"
 directory = "./public"
 binding = "ASSETS"
 run_worker_first = true
+
+[ai]
+binding = "AI"
+
+[[services]]
+binding = "OANDA_ENGINE"
+service = "oanda-28pair-strategy"
