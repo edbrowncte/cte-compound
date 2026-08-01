@@ -30,11 +30,11 @@ function assertSameOrigin(request) {
   if (site && !["same-origin","same-site","none"].includes(site)) throw Object.assign(new Error("Cross-site requests are not allowed."),{status:403});
 }
 
-function credentials(request) {
-  const token=(request.headers.get("X-OANDA-Token")||"").trim();
-  const accountId=(request.headers.get("X-OANDA-Account-ID")||"").trim();
-  if (token.length<20) throw Object.assign(new Error("Missing or invalid OANDA token."),{status:401});
-  if (!/^[A-Za-z0-9-]{6,80}$/.test(accountId)) throw Object.assign(new Error("Missing or invalid OANDA account ID."),{status:401});
+function credentials(env) {
+  const token=String(env.OANDA_API_KEY||"").trim();
+  const accountId=String(env.OANDA_ACCOUNT_ID||"").trim();
+  if (token.length<20) throw Object.assign(new Error("OANDA_API_KEY is not configured."),{status:503});
+  if (!/^[A-Za-z0-9-]{6,80}$/.test(accountId)) throw Object.assign(new Error("OANDA_ACCOUNT_ID is not configured."),{status:503});
   return {token,accountId};
 }
 
@@ -92,8 +92,8 @@ async function mapLimit(items,limit,worker) {
   return output;
 }
 
-async function handleConnect(request) {
-  const {token,accountId}=credentials(request);
+async function handleConnect(env) {
+  const {token,accountId}=credentials(env);
   const payload=await oandaFetch(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token);
   const account=payload.account||{};
   return json({account:{
@@ -110,8 +110,8 @@ async function handleConnect(request) {
   }});
 }
 
-async function handleCandles(request,url) {
-  const {token}=credentials(request);
+async function handleCandles(env,url) {
+  const {token}=credentials(env);
   const instrument=(url.searchParams.get("instrument")||"").toUpperCase();
   const granularity=(url.searchParams.get("granularity")||"").toUpperCase();
   if (!INSTRUMENTS.has(instrument)) return json({error:"Instrument is not allowed."},400);
@@ -121,8 +121,8 @@ async function handleCandles(request,url) {
   return json({instrument,granularity,candles,completedOnly:true});
 }
 
-async function handleSchedule(request,url) {
-  const {token}=credentials(request);
+async function handleSchedule(env,url) {
+  const {token}=credentials(env);
   const granularity=(url.searchParams.get("granularity")||"").toUpperCase();
   if (!GRANULARITIES.has(granularity)) return json({error:"Granularity is not allowed."},400);
   const count=boundedCount(url.searchParams.get("count"),180,300);
@@ -160,9 +160,9 @@ export default {
           if (!downstream.ok) return json({error:"OANDA engine health check failed.",status:downstream.status},502);
           return json({...payload,engine:"oanda-28pair-strategy",engineReachable:true});
         }
-        if (url.pathname==="/api/oanda/connect") return await handleConnect(request);
-        if (url.pathname==="/api/oanda/candles") return await handleCandles(request,url);
-        if (url.pathname==="/api/oanda/schedule") return await handleSchedule(request,url);
+        if (url.pathname==="/api/oanda/connect") return await handleConnect(env);
+        if (url.pathname==="/api/oanda/candles") return await handleCandles(env,url);
+        if (url.pathname==="/api/oanda/schedule") return await handleSchedule(env,url);
         return json({error:"API route not found."},404);
       }
       const response=await env.ASSETS.fetch(request);
