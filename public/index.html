@@ -487,9 +487,8 @@
     const response=await fetch(path,{method:"GET",headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store",signal:controller?.signal});
     const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
     if (!response.ok) {
-      const base=payload.error||payload.message||`HTTP ${response.status}`;
-      const reference=[payload.errorCode,payload.diagnosticId].filter(Boolean).join(" · ");
-      throw new Error(reference?`${base} · ${reference}`:base);
+      const message=payload.error||payload.message||`HTTP ${response.status}`;
+      throw new Error(message);
     }
     return payload;
   }
