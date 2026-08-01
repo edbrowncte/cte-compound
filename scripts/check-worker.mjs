@@ -18,8 +18,12 @@ for (const required of ["OANDA_BAD_REQUEST","OANDA_METHOD_REJECTED","upstreamErr
   if (!worker.includes(required)) throw new Error(`Missing safe OANDA diagnostic: ${required}`);
 }
 
-for (const required of ['cache:"no-store"','oandaFetch("/v3/accounts",token)',"OANDA_ACCOUNT_ID_NOT_AUTHORIZED"]) {
-  if (!worker.includes(required)) throw new Error(`Missing proven OANDA connection behavior: ${required}`);
+for (const required of ['cache:"no-store"',"encodeURIComponent(accountId)}/summary"]) {
+  if (!worker.includes(required)) throw new Error(`Missing direct OANDA connection behavior: ${required}`);
+}
+
+if (worker.includes('oandaFetch("/v3/accounts",token)') || worker.includes("OANDA_ACCOUNT_ID_NOT_AUTHORIZED")) {
+  throw new Error("OANDA connection must not run an account-discovery preflight.");
 }
 
 if (worker.includes("AbortSignal.timeout")) {
