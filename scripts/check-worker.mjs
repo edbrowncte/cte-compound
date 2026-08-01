@@ -14,4 +14,8 @@ if (worker.includes('"User-Agent":"cte-compound/1.0"')) {
   throw new Error("OANDA requests must use the proven minimal header set.");
 }
 
+for (const required of ["OANDA_BAD_REQUEST","OANDA_METHOD_REJECTED","upstreamErrorCode","upstreamStatus"]) {
+  if (!worker.includes(required)) throw new Error(`Missing safe OANDA diagnostic: ${required}`);
+}
+
 console.log("OANDA redirect handling verified.");
