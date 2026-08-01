@@ -158,7 +158,7 @@ export default {
           const downstream=await env.OANDA_ENGINE.fetch(new Request("https://internal/api/health",{method:"GET"}));
           const payload=await downstream.json().catch(()=>({}));
           if (!downstream.ok) return json({error:"OANDA engine health check failed.",status:downstream.status},502);
-          return json({engine:"oanda-28pair-strategy",connected:true,...payload});
+          return json({...payload,engine:"oanda-28pair-strategy",engineReachable:true});
         }
         if (url.pathname==="/api/oanda/connect") return await handleConnect(request);
         if (url.pathname==="/api/oanda/candles") return await handleCandles(request,url);
