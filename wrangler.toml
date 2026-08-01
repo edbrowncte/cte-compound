@@ -13,3 +13,6 @@ binding = "AI"
 [[services]]
 binding = "OANDA_ENGINE"
 service = "oanda-28pair-strategy"
+
+[secrets]
+required = [ "OANDA_ACCOUNT_ID", "OANDA_API_KEY" ]
