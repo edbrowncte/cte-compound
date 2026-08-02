@@ -35,6 +35,7 @@ async function resolveAccount(token,configuredAccountId) {
 function assertSameOrigin(request) {
   const url=new URL(request.url),origin=request.headers.get("Origin"),site=request.headers.get("Sec-Fetch-Site");
   if(origin&&origin!==url.origin) throw Object.assign(new Error("Cross-origin request rejected."),{status:403});
+  if(!origin&&!site) throw Object.assign(new Error("Browser-origin request required."),{status:403});
   if(site&&!['same-origin','same-site','none'].includes(site)) throw Object.assign(new Error("Cross-site request rejected."),{status:403});
 }
 
@@ -66,18 +67,10 @@ function proxyPath(raw,accountId,method) {
     new RegExp(`^/v3/accounts/${account}/positions$`),
     /^\/v3\/instruments\/[A-Z]{3}_[A-Z]{3}\/candles\?/
   ];
-  const postRules=[new RegExp(`^/v3/accounts/${account}/orders$`)];
-  const allowed=(method==="GET"?getRules:postRules).some(rule=>rule.test(path));
+  const allowed=method==="GET"&&getRules.some(rule=>rule.test(path));
   if(!allowed) throw Object.assign(new Error("OANDA route is not permitted."),{status:403});
   if(path.includes("api-fxpractice")||path.includes("stream-fxpractice")) throw Object.assign(new Error("Practice endpoints are not available."),{status:403});
   return path;
-}
-
-function validateOrder(body) {
-  const order=body?.order;
-  if(!order||order.type!=="MARKET"||order.timeInForce!=="FOK"||order.positionFill!=="DEFAULT") throw Object.assign(new Error("Only live MARKET/FOK/DEFAULT orders are accepted."),{status:400});
-  if(!INSTRUMENTS.has(order.instrument)||!Number.isFinite(Number(order.units))||Number(order.units)===0) throw Object.assign(new Error("Invalid instrument or units."),{status:400});
-  return {order:{instrument:order.instrument,units:String(Math.trunc(Number(order.units))),type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT",clientExtensions:order.clientExtensions}};
 }
 
 async function handleConnect(env) {
@@ -92,11 +85,9 @@ async function handleAccountDiagnostic(env) {
 
 async function handleProxy(request,env,url) {
   const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),method=request.method;
-  if(!["GET","POST"].includes(method)) return json({error:"Method not allowed."},405,{Allow:"GET, POST"});
+  if(method!=="GET") return json({error:"Method not allowed."},405,{Allow:"GET"});
   const path=proxyPath(url.searchParams.get("path"),accountId,method);
-  let body;
-  if(method==="POST") body=JSON.stringify(validateOrder(await request.json()));
-  return json(await oandaRequest(path,token,{method,body}));
+  return json(await oandaRequest(path,token,{method}));
 }
 
 async function handleCandles(env,url) {
@@ -127,7 +118,6 @@ export default {
         if(url.pathname==="/api/oanda/accounts"&&request.method==="GET") return await handleAccountDiagnostic(env);
         if(url.pathname==="/api/engine/status"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/status");
         if(url.pathname==="/api/engine/ledger"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/ledger");
-        if(url.pathname==="/api/engine/tick"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/tick",{method:"POST"}));
         if(url.pathname==="/api/oanda/proxy") return await handleProxy(request,env,url);
         if(url.pathname==="/api/oanda/candles"&&request.method==="GET") return await handleCandles(env,url);
         if(url.pathname==="/api/engine/health"&&request.method==="GET") {
