@@ -20,6 +20,17 @@ function credentials(env) {
   return {token,accountId};
 }
 
+let accountCache=null;
+async function resolveAccount(token,configuredAccountId) {
+  if(accountCache&&accountCache.expires>Date.now()) return accountCache.id;
+  const payload=await oandaRequest("/v3/accounts",token);
+  const accounts=Array.isArray(payload.accounts)?payload.accounts:[];
+  const selected=accounts.find(account=>account.id===configuredAccountId)||accounts[0];
+  if(!selected?.id) throw Object.assign(new Error("The OANDA token has no accessible live account."),{status:401});
+  accountCache={id:selected.id,expires:Date.now()+300000};
+  return selected.id;
+}
+
 function assertSameOrigin(request) {
   const url=new URL(request.url),origin=request.headers.get("Origin"),site=request.headers.get("Sec-Fetch-Site");
   if(origin&&origin!==url.origin) throw Object.assign(new Error("Cross-origin request rejected."),{status:403});
@@ -69,12 +80,12 @@ function validateOrder(body) {
 }
 
 async function handleConnect(env) {
-  const {token,accountId}=credentials(env),payload=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token),account=payload.account||{};
+  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),payload=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token),account=payload.account||{};
   return json({account:{id:account.id||accountId,alias:account.alias||"",currency:account.currency||"",balance:account.balance||"0",NAV:account.NAV||"0",marginAvailable:account.marginAvailable||"0",marginUsed:account.marginUsed||"0",hedgingEnabled:Boolean(account.hedgingEnabled),openPositionCount:account.openPositionCount||0,lastTransactionID:payload.lastTransactionID||null},live:true});
 }
 
 async function handleProxy(request,env,url) {
-  const {token,accountId}=credentials(env),method=request.method;
+  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),method=request.method;
   if(!["GET","POST"].includes(method)) return json({error:"Method not allowed."},405,{Allow:"GET, POST"});
   const path=proxyPath(url.searchParams.get("path"),accountId,method);
   let body;
