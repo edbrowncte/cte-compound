@@ -65,13 +65,28 @@ export class HtlEngine{
   constructor(ctx,env){this.ctx=ctx;this.env=env;this.running=false;}
   async fetch(request){const path=new URL(request.url).pathname;if(path==="/status")return response(await this.status());if(path==="/ledger")return response({ledger:(await this.ctx.storage.get("ledger"))||[]});if(path==="/tick"&&request.method==="POST"){await this.tick();return response(await this.status());}return response({error:"Not found"},404);}
   async alarm(){try{await this.tick();}finally{await this.ctx.storage.setAlarm(Date.now()+60000);}}
-  async status(){const state=(await this.ctx.storage.get("state"))||{};return{armed:true,running:this.running,timeframe:TIMEFRAME,htlLength:HTL_LENGTH,triggerMode:"new-completed-candle-only",lastCandle:state.lastCandle||null,lastRun:state.lastRun||null,lastError:state.lastError||null,processedPairs:Object.keys(state.events||{}).length};}
+  async status(){const state=(await this.ctx.storage.get("state"))||{};return{armed:true,running:this.running,timeframe:TIMEFRAME,htlLength:HTL_LENGTH,triggerMode:"new-completed-candle-only",positionManagement:"all-open-positions",lastCandle:state.lastCandle||null,lastRun:state.lastRun||null,lastError:state.lastError||null,processedPairs:Object.keys(state.events||{}).length};}
   async write(entry){const ledger=(await this.ctx.storage.get("ledger"))||[];ledger.unshift({...entry,time:new Date().toISOString()});await this.ctx.storage.put("ledger",ledger.slice(0,500));await notify(this.env,entry);}
+  async reconcile(directions,token,accountId){
+    const payload=await callOanda(`/v3/accounts/${accountId}/positions`,token),positions=payload.positions||[];
+    for(const position of positions){
+      if(!PAIRS.includes(position.instrument))continue;
+      const longUnits=Number(position.long?.units||0),shortUnits=Math.abs(Number(position.short?.units||0)),existing=longUnits>0?1:shortUnits>0?-1:0,required=Number(directions[position.instrument]||0);
+      if(!existing||!required||existing===required)continue;
+      const body=existing>0?{longUnits:"ALL"}:{shortUnits:"ALL"};
+      await callOanda(`/v3/accounts/${accountId}/positions/${position.instrument}/close`,token,{method:"PUT",body:JSON.stringify(body)});
+      await this.write({type:"POSITION_CLOSED",pair:position.instrument,direction:existing>0?"BUY":"SELL",units:existing>0?longUnits:shortUnits,message:"Position opposed current HTL direction"});
+    }
+  }
   async tick(){
     if(this.running)return;this.running=true;let state=(await this.ctx.storage.get("state"))||{events:{},initialized:false};
     try{
-      const{token,configured}=secrets(this.env),accountId=await liveAccount(token,configured),probe=await candles("EUR_USD",token,2),lastCandle=probe.at(-1)?.time;if(!lastCandle||lastCandle===state.lastCandle)return;
+      const{token,configured}=secrets(this.env),accountId=await liveAccount(token,configured),probe=await candles("EUR_USD",token,2),lastCandle=probe.at(-1)?.time;
+      if(!lastCandle)return;
+      if(lastCandle===state.lastCandle){if(state.directions)await this.reconcile(state.directions,token,accountId);state.lastRun=new Date().toISOString();state.lastError=null;return;}
       const rows=[];for(const pair of PAIRS){const data=await candles(pair,token),event=currentEvent(data);if(event)rows.push({pair,event});}
+      state.directions=Object.fromEntries(rows.map(row=>[row.pair,row.event.direction]));
+      await this.reconcile(state.directions,token,accountId);
       if(!state.initialized){state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;await this.write({type:"INITIALIZED",message:`${rows.length} HTL events registered`});}
       else{
         const candidates=rows.filter(row=>state.events[row.pair]!==row.event.id&&row.event.startTime===lastCandle).sort((a,b)=>b.event.bars-a.event.bars);
