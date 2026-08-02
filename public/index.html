@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="robots" content="noindex,nofollow">
-  <title>Criterion Echelon · HTL Asset Analytical Compound</title>
+  <title>CTE Compound · HTL Asset Analytical Compound</title>
+  <!-- Global visual design. -->
   <style>
     :root {
       --bg:#080b10; --panel:#10151d; --panel2:#151c26; --line:#2b3543; --line2:#3a4657;
@@ -30,7 +31,7 @@
     .subtitle { margin:0; color:var(--muted); font-size:12px; }
     .credential-grid { display:grid; grid-template-columns:minmax(160px,.8fr) minmax(220px,1.25fr) auto auto; gap:8px; align-items:end; }
     .field { display:grid; gap:4px; min-width:0; }
-    .field span { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+    .field span, .field label { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
     .field input { width:100%; }
     .runtime-value { min-height:36px; display:flex; align-items:center; padding:7px 9px; border:1px solid var(--line); background:#0b1016; color:var(--text); font-size:11px; }
     .connect { background:linear-gradient(180deg,#4b3921,#332512); border-color:#8d6934; }
@@ -43,6 +44,14 @@
     .fact { min-width:105px; padding:7px 9px; border:1px solid var(--line); background:#0c1118; }
     .fact span { display:block; color:var(--muted); font-size:8px; letter-spacing:.08em; text-transform:uppercase; }
     .fact strong { display:block; margin-top:2px; font-size:12px; }
+    .fact select,.fact input { width:100%; min-height:30px; margin-top:3px; padding:4px 6px; }
+    .trade-pair { min-width:130px; }
+    .trade-capacity { min-width:180px; }
+    .trade-units { min-width:110px; }
+    .trade-action { min-width:82px; align-self:stretch; }
+    .trade-action.buy { color:#b9f5d8; background:rgba(72,199,142,.18); border-color:rgba(72,199,142,.5); }
+    .trade-action.sell { color:#ffc1c5; background:rgba(239,107,115,.18); border-color:rgba(239,107,115,.5); }
+    .trade-status { flex-basis:100%; min-height:15px; color:var(--muted); font-size:9px; }
     main { display:grid; gap:14px; margin-top:14px; }
     .panel { border:1px solid var(--line2); background:linear-gradient(180deg,var(--panel),#0d1219); box-shadow:var(--shadow); }
     .panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-bottom:1px solid var(--line); }
@@ -90,6 +99,9 @@
     #chart { display:block; width:100%; height:100%; }
     .chart-message { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; color:var(--muted); font-size:12px; }
     .chart-message[hidden] { display:none; }
+    .indicator-legend { display:flex; flex-wrap:wrap; gap:10px; min-height:29px; padding:7px 12px; border-bottom:1px solid var(--line); color:#cbd5e1; font:9px ui-monospace,monospace; }
+    .indicator-legend span { display:inline-flex; align-items:center; gap:5px; }
+    .indicator-legend i { width:13px; height:2px; display:inline-block; }
     .compartments { display:grid; grid-template-columns:repeat(6,minmax(150px,1fr)); gap:8px; padding:10px 12px 12px; border-top:1px solid var(--line); }
     .compartment { min-width:0; padding:9px; border:1px solid var(--line); background:#0b1118; }
     .compartment header { display:flex; justify-content:space-between; gap:8px; align-items:center; }
@@ -101,7 +113,6 @@
     .compartment dl { display:grid; grid-template-columns:1fr auto; gap:4px 8px; margin:8px 0 0; font-size:8px; }
     .compartment dt { color:var(--muted); }
     .compartment dd { margin:0; color:#dbe3ed; text-align:right; }
-    footer { padding:11px 2px 4px; color:#768294; font-size:9px; }
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     @media (max-width:1100px) {
       .topbar { grid-template-columns:1fr; }
@@ -120,13 +131,54 @@
       .chart-summary { grid-template-columns:1fr 1fr; }
       .chart-stage { height:430px; }
     }
+    .app-tabs { display:flex; gap:6px; margin-top:10px; border:1px solid var(--line2); background:#0c1118; padding:6px; overflow:auto; }
+    .app-tab[aria-selected="true"] { color:#10141b; background:var(--accent); border-color:var(--accent); }
+    .tab-panel[hidden] { display:none; }
+    .event-controls { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
+    .event-chart-stage { height:360px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); position:relative; background:#080c12; }
+    .event-chart-toolbar { padding:10px 14px; border-top:1px solid var(--line); }
+    .event-chart-instrument { margin-left:auto; min-height:36px; display:flex; align-items:center; gap:8px; padding:4px 2px; color:var(--muted); }
+    .event-chart-instrument span { font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+    .event-chart-instrument strong { color:var(--text); font-size:13px; }
+    #eventPanel:fullscreen { background:#080c12; overflow:auto; }
+    #eventPanel:fullscreen .event-chart-stage { height:calc(100vh - 150px); }
+    #eventChart { width:100%; height:100%; display:block; }
+    .event-table-wrap { overflow:auto; max-height:420px; }
+    .event-table { width:100%; border-collapse:collapse; font-size:10px; white-space:nowrap; }
+    .event-table th,.event-table td { padding:7px 8px; border:1px solid var(--line); text-align:right; }
+    .event-table th:first-child,.event-table td:first-child { text-align:left; }
+    .event-table thead { position:sticky; top:0; background:#141c27; z-index:1; }
+    .event-table th button { width:100%; border:0; padding:0; background:transparent; color:inherit; text-align:inherit; white-space:nowrap; }
+    .event-table tr[data-pair] { cursor:pointer; }
+    .event-table tr[data-pair].selected { background:rgba(215,168,92,.14); }
+    .event-table tr[data-pair]:focus { outline:2px solid var(--accent); outline-offset:-2px; }
+    .event-table td.event-signal { font-weight:900; text-align:center; }
+    .event-table td.event-signal.buy { color:#b9f5d8; background:rgba(72,199,142,.18); }
+    .event-table td.event-signal.sell { color:#ffc1c5; background:rgba(239,107,115,.18); }
+    .event-note { padding:10px 14px; color:var(--muted); font-size:10px; }
+    .event-section-title { padding:10px 14px; margin:0; border-top:1px solid var(--line); font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+    .event-ledger { margin:14px 18px 18px; border:1px solid var(--line); }
+    .event-ledger summary { padding:12px 14px; cursor:pointer; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+    .event-ledger[open] summary { border-bottom:1px solid var(--line); }
+    .config-grid { display:grid; grid-template-columns:repeat(6,minmax(145px,1fr)); gap:8px; padding:12px; }
+    .config-card { border:1px solid var(--line); background:#0b1118; padding:10px; }
+    .config-card h3 { margin:0 0 8px; font-size:11px; }
+    .config-card .field { margin-top:7px; }
+    .performance-wrap { overflow:auto; padding:0 12px 12px; }
+    .performance-table { width:100%; border-collapse:collapse; white-space:nowrap; font-size:9px; }
+    .performance-table th,.performance-table td { border:1px solid var(--line); padding:7px; text-align:right; }
+    .performance-table th:first-child,.performance-table td:first-child { text-align:left; }
+    .positive { color:var(--buy); }.negative { color:var(--sell); }
+    @media(max-width:900px) { .config-grid { grid-template-columns:1fr 1fr; } }
+    @media(max-width:900px) { .event-chart-stage { height:300px; } .event-chart-instrument { margin-left:0; } }
   </style>
 </head>
 <body>
   <div class="shell">
-    <header class="topbar">
+    <!-- Header, account facts, and connection controls. -->
+  <header class="topbar">
       <section class="brand" aria-labelledby="title">
-        <div class="eyebrow">Criterion Echelon</div>
+        <div class="eyebrow">CTE-COMPOUND</div>
         <h1 id="title">HTL Asset Analytical Compound</h1>
         <p class="subtitle">28 pairs · six analytical compartments · ten native OANDA timeframes · completed midpoint candles only</p>
         <div class="account-facts" id="accountFacts" hidden>
@@ -135,31 +187,45 @@
           <div class="fact"><span>Balance</span><strong id="factBalance">—</strong></div>
           <div class="fact"><span>NAV</span><strong id="factNav">—</strong></div>
           <div class="fact"><span>Margin Available</span><strong id="factMargin">—</strong></div>
+          <label class="fact trade-pair"><span>Currency Pair</span><select id="tradePair"></select></label>
+          <div class="fact trade-capacity"><span>Units Available</span><strong id="factUnitsAvailable">—</strong></div>
+          <label class="fact trade-units"><span>Units</span><input id="tradeUnits" type="text" inputmode="numeric" pattern="[0-9]+" value="1"></label>
+          <button class="trade-action buy" id="tradeBuy" type="button" disabled>BUY</button>
+          <button class="trade-action sell" id="tradeSell" type="button" disabled>SELL</button>
+          <div class="trade-status" id="tradeStatus" role="status" aria-live="polite"></div>
         </div>
       </section>
 
       <form id="credentialForm" autocomplete="off" novalidate>
         <div class="credential-grid">
           <div class="field">
-            <span>OANDA API</span>
-            <strong class="runtime-value" id="oandaRuntimeStatus">Ready to connect</strong>
+            <label for="oandaAccountId">OANDA Account ID</label>
+            <input id="oandaAccountId" type="text" inputmode="numeric" pattern="[0-9-]+" autocomplete="off" required>
           </div>
           <div class="field">
-            <span>MCP dataset engine</span>
-            <strong class="runtime-value" id="engineStatus">Checking private service binding…</strong>
+            <label for="oandaApiToken">OANDA API Token</label>
+            <input id="oandaApiToken" type="password" autocomplete="off" spellcheck="false" required>
           </div>
           <button class="connect" id="connectButton" type="submit">Connect</button>
           <button class="disconnect" id="disconnectButton" type="button" disabled>Disconnect</button>
           <div class="connection-line" role="status" aria-live="polite">
             <span class="status-dot" id="statusDot"></span>
-            <span id="connectionStatus">Disconnected. Press Connect to use the server-side OANDA credentials.</span>
+            <span id="connectionStatus">Not connected</span>
           </div>
         </div>
       </form>
     </header>
 
+    <nav class="app-tabs" role="tablist" aria-label="Analytical compound facilities">
+      <button class="app-tab" id="analysisTab" role="tab" aria-selected="true" aria-controls="analysisPanel" type="button">Analytical Compound</button>
+      <button class="app-tab" id="eventTab" role="tab" aria-selected="false" aria-controls="eventPanel" type="button">HTL Event Forecast</button>
+      <button class="app-tab" id="performanceTab" role="tab" aria-selected="false" aria-controls="performancePanel" type="button">Configuration &amp; Performance</button>
+    </nav>
+
     <main>
-      <section class="panel" aria-labelledby="scheduleTitle">
+      <div class="tab-panel" id="analysisPanel" role="tabpanel" aria-labelledby="analysisTab">
+      <!-- Timeframe signal schedule. -->
+  <section class="panel" aria-labelledby="scheduleTitle">
         <div class="panel-head">
           <div class="panel-title">
             <h2 id="scheduleTitle">Timeframe Signal Schedule</h2>
@@ -181,12 +247,13 @@
           <table id="signalMatrix" aria-label="28 currency pairs by ten timeframes with buy and sell signals"></table>
         </div>
         <div class="matrix-foot">
-          <div class="legend"><span><b>BUY/SELL</b> = latest active compartment direction</span><span><b>%</b> = normalized signal confidence</span><span><b>—</b> = hold/no qualified signal</span></div>
-          <div id="scheduleStamp">Completed candles only</div>
+          <div class="legend"><span><b>BUY/SELL</b> = latest active compartment direction</span><span><b>%</b> = normalized signal confidence</span><span><b>—</b> = no result</span></div>
+          <div id="scheduleStamp">Not loaded</div>
         </div>
       </section>
 
-      <section class="panel chart-panel" id="chartPanel" aria-labelledby="chartTitle">
+      <!-- Interactive analytical chart. -->
+  <section class="panel chart-panel" id="chartPanel" aria-labelledby="chartTitle">
         <div class="panel-head">
           <div class="panel-title">
             <h2 id="chartTitle">Interactive Analytical Chart</h2>
@@ -206,24 +273,78 @@
           </div>
         </div>
         <div class="chart-summary">
-          <div class="metric"><span>Signal</span><strong id="metricSignal" class="hold">HOLD</strong></div>
+          <div class="metric"><span>Signal</span><strong id="metricSignal">—</strong></div>
           <div class="metric"><span>Confidence</span><strong id="metricConfidence">—</strong></div>
           <div class="metric"><span>Regime</span><strong id="metricRegime">—</strong></div>
           <div class="metric"><span>Last close</span><strong id="metricClose">—</strong></div>
           <div class="metric"><span>Completed candle</span><strong id="metricTime">—</strong></div>
           <div class="metric"><span>Visible bars</span><strong id="metricBars">120</strong></div>
         </div>
+        <div class="indicator-legend" id="indicatorLegend" aria-label="Displayed indicators"></div>
         <div class="chart-stage" id="chartStage">
           <canvas id="chart" aria-label="Interactive OANDA candlestick chart"></canvas>
-          <div class="chart-message" id="chartMessage">Connect live OANDA credentials to load completed candles.</div>
+          <div class="chart-message" id="chartMessage">No chart loaded</div>
         </div>
         <div class="compartments" id="compartments"></div>
       </section>
+      </div>
+
+      <!-- HTL Asset event forecast. -->
+      <section class="panel tab-panel" id="eventPanel" role="tabpanel" aria-labelledby="eventTab" hidden>
+        <div class="panel-head">
+          <div class="panel-title"><h2>HTL Schedule</h2></div>
+          <div class="event-controls">
+            <label class="field"><span>Currency pair</span><select id="eventPair"></select></label>
+            <label class="field"><span>Timeframe</span><select id="eventTimeframe"></select></label>
+            <label class="field"><span>HTL length</span><input id="eventLength" type="number" min="3" max="200" value="50"></label>
+            <button id="loadEvents" type="button" disabled>Forecast events</button>
+          </div>
+        </div>
+        <h3 class="event-section-title">HTL Schedule</h3>
+        <div class="event-table-wrap">
+          <table class="event-table" id="eventScheduleTable" role="grid" aria-label="HTL currency-pair schedule" aria-describedby="eventScheduleInterpretation">
+            <thead><tr>
+              <th><button type="button" data-event-sort="pair">Currency pair</button></th>
+              <th><button type="button" data-event-sort="price">Current Price</button></th>
+              <th><button type="button" data-event-sort="currentEvent">Current Event</button></th>
+              <th><button type="button" data-event-sort="eventOpen">Current Event Open</button></th>
+              <th><button type="button" data-event-sort="location">Location</button></th>
+              <th><button type="button" data-event-sort="p5">Completion ≤ 5 bars</button></th>
+              <th><button type="button" data-event-sort="p10">Completion ≤ 10 bars</button></th>
+              <th><button type="button" data-event-sort="events">Events</button></th>
+              <th><button type="button" data-event-sort="durationMae">Duration MAE</button></th>
+              <th><button type="button" data-event-sort="envelopeMae">Envelope MAE</button></th>
+              <th><button type="button" data-event-sort="brier">Onset Brier</button></th>
+              <th><button type="button" data-event-sort="historicalBrier">Historical Brier</button></th>
+              <th><button type="button" data-event-sort="nextEvent">Next HTL event</button></th>
+              <th><button type="button" data-event-sort="envelopeLow">Forecast envelope</button></th>
+            </tr></thead>
+            <tbody id="eventScheduleBody"></tbody>
+          </table>
+        </div>
+        <p class="event-note" id="eventScheduleInterpretation">Current Event is the active Asset/Inverse crossing; Current Event Open is the completed crossing candle close; Location is AA above average or BA below average; completion columns estimate the active event ending within 5 or 10 bars; Events counts FINAL events; MAE columns measure duration and envelope error; Onset Brier measures the same-direction ≤10-bar probability error; Historical Brier is the rolling historical-frequency benchmark; Next HTL Event and Forecast Envelope describe the next opposite event.</p>
+        <div class="chart-toolbar event-chart-toolbar">
+          <button id="eventZoomOut" type="button">Zoom −</button><button id="eventZoomIn" type="button">Zoom +</button>
+          <button id="eventIndentOut" type="button">Indent +</button><button id="eventIndentIn" type="button">Indent −</button>
+          <button id="eventCrosshairToggle" type="button" aria-pressed="true">Crosshair on</button><button id="eventMaximize" type="button">Maximize</button>
+          <span class="event-chart-instrument"><span>Instrument</span><strong id="eventChartInstrument">—</strong></span>
+        </div>
+        <div class="indicator-legend" aria-label="HTL geometry legend"><span><i style="background:#6ddcdb"></i>f (HL2)</span><span><i style="background:#e08430"></i>UPR recovered inverse</span><span><i style="background:#d7a85c"></i>HH–LL Asset</span><span><i style="background:#8d72d8"></i>Asset recovered inverse</span><span><i style="background:#48a46b"></i>Asset mean</span></div>
+        <div class="event-chart-stage"><canvas id="eventChart" aria-label="Completed OANDA candles with original HTL and HTL Asset geometry"></canvas><div class="chart-message" id="eventMessage">No event forecast loaded</div></div>
+        <p class="event-note" id="eventMethod">Not loaded</p>
+        <details class="event-ledger">
+          <summary>Event Ledger</summary>
+          <div class="event-table-wrap"><table class="event-table"><thead><tr><th>Event</th><th>Status</th><th>Start</th><th>Bars</th><th>High</th><th>Low</th><th>Spread μ</th><th>Spread σ²</th><th>Slope</th><th>Area</th><th>Source crosses</th></tr></thead><tbody id="eventLedger"></tbody></table></div>
+        </details>
+      </section>
+      <section class="panel tab-panel" id="performancePanel" role="tabpanel" aria-labelledby="performanceTab" hidden>
+        <div class="panel-head"><div class="panel-title"><h2>Compute Configuration — Length / Filter Optimizer</h2><p id="configurationScope">EUR/USD · M15 · completed candles</p></div><div class="head-controls"><button id="applyConfiguration" type="button">Apply configuration</button><button id="computeConfiguration" type="button" disabled>Compute configuration</button></div></div>
+        <div class="config-grid" id="strategyConfiguration"></div>
+        <div class="panel-head"><div class="panel-title"><h2>Macro: HTL Asset / DARE(N) / DARE / COMBO / NAI / APEX Performance</h2><p>Configured signals · next-open entries · opposite-signal exits</p></div></div>
+        <div class="performance-wrap"><table class="performance-table"><thead><tr><th>Strategy</th><th>Trades</th><th>W/L/Flat</th><th>Net pips</th><th>Avg</th><th>MFE/MAE</th><th>Max DD</th><th>Profit factor</th><th>Recovery factor</th></tr></thead><tbody id="macroPerformanceBody"><tr><td colspan="9">Load the analytical chart to calculate performance.</td></tr></tbody></table></div>
+      </section>
     </main>
 
-    <footer>
-      Live-only read access. The page does not place, modify, or close orders. The account ID and token remain in page memory and are cleared on disconnect or reload.
-    </footer>
   </div>
 
   <script>
@@ -238,6 +359,7 @@
   ]);
 
   const TIMEFRAMES = Object.freeze(["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]);
+  const OANDA_URL = "https://api-fxtrade.oanda.com";
   const STRATEGIES = Object.freeze([
     { id:"ASSET", label:"HTL Asset" },
     { id:"DARE_N", label:"DARE(N)" },
@@ -246,15 +368,32 @@
     { id:"NAI", label:"NAI" },
     { id:"APEX", label:"APEX" }
   ]);
+  const STRATEGY_CONFIG={ASSET:{length:50,filter:1.05},DARE_N:{length:50,filter:.62},DARE:{length:50,filter:.08},COMBO:{length:50,filter:2},NAI:{length:50,filter:1.25},APEX:{length:20,filter:.02}};
 
   const state = {
     connected:false,
+    tradeLongAvailable:0,
+    tradeShortAvailable:0,
+    tradeBusy:false,
     scheduleCandles:new Map(),
     scheduleEvaluations:new Map(),
     scheduleController:null,
     chartController:null,
     chartCandles:[],
     chartAnalysis:null,
+    eventData:null,
+    eventHtl:null,
+    eventEvents:[],
+    eventRows:[],
+    eventSort:{key:"pair",direction:1},
+    eventVisibleBars:120,
+    eventOffsetBars:0,
+    eventRightIndent:72,
+    eventCrosshairEnabled:true,
+    eventCrosshair:null,
+    eventDragging:false,
+    eventDragStartX:0,
+    eventDragStartOffset:0,
     visibleBars:120,
     offsetBars:0,
     rightIndent:72,
@@ -371,11 +510,12 @@
     return clamp(.5+.48*(1-Math.exp(-magnitude*1.35)),.5,.98);
   }
 
-  function prepareIndicators(candles) {
+  function prepareIndicators(candles,config={length:50}) {
     const closes=candles.map(c=>c.close);
-    const ema20=ema(closes,20),ema50=ema(closes,50),ema100=ema(closes,100);
-    const atr14=atr(candles,14),rsi14=rsi(closes,14),z50=rollingZ(closes,50);
-    const logOls=rollingLogOlsResidualZ(closes,50),channel=donchian(candles,20);
+    const length=clamp(Math.round(config.length||50),3,200),fast=Math.max(3,Math.round(length*.4)),macro=Math.min(400,length*2);
+    const ema20=ema(closes,fast),ema50=ema(closes,length),ema100=ema(closes,macro);
+    const atr14=atr(candles,14),rsi14=rsi(closes,14),z50=rollingZ(closes,length);
+    const logOls=rollingLogOlsResidualZ(closes,length),channel=donchian(candles,length);
     return {closes,ema20,ema50,ema100,atr14,rsi14,z50,residualZ:logOls.residualZ,donchianHigh:channel.high,donchianLow:channel.low};
   }
 
@@ -383,7 +523,8 @@
     return { direction,score:finite(score),confidence:direction?confidenceFromScore(score):0,regime,metrics };
   }
 
-  function evaluateAt(candles,indicators,index) {
+  function evaluateSingle(candles,indicators,index,strategy) {
+    const config=STRATEGY_CONFIG[strategy];
     const close=indicators.closes[index],atrValue=Math.max(finite(indicators.atr14[index]),1e-12);
     const rsiValue=finite(indicators.rsi14[index],50),z=finite(indicators.z50[index]),residualZ=finite(indicators.residualZ[index]);
     const e20=finite(indicators.ema20[index],close),e50=finite(indicators.ema50[index],close),e100=finite(indicators.ema100[index],close);
@@ -392,58 +533,46 @@
     const trendGap=(e20-e50)/atrValue;
     const macroGap=(e50-e100)/atrValue;
 
-    const assetScore=-(.68*residualZ+.32*z);
+    if(strategy==='ASSET'){const assetScore=-(.68*residualZ+.32*z);
     let assetDirection=0;
-    if (residualZ<=-1.05 && z<=-.55) assetDirection=1;
-    else if (residualZ>=1.05 && z>=.55) assetDirection=-1;
-    const asset=output(assetDirection,assetScore,Math.abs(macroGap)>.45?"TREND":"REVERSION",{residualZ,z50:z});
+    if (residualZ<=-config.filter && z<=-config.filter*.52) assetDirection=1;else if (residualZ>=config.filter && z>=config.filter*.52) assetDirection=-1;return output(assetDirection,assetScore,Math.abs(macroGap)>.45?"TREND":"REVERSION",{residualZ,z50:z});}
 
-    const dareNScore=.72*trendGap+.28*slope;
+    if(strategy==='DARE_N'){const dareNScore=.72*trendGap+.28*slope;
     let dareNDirection=0;
-    if (dareNScore>.62 && rsiValue>49) dareNDirection=1;
-    else if (dareNScore<-.62 && rsiValue<51) dareNDirection=-1;
-    const dareN=output(dareNDirection,dareNScore,Math.abs(trendGap)>.55?"TREND":"TRANSITION",{trendGap,slope,rsi:rsiValue});
+    if (dareNScore>config.filter && rsiValue>49) dareNDirection=1;else if (dareNScore<-config.filter && rsiValue<51) dareNDirection=-1;return output(dareNDirection,dareNScore,Math.abs(trendGap)>.55?"TREND":"TRANSITION",{trendGap,slope,rsi:rsiValue});}
 
-    const dareScore=.55*trendGap+.3*macroGap+.15*slope;
+    if(strategy==='DARE'){const dareScore=.55*trendGap+.3*macroGap+.15*slope;
     let dareDirection=0;
-    if (e20>e50 && e50>e100 && slope>.08 && rsiValue<76) dareDirection=1;
-    else if (e20<e50 && e50<e100 && slope<-.08 && rsiValue>24) dareDirection=-1;
-    const dare=output(dareDirection,dareScore,"TREND",{trendGap,macroGap,slope});
+    if (e20>e50 && e50>e100 && slope>config.filter && rsiValue<76) dareDirection=1;else if (e20<e50 && e50<e100 && slope<-config.filter && rsiValue>24) dareDirection=-1;return output(dareDirection,dareScore,"TREND",{trendGap,macroGap,slope});}
 
-    const naiScore=-z+(50-rsiValue)/22;
+    if(strategy==='NAI'){const naiScore=-z+(50-rsiValue)/22;
     let naiDirection=0;
-    if (z<=-1.25 && rsiValue<=43) naiDirection=1;
-    else if (z>=1.25 && rsiValue>=57) naiDirection=-1;
-    const nai=output(naiDirection,naiScore,"REVERSION",{z50:z,rsi:rsiValue});
+    if (z<=-config.filter && rsiValue<=43) naiDirection=1;else if (z>=config.filter && rsiValue>=57) naiDirection=-1;return output(naiDirection,naiScore,"REVERSION",{z50:z,rsi:rsiValue});}
 
-    const high=finite(indicators.donchianHigh[index],close),low=finite(indicators.donchianLow[index],close);
+    if(strategy==='APEX'){const high=finite(indicators.donchianHigh[index],close),low=finite(indicators.donchianLow[index],close);
     const upperBreak=(close-high)/atrValue,lowerBreak=(low-close)/atrValue;
     let apexDirection=0,apexScore=0;
-    if (upperBreak>.02 && slope>.05) { apexDirection=1; apexScore=1+upperBreak+slope*.25; }
-    else if (lowerBreak>.02 && slope<-.05) { apexDirection=-1; apexScore=-(1+lowerBreak+Math.abs(slope)*.25); }
-    const apex=output(apexDirection,apexScore,"BREAKOUT",{upperBreak,lowerBreak,slope});
+    if (upperBreak>config.filter && slope>.05) { apexDirection=1; apexScore=1+upperBreak+slope*.25; }else if (lowerBreak>config.filter && slope<-.05) { apexDirection=-1; apexScore=-(1+lowerBreak+Math.abs(slope)*.25); }return output(apexDirection,apexScore,"BREAKOUT",{upperBreak,lowerBreak,slope});}}
 
-    const members=[asset,dareN,dare,nai,apex];
+  function evaluateAt(candles,indicatorSets,index) {const asset=evaluateSingle(candles,indicatorSets.ASSET,index,'ASSET'),dareN=evaluateSingle(candles,indicatorSets.DARE_N,index,'DARE_N'),dare=evaluateSingle(candles,indicatorSets.DARE,index,'DARE'),nai=evaluateSingle(candles,indicatorSets.NAI,index,'NAI'),apex=evaluateSingle(candles,indicatorSets.APEX,index,'APEX');const members=[asset,dareN,dare,nai,apex];
     const vote=members.reduce((sum,item)=>sum+item.direction,0);
-    let comboDirection=vote>=2?1:vote<=-2?-1:0;
+    const required=clamp(Math.round(STRATEGY_CONFIG.COMBO.filter),1,5),comboDirection=vote>=required?1:vote<=-required?-1:0;
     const directional=members.filter(item=>item.direction===comboDirection && comboDirection!==0);
     const comboScore=comboDirection*(Math.abs(vote)+average(directional.map(item=>item.confidence)));
-    const combo=output(comboDirection,comboScore,Math.abs(macroGap)>.45?"CONSENSUS TREND":"CONSENSUS REVERSION",{vote,buyVotes:members.filter(x=>x.direction>0).length,sellVotes:members.filter(x=>x.direction<0).length});
+    const combo=output(comboDirection,comboScore,Math.abs(dare.metrics.macroGap)>.45?"CONSENSUS TREND":"CONSENSUS REVERSION",{vote,buyVotes:members.filter(x=>x.direction>0).length,sellVotes:members.filter(x=>x.direction<0).length});
 
     return { ASSET:asset,DARE_N:dareN,DARE:dare,COMBO:combo,NAI:nai,APEX:apex };
   }
 
   function analyzeCandles(candles,withSeries=false) {
-    if (!Array.isArray(candles)||candles.length<55) throw new Error(`Insufficient completed candles: ${candles?.length||0}`);
-    const indicators=prepareIndicators(candles);
+    const minimum=Math.max(...Object.values(STRATEGY_CONFIG).map(item=>item.length))*2;if (!Array.isArray(candles)||candles.length<minimum) throw new Error(`Insufficient completed candles: ${candles?.length||0}`);const indicatorSets={};for(const strategy of STRATEGIES)if(strategy.id!=='COMBO')indicatorSets[strategy.id]=prepareIndicators(candles,STRATEGY_CONFIG[strategy.id]);indicatorSets.COMBO=indicatorSets.DARE;
     const latestIndex=candles.length-1;
-    const latest=evaluateAt(candles,indicators,latestIndex);
+    const latest=evaluateAt(candles,indicatorSets,latestIndex);
     const series={};
     if (withSeries) {
       for (const strategy of STRATEGIES) series[strategy.id]=[];
       let prior={};
-      for (let index=55;index<candles.length;index++) {
-        const outputs=evaluateAt(candles,indicators,index);
+      for (let index=minimum;index<candles.length;index++) {const outputs=evaluateAt(candles,indicatorSets,index);
         for (const strategy of STRATEGIES) {
           const current=outputs[strategy.id];
           if (current.direction && current.direction!==prior[strategy.id]) {
@@ -453,7 +582,7 @@
         }
       }
     }
-    return {latest,series,indicators};
+    return {latest,series,indicators:indicatorSets.COMBO,indicatorSets};
   }
 
   function buildSelectors() {
@@ -462,8 +591,11 @@
     el("chartStrategy").innerHTML=strategyOptions;
     el("scheduleStrategy").value=state.selectedScheduleStrategy;
     el("chartStrategy").value=state.selectedStrategy;
-    el("chartPair").innerHTML=INSTRUMENTS.map(item=>`<option value="${item}">${formatPair(item)}</option>`).join("");
+    const pairOptions=INSTRUMENTS.map(item=>`<option value="${item}">${formatPair(item)}</option>`).join("");
+    el("chartPair").innerHTML=pairOptions;
+    el("tradePair").innerHTML=pairOptions;
     el("chartPair").value=state.selectedInstrument;
+    el("tradePair").value=state.selectedInstrument;
     el("chartTimeframe").innerHTML=TIMEFRAMES.map(item=>`<option value="${item}">${item}</option>`).join("");
     el("chartTimeframe").value=state.selectedTimeframe;
   }
@@ -475,7 +607,7 @@
   }
 
   function buildCompartments() {
-    el("compartments").innerHTML=STRATEGIES.map(strategy=>`<article class="compartment" id="compartment-${strategy.id}"><header><h3>${strategy.label}</h3><span class="badge hold">HOLD</span></header><dl><dt>Confidence</dt><dd data-key="confidence">—</dd><dt>Regime</dt><dd data-key="regime">—</dd><dt>Score</dt><dd data-key="score">—</dd><dt>Primary metric</dt><dd data-key="metric">—</dd></dl></article>`).join("");
+    el("compartments").innerHTML=STRATEGIES.map(strategy=>`<article class="compartment" id="compartment-${strategy.id}"><header><h3>${strategy.label}</h3><span class="badge">—</span></header><dl><dt>Confidence</dt><dd data-key="confidence">—</dd><dt>Regime</dt><dd data-key="regime">—</dd><dt>Score</dt><dd data-key="score">—</dd><dt>Primary metric</dt><dd data-key="metric">—</dd></dl></article>`).join("");
   }
 
   function setConnectionStatus(message,type="idle") {
@@ -483,72 +615,116 @@
     el("statusDot").className=`status-dot ${type==="connected"?"connected":type==="error"?"error":""}`;
   }
 
-  async function api(path,controller) {
-    const response=await fetch(path,{method:"GET",headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store",signal:controller?.signal});
+  async function oanda(path,controller) {
+    const token=el("oandaApiToken").value.trim();
+    const response=await fetch(`${OANDA_URL}${path}`,{method:"GET",headers:{"Accept":"application/json","Authorization":`Bearer ${token}`},credentials:"omit",cache:"no-store",signal:controller?.signal});
     const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
     if (!response.ok) {
-      const message=payload.error||payload.message||`HTTP ${response.status}`;
+      const message=payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`;
       throw new Error(message);
     }
     return payload;
   }
 
-  async function updateEngineStatus() {
-    try {
-      const payload=await api("/api/engine/health");
-      const pairs=Array.isArray(payload.pairs)?` · ${payload.pairs.length} pairs`:"";
-      el("engineStatus").textContent=`Reachable${pairs}`;
-      return true;
-    } catch (error) {
-      el("engineStatus").textContent=error.message||"Unavailable";
-      return false;
-    }
+  async function oandaPost(path,body) {
+    const token=el("oandaApiToken").value.trim();
+    const response=await fetch(`${OANDA_URL}${path}`,{method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json","Authorization":`Bearer ${token}`},credentials:"omit",cache:"no-store",body:JSON.stringify(body)});
+    const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
+    if(!response.ok){const message=payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`;throw new Error(message);}
+    return payload;
+  }
+
+  function applyAccountFacts(account,accountId=el("oandaAccountId").value.trim()){
+    el("factAccount").textContent=account.alias||account.id||accountId;
+    el("factCurrency").textContent=account.currency||"—";
+    el("factBalance").textContent=finite(account.balance).toLocaleString(undefined,{maximumFractionDigits:2});
+    el("factNav").textContent=finite(account.NAV).toLocaleString(undefined,{maximumFractionDigits:2});
+    el("factMargin").textContent=finite(account.marginAvailable).toLocaleString(undefined,{maximumFractionDigits:2});
+  }
+
+  function tradeUnitAmount(){return Math.trunc(Number(el("tradeUnits").value.replace(/\D/g,"")));}
+
+  function updateTradeButtons(){
+    const units=tradeUnitAmount();
+    el("tradeBuy").disabled=!state.connected||state.tradeBusy||!Number.isFinite(units)||units<1||units>state.tradeLongAvailable;
+    el("tradeSell").disabled=!state.connected||state.tradeBusy||!Number.isFinite(units)||units<1||units>state.tradeShortAvailable;
+  }
+
+  async function loadTradeCapacity(){
+    if(!state.connected)return;
+    state.tradeLongAvailable=0;state.tradeShortAvailable=0;el("factUnitsAvailable").textContent="—";updateTradeButtons();
+    try{
+      const accountId=el("oandaAccountId").value.trim(),instrument=el("tradePair").value,payload=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/pricing?instruments=${encodeURIComponent(instrument)}&includeUnitsAvailable=true`),available=payload.prices?.[0]?.unitsAvailable?.default;
+      state.tradeLongAvailable=Math.max(0,Math.trunc(Number(available?.long)||0));state.tradeShortAvailable=Math.max(0,Math.trunc(Number(available?.short)||0));
+      el("factUnitsAvailable").textContent=`BUY ${state.tradeLongAvailable.toLocaleString()} · SELL ${state.tradeShortAvailable.toLocaleString()}`;
+    }catch(error){el("tradeStatus").textContent=error.message||"Units unavailable.";}
+    updateTradeButtons();
+  }
+
+  async function placeTrade(side){
+    if(!state.connected||state.tradeBusy)return;
+    const accountId=el("oandaAccountId").value.trim(),instrument=el("tradePair").value,amount=tradeUnitAmount(),limit=side==="BUY"?state.tradeLongAvailable:state.tradeShortAvailable;
+    if(!Number.isFinite(amount)||amount<1||amount>limit)return;
+    state.tradeBusy=true;el("tradeStatus").textContent="";updateTradeButtons();
+    try{
+      const units=side==="BUY"?amount:-amount,payload=await oandaPost(`/v3/accounts/${encodeURIComponent(accountId)}/orders`,{order:{instrument,units:String(units),type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT"}}),fill=payload.orderFillTransaction;
+      el("tradeStatus").textContent=`${side} ${amount.toLocaleString()} ${formatPair(instrument)} · ${fill?.price||"filled"} · transaction ${fill?.id||payload.lastTransactionID||"—"}`;
+      const summary=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/summary`);applyAccountFacts(summary.account,accountId);await loadTradeCapacity();
+    }catch(error){el("tradeStatus").textContent=error.message||"Order failed.";}
+    finally{state.tradeBusy=false;updateTradeButtons();}
+  }
+
+  function completedCandles(payload) {
+    return (payload.candles||[]).filter(candle=>candle.complete&&candle.mid).map(candle=>({
+      time:candle.time,
+      open:Number(candle.mid.o),
+      high:Number(candle.mid.h),
+      low:Number(candle.mid.l),
+      close:Number(candle.mid.c),
+      volume:Number(candle.volume)||0
+    }));
   }
 
   async function connect(event) {
     event?.preventDefault?.();
+    const accountId=el("oandaAccountId").value.trim();
+    const token=el("oandaApiToken").value.trim();
+    if (!accountId||!token) return;
     el("connectButton").disabled=true;
-    el("oandaRuntimeStatus").textContent="Authorizing live OANDA…";
     setConnectionStatus("Connecting to live OANDA…");
-    const engineCheck=updateEngineStatus();
     try {
-      const payload=await api("/api/oanda/connect");
+      const payload=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/summary`);
       state.connected=true;
       el("disconnectButton").disabled=false;
       el("refreshSchedule").disabled=false;
       el("refreshChart").disabled=false;
+      el("loadEvents").disabled=false;
       el("accountFacts").hidden=false;
-      el("factAccount").textContent=payload.account.alias||payload.account.id||"Live account";
-      el("factCurrency").textContent=payload.account.currency||"—";
-      el("factBalance").textContent=finite(payload.account.balance).toLocaleString(undefined,{maximumFractionDigits:2});
-      el("factNav").textContent=finite(payload.account.NAV).toLocaleString(undefined,{maximumFractionDigits:2});
-      el("factMargin").textContent=finite(payload.account.marginAvailable).toLocaleString(undefined,{maximumFractionDigits:2});
-      el("oandaRuntimeStatus").textContent=`Authorized · ${payload.account.id||"live account"}`;
+      applyAccountFacts(payload.account,accountId);
       setConnectionStatus("Live OANDA connected · completed midpoint candles only","connected");
-      await Promise.all([engineCheck,loadSchedule(),loadChart()]);
+      await Promise.all([loadTradeCapacity(),loadSchedule(),loadChart(),loadEventForecast()]);
     } catch (error) {
       state.connected=false;
       el("accountFacts").hidden=true;
-      el("oandaRuntimeStatus").textContent=error.message||"Authorization failed";
       setConnectionStatus(error.message||"OANDA connection failed.","error");
-      await engineCheck;
     } finally { el("connectButton").disabled=state.connected; }
   }
 
   function disconnect() {
     state.scheduleController?.abort(); state.chartController?.abort();
     state.connected=false; state.scheduleCandles.clear(); state.scheduleEvaluations.clear();
-    state.chartCandles=[]; state.chartAnalysis=null; state.crosshair=null;
+    state.chartCandles=[]; state.chartAnalysis=null; state.eventData=null; state.eventHtl=null; state.eventEvents=[]; state.eventRows=[]; state.crosshair=null;state.tradeLongAvailable=0;state.tradeShortAvailable=0;state.tradeBusy=false;
     el("accountFacts").hidden=true;
-    el("connectButton").disabled=false; el("disconnectButton").disabled=true; el("refreshSchedule").disabled=true; el("refreshChart").disabled=true;
-    el("oandaRuntimeStatus").textContent="Disconnected";
-    setConnectionStatus("Disconnected. Press Connect to use the server-side OANDA credentials.");
+    el("connectButton").disabled=false; el("disconnectButton").disabled=true; el("refreshSchedule").disabled=true; el("refreshChart").disabled=true; el("loadEvents").disabled=true;
+    el("oandaAccountId").value=""; el("oandaApiToken").value="";
+    el("factUnitsAvailable").textContent="—";el("tradeStatus").textContent="";el("eventChartInstrument").textContent="—";updateTradeButtons();
+    setConnectionStatus("Not connected");
     resetMatrix(); updateChartSummary(); updateCompartments(); drawChart();
   }
 
   function resetMatrix() {
     document.querySelectorAll(".signal-cell").forEach(cell=>{ cell.classList.remove("active","loading"); cell.querySelector(".signal-main").textContent="—"; cell.querySelector(".signal-sub").textContent=""; });
-    el("progressFill").style.width="0%"; el("progressText").textContent="Not loaded"; el("scheduleStamp").textContent="Completed candles only";
+    el("progressFill").style.width="0%"; el("progressText").textContent="Not loaded"; el("scheduleStamp").textContent="Not loaded";
   }
 
   function scheduleKey(instrument,timeframe) { return `${instrument}|${timeframe}`; }
@@ -590,14 +766,16 @@
     try {
       await runPool(TIMEFRAMES,2,async timeframe=>{
         try {
-          const payload=await api(`/api/oanda/schedule?granularity=${encodeURIComponent(timeframe)}&count=180`,controller);
-          for (const item of payload.results) {
-            if (item.error) { errors++; continue; }
-            const key=scheduleKey(item.instrument,timeframe);
-            state.scheduleCandles.set(key,item.candles);
-            try { state.scheduleEvaluations.set(key,analyzeCandles(item.candles,false)); } catch { errors++; }
-            renderScheduleCell(item.instrument,timeframe);
-          }
+          await runPool(INSTRUMENTS,4,async instrument=>{
+            try {
+              const payload=await oanda(`/v3/instruments/${encodeURIComponent(instrument)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=180`,controller);
+              const candles=completedCandles(payload);
+              const key=scheduleKey(instrument,timeframe);
+              state.scheduleCandles.set(key,candles);
+              state.scheduleEvaluations.set(key,analyzeCandles(candles,false));
+              renderScheduleCell(instrument,timeframe);
+            } catch (error) { if (error.name!=="AbortError") errors++; }
+          });
         } catch (error) { if (error.name!=="AbortError") errors++; }
         completed++;
         el("progressFill").style.width=`${completed/TIMEFRAMES.length*100}%`;
@@ -616,12 +794,13 @@
     const controller=new AbortController(); state.chartController=controller;
     el("refreshChart").disabled=true; el("chartMessage").hidden=false; el("chartMessage").textContent="Loading completed OANDA candles…";
     try {
-      const payload=await api(`/api/oanda/candles?instrument=${encodeURIComponent(state.selectedInstrument)}&granularity=${encodeURIComponent(state.selectedTimeframe)}&count=650`,controller);
-      state.chartCandles=payload.candles;
-      state.chartAnalysis=analyzeCandles(payload.candles,true);
+      const payload=await oanda(`/v3/instruments/${encodeURIComponent(state.selectedInstrument)}/candles?price=M&granularity=${encodeURIComponent(state.selectedTimeframe)}&count=650`,controller);
+      const candles=completedCandles(payload);
+      state.chartCandles=candles;
+      state.chartAnalysis=analyzeCandles(candles,true);
       state.offsetBars=0; state.crosshair=null;
       el("chartMessage").hidden=true;
-      updateChartSummary(); updateCompartments(); markSelectedRow(); drawChart();
+      updateChartSummary(); updateCompartments(); markSelectedRow(); drawChart(); renderStrategyConfiguration(); renderMacroPerformance();
     } catch (error) {
       if (error.name!=="AbortError") { el("chartMessage").hidden=false; el("chartMessage").textContent=error.message||"Chart load failed."; state.chartCandles=[]; state.chartAnalysis=null; updateChartSummary(); updateCompartments(); drawChart(); }
     } finally { if (!controller.signal.aborted) el("refreshChart").disabled=false; }
@@ -630,8 +809,8 @@
   function updateChartSummary() {
     const latest=state.chartAnalysis?.latest?.[state.selectedStrategy];
     const candle=state.chartCandles.at(-1);
-    el("metricSignal").textContent=latest?signalWord(latest.direction):"HOLD";
-    el("metricSignal").className=directionClass(latest?.direction||0);
+    el("metricSignal").textContent=latest?signalWord(latest.direction):"—";
+    el("metricSignal").className=latest?directionClass(latest.direction):"";
     el("metricConfidence").textContent=latest&&latest.direction?formatPct(latest.confidence):"—";
     el("metricRegime").textContent=latest?.regime||"—";
     el("metricClose").textContent=candle?formatPrice(candle.close):"—";
@@ -652,8 +831,8 @@
       const card=el(`compartment-${strategy.id}`); if (!card) continue;
       const output=state.chartAnalysis?.latest?.[strategy.id];
       const badge=card.querySelector(".badge");
-      badge.textContent=output?signalWord(output.direction):"HOLD";
-      badge.className=`badge ${directionClass(output?.direction||0)}`;
+      badge.textContent=output?signalWord(output.direction):"—";
+      badge.className=output?`badge ${directionClass(output.direction)}`:"badge";
       card.querySelector('[data-key="confidence"]').textContent=output&&output.direction?formatPct(output.confidence):"—";
       card.querySelector('[data-key="regime"]').textContent=output?.regime||"—";
       card.querySelector('[data-key="score"]').textContent=output?output.score.toFixed(3):"—";
@@ -670,7 +849,6 @@
     state.selectedTimeframe=timeframe||state.selectedTimeframe;
     el("chartPair").value=state.selectedInstrument; el("chartTimeframe").value=state.selectedTimeframe;
     markSelectedRow();
-    if (state.connected) loadChart();
     el("chartPanel").scrollIntoView({behavior:"smooth",block:"start"});
   }
 
@@ -682,6 +860,11 @@
     const margin={top:18,right:78+state.rightIndent,bottom:30,left:10};
     return {canvas,ctx,width,height,dpr,plot:{x:margin.left,y:margin.top,w:Math.max(80,width-margin.left-margin.right),h:Math.max(80,height-margin.top-margin.bottom)},axisX:width-68};
   }
+  // Dual Fan: causal active regime fan plus an independently anchored adverse fan.
+  function fanPrice(fan,index,ratio=1){return fan.anchorPrice+fan.direction*ratio*fan.slope*(index-fan.anchorIndex);}
+  function createFan(data,start,end,direction=null){if(end<=start)return null;let high=-Infinity,low=Infinity,highIndex=start,lowIndex=start;for(let i=start;i<=end;i++){if(data[i].high>high){high=data[i].high;highIndex=i;}if(data[i].low<low){low=data[i].low;lowIndex=i;}}const side=direction||(lowIndex<highIndex?1:-1);if(side>0){high=-Infinity;highIndex=lowIndex;for(let i=lowIndex;i<=end;i++)if(data[i].high>high){high=data[i].high;highIndex=i;}}else{low=Infinity;lowIndex=highIndex;for(let i=highIndex;i<=end;i++)if(data[i].low<low){low=data[i].low;lowIndex=i;}}const anchorIndex=side>0?lowIndex:highIndex,anchorPrice=side>0?low:high,H=Math.max(Number.EPSILON,high-low),W=Math.max(1,Math.abs(highIndex-lowIndex));return{direction:side,anchorIndex,anchorPrice,high,low,highIndex,lowIndex,H,W,slope:H/W,startIndex:start,activationIndex:end,endIndex:end,extended:true};}
+  function updateFan(fan,data,index){const candle=data[index];if(fan.direction>0&&candle.high>fan.high){fan.high=candle.high;fan.highIndex=index;}else if(fan.direction<0&&candle.low<fan.low){fan.low=candle.low;fan.lowIndex=index;}fan.H=Math.max(Number.EPSILON,fan.high-fan.low);fan.W=Math.max(1,Math.abs(fan.highIndex-fan.lowIndex));fan.slope=fan.H/fan.W;fan.endIndex=index;return fan;}
+  function buildDualFans(data,seedLength=50){const fans=[];if(data.length<4)return{fans,activeFan:null,adverseFan:null};const seed=Math.max(3,Math.min(seedLength,50,data.length-1));let active=createFan(data,0,seed-1);if(!active)return{fans,activeFan:null,adverseFan:null};fans.push(active);for(let index=seed;index<data.length;index++){const boundary=active.direction>0?0:1,line=fanPrice(active,index,boundary),regimeSide=active.direction>0?data[index].close>=line:data[index].close<=line,favorable=active.direction>0?active.highIndex:active.lowIndex;if(active.extended&&index>favorable&&!regimeSide&&index-active.activationIndex>=3){active.endIndex=index;const replacement=createFan(data,Math.max(0,active.anchorIndex),index,-active.direction);if(replacement){replacement.extended=false;active=replacement;fans.push(active);}}else{const prior=favorable;updateFan(active,data,index);if((active.direction>0?active.highIndex:active.lowIndex)!==prior)active.extended=true;}}const adverse=createFan(data,active.anchorIndex,data.length-1,-active.direction);return{fans,activeFan:active,adverseFan:adverse};}
 
   function visibleSlice() {
     const total=state.chartCandles.length;
@@ -690,27 +873,54 @@
     return {start,end,candles:state.chartCandles.slice(start,end)};
   }
 
+  // Indicator series used by each analytical compartment.
+  const CHART_INDICATORS={
+    ASSET:{price:[],osc:[['residualZ','Residual Z','#d7a85c'],['z50','Z50','#75a7e8']]},
+    DARE_N:{price:[['ema20','EMA20','#d7a85c'],['ema50','EMA50','#75a7e8']],osc:[['rsi14','RSI14','#b38cff']]},
+    DARE:{price:[['ema20','EMA20','#d7a85c'],['ema50','EMA50','#75a7e8'],['ema100','EMA100','#b38cff']],osc:[]},
+    COMBO:{price:[['ema20','EMA20','#d7a85c'],['ema50','EMA50','#75a7e8'],['ema100','EMA100','#b38cff'],['donchianHigh','Donchian high','#48c78e'],['donchianLow','Donchian low','#ef6b73']],osc:[['residualZ','Residual Z','#f2c66d'],['z50','Z50','#66b4ff'],['rsi14','RSI14','#c490ff']]},
+    NAI:{price:[],osc:[['z50','Z50','#75a7e8'],['rsi14','RSI14','#b38cff']]},
+    APEX:{price:[['donchianHigh','Donchian high','#48c78e'],['donchianLow','Donchian low','#ef6b73'],['ema20','EMA20','#d7a85c']],osc:[]}
+  };
+
+  function drawIndicatorLine(ctx,values,start,end,indexToX,valueToY,color,width=1.5) {
+    ctx.beginPath(); let drawing=false;
+    for(let absolute=start;absolute<end;absolute++) {
+      const value=values?.[absolute];
+      if(!Number.isFinite(value)){drawing=false;continue;}
+      const x=indexToX(absolute-start),y=valueToY(value);
+      if(!drawing){ctx.moveTo(x,y);drawing=true;}else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();
+  }
+
   function drawChart() {
     const {ctx,width,height,plot,axisX}=chartGeometry();
     ctx.clearRect(0,0,width,height); ctx.fillStyle="#080c12"; ctx.fillRect(0,0,width,height);
     const visible=visibleSlice();
     if (!visible.candles.length) return;
-    let low=Math.min(...visible.candles.map(c=>c.low)),high=Math.max(...visible.candles.map(c=>c.high));
+    const indicatorSet=CHART_INDICATORS[state.selectedStrategy]||CHART_INDICATORS.COMBO;
+    const indicators=state.chartAnalysis?.indicatorSets?.[state.selectedStrategy]||state.chartAnalysis?.indicators||{};
+    const hasOscillator=indicatorSet.osc.length>0;
+    const pricePlot=hasOscillator?{...plot,h:plot.h*.72}:plot;
+    const oscPlot=hasOscillator?{x:plot.x,y:plot.y+plot.h*.78,w:plot.w,h:plot.h*.22}:null;
+    const priceValues=indicatorSet.price.flatMap(([key])=>(indicators[key]||[]).slice(visible.start,visible.end).filter(Number.isFinite));
+    let low=Math.min(...visible.candles.map(c=>c.low),...priceValues),high=Math.max(...visible.candles.map(c=>c.high),...priceValues);
     const pad=Math.max((high-low)*.08,high*1e-6); low-=pad; high+=pad;
-    const priceToY=price=>plot.y+(high-price)/(high-low)*plot.h;
-    const yToPrice=y=>high-(y-plot.y)/plot.h*(high-low);
+    const priceToY=price=>pricePlot.y+(high-price)/(high-low)*pricePlot.h;
+    const yToPrice=y=>high-(y-pricePlot.y)/pricePlot.h*(high-low);
     const barWidth=plot.w/Math.max(1,visible.candles.length);
     const indexToX=index=>plot.x+(index+.5)*barWidth;
 
     ctx.strokeStyle="#1c2632"; ctx.lineWidth=1; ctx.font="10px ui-monospace,monospace"; ctx.textBaseline="middle";
     for (let i=0;i<=6;i++) {
-      const y=plot.y+plot.h*i/6,price=high-(high-low)*i/6;
+      const y=pricePlot.y+pricePlot.h*i/6,price=high-(high-low)*i/6;
       ctx.beginPath(); ctx.moveTo(plot.x,y+.5); ctx.lineTo(axisX,y+.5); ctx.stroke();
       ctx.fillStyle="#8b98aa"; ctx.fillText(formatPrice(price),axisX+6,y);
     }
     for (let i=0;i<=6;i++) {
       const x=plot.x+plot.w*i/6;
-      ctx.beginPath(); ctx.moveTo(x+.5,plot.y); ctx.lineTo(x+.5,plot.y+plot.h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+.5,pricePlot.y); ctx.lineTo(x+.5,pricePlot.y+pricePlot.h); ctx.stroke();
       const candle=visible.candles[Math.min(visible.candles.length-1,Math.floor(i/6*(visible.candles.length-1)))];
       if (candle) { ctx.fillStyle="#7f8b9b"; ctx.textAlign=i===0?"left":i===6?"right":"center"; ctx.fillText(new Intl.DateTimeFormat(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(candle.time)),x,plot.y+plot.h+18); }
     }
@@ -723,6 +933,27 @@
       const bodyTop=Math.min(openY,closeY),bodyHeight=Math.max(1,Math.abs(closeY-openY)),bodyWidth=Math.max(1,Math.min(11,barWidth*.66));
       ctx.fillRect(x-bodyWidth/2,bodyTop,bodyWidth,bodyHeight);
     });
+
+    const dualFans=buildDualFans(state.chartCandles,STRATEGY_CONFIG.ASSET.length),ratios=[0,.25,.382,.5,.618,.75,1];
+    const drawFan=(fan,ratio,end,color,alpha,width=1)=>{if(!fan||end<visible.start||fan.anchorIndex>=visible.end)return;ctx.strokeStyle=color;ctx.globalAlpha=alpha;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(indexToX(fan.anchorIndex-visible.start),priceToY(fan.anchorPrice));ctx.lineTo(indexToX(end-visible.start),priceToY(fanPrice(fan,end,ratio)));ctx.stroke();ctx.globalAlpha=1;};
+    dualFans.fans.slice(0,-1).forEach(fan=>{drawFan(fan,0,fan.endIndex,fan.direction>0?'#48c78e':'#ef6b73',.25);drawFan(fan,1,fan.endIndex,fan.direction>0?'#48c78e':'#ef6b73',.42);});
+    ratios.forEach((ratio,index)=>drawFan(dualFans.activeFan,ratio,visible.end-1,dualFans.activeFan?.direction>0?'#48c78e':'#ef6b73',.24+.5*(index+1)/ratios.length,index===ratios.length-1?1.6:1));
+    ratios.forEach((ratio,index)=>drawFan(dualFans.adverseFan,ratio,visible.end-1,dualFans.adverseFan?.direction>0?'#79e8b4':'#ff9ca3',.18+.32*(index+1)/ratios.length,index===ratios.length-1?1.4:1));
+
+    for(const [key,,color] of indicatorSet.price) drawIndicatorLine(ctx,indicators[key],visible.start,visible.end,indexToX,priceToY,color);
+
+    if(oscPlot){
+      const oscillatorValues=indicatorSet.osc.flatMap(([key])=>(indicators[key]||[]).slice(visible.start,visible.end).filter(Number.isFinite));
+      if(oscillatorValues.length){
+        let oscLow=Math.min(...oscillatorValues),oscHigh=Math.max(...oscillatorValues);
+        if(oscLow===oscHigh){oscLow-=1;oscHigh+=1;}else{const oscPad=(oscHigh-oscLow)*.08;oscLow-=oscPad;oscHigh+=oscPad;}
+        const oscToY=value=>oscPlot.y+(oscHigh-value)/(oscHigh-oscLow)*oscPlot.h;
+        ctx.fillStyle="#0a1017";ctx.fillRect(oscPlot.x,oscPlot.y,oscPlot.w,oscPlot.h);
+        ctx.strokeStyle="#283443";ctx.beginPath();ctx.moveTo(oscPlot.x,oscPlot.y+.5);ctx.lineTo(axisX,oscPlot.y+.5);ctx.stroke();
+        for(const [key,,color] of indicatorSet.osc) drawIndicatorLine(ctx,indicators[key],visible.start,visible.end,indexToX,oscToY,color);
+        ctx.fillStyle="#8b98aa";ctx.font="9px ui-monospace,monospace";ctx.fillText(oscHigh.toFixed(2),axisX+6,oscPlot.y+5);ctx.fillText(oscLow.toFixed(2),axisX+6,oscPlot.y+oscPlot.h-5);
+      }
+    }
 
     const events=state.chartAnalysis?.series?.[state.selectedStrategy]||[];
     for (const event of events) {
@@ -740,27 +971,209 @@
     ctx.setLineDash([4,4]); ctx.strokeStyle="#d7a85c"; ctx.beginPath(); ctx.moveTo(plot.x,latestY); ctx.lineTo(axisX,latestY); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle="#d7a85c"; ctx.fillRect(axisX,latestY-10,68,20); ctx.fillStyle="#0b0e14"; ctx.font="bold 10px ui-monospace,monospace"; ctx.fillText(formatPrice(latest.close),axisX+5,latestY);
 
-    if (state.crosshairEnabled&&state.crosshair&&state.crosshair.x>=plot.x&&state.crosshair.x<=plot.x+plot.w&&state.crosshair.y>=plot.y&&state.crosshair.y<=plot.y+plot.h) {
+    if (state.crosshairEnabled&&state.crosshair&&state.crosshair.x>=pricePlot.x&&state.crosshair.x<=pricePlot.x+pricePlot.w&&state.crosshair.y>=pricePlot.y&&state.crosshair.y<=pricePlot.y+pricePlot.h) {
       const x=state.crosshair.x,y=state.crosshair.y,price=yToPrice(y);
-      ctx.setLineDash([3,3]); ctx.strokeStyle="#a7b5c7"; ctx.beginPath(); ctx.moveTo(x,plot.y); ctx.lineTo(x,plot.y+plot.h); ctx.moveTo(plot.x,y); ctx.lineTo(axisX,y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.setLineDash([3,3]); ctx.strokeStyle="#a7b5c7"; ctx.beginPath(); ctx.moveTo(x,pricePlot.y); ctx.lineTo(x,pricePlot.y+pricePlot.h); ctx.moveTo(pricePlot.x,y); ctx.lineTo(axisX,y); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle="#c4cfdd"; ctx.fillRect(axisX,y-10,68,20); ctx.fillStyle="#0b0e14"; ctx.fillText(formatPrice(price),axisX+5,y);
       const localIndex=clamp(Math.floor((x-plot.x)/barWidth),0,visible.candles.length-1),candle=visible.candles[localIndex];
       const label=new Intl.DateTimeFormat(undefined,{year:"2-digit",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date(candle.time));
       ctx.font="10px ui-monospace,monospace"; const labelWidth=ctx.measureText(label).width+10,labelX=clamp(x-labelWidth/2,plot.x,axisX-labelWidth);
       ctx.fillStyle="#c4cfdd"; ctx.fillRect(labelX,plot.y+plot.h+3,labelWidth,20); ctx.fillStyle="#0b0e14"; ctx.textAlign="center"; ctx.fillText(label,labelX+labelWidth/2,plot.y+plot.h+13); ctx.textAlign="left";
     }
+    const latestIndex=state.chartCandles.length-1;
+    const fanLegend=[dualFans.activeFan?`<span><i style="background:${dualFans.activeFan.direction>0?'#48c78e':'#ef6b73'}"></i>Active Fan ${signalWord(dualFans.activeFan.direction)}</span>`:'',dualFans.adverseFan?`<span><i style="background:${dualFans.adverseFan.direction>0?'#79e8b4':'#ff9ca3'}"></i>Adverse Fan ${signalWord(dualFans.adverseFan.direction)}</span>`:''].join('');el("indicatorLegend").innerHTML=fanLegend+[...indicatorSet.price,...indicatorSet.osc].map(([key,label,color])=>`<span><i style="background:${color}"></i>${label} ${Number.isFinite(indicators[key]?.[latestIndex])?Number(indicators[key][latestIndex]).toFixed(key==='rsi14'?2:5):'—'}</span>`).join('');
   }
+
+  // Canonical HTL series construction.
+  function htlSeriesAverage(values,length){let total=0;return values.map((value,index)=>{total+=value;if(index>=length)total-=values[index-length];return total/length;});}
+  function htlSeriesStdev(values,length){const out=Array(values.length).fill(null);if(values.length<length)return out;let offset=values.find(Number.isFinite)||0,sum=0,sum2=0,bad=0;for(let i=0;i<length;i++){const v=values[i];if(!Number.isFinite(v))bad++;else{const y=v-offset;sum+=y;sum2+=y*y;}}const write=i=>{if(!bad){const m=sum/length;out[i]=Math.sqrt(Math.max(0,sum2/length-m*m));}};write(length-1);for(let i=length;i<values.length;i++){const incoming=values[i],outgoing=values[i-length];if(!Number.isFinite(incoming))bad++;else{const y=incoming-offset;sum+=y;sum2+=y*y;}if(!Number.isFinite(outgoing))bad--;else{const y=outgoing-offset;sum-=y;sum2-=y*y;}write(i);}return out;}
+  function htlSeriesWma(values,length){const out=Array(values.length).fill(null);if(values.length<length)return out;const den=length*(length+1)/2;let sum=0,weighted=0,bad=0;for(let i=0;i<length;i++){const v=values[i];if(!Number.isFinite(v))bad++;else{sum+=v;weighted+=(i+1)*v;}}if(!bad)out[length-1]=weighted/den;for(let i=length;i<values.length;i++){const incoming=values[i],outgoing=values[i-length],oldSum=sum;if(!Number.isFinite(incoming))bad++;else sum+=incoming;if(!Number.isFinite(outgoing))bad--;else sum-=outgoing;if(!bad){if(Number.isFinite(incoming)&&Number.isFinite(outgoing))weighted=weighted-oldSum+length*incoming;else{weighted=0;for(let j=0;j<length;j++)weighted+=(j+1)*values[i-length+1+j];}out[i]=weighted/den;}}return out;}
+  function htlPairAverage(left,right){return left.map((value,index)=>Number.isFinite(value)&&Number.isFinite(right[index])?(value+right[index])/2:null);}
+  function htlNorm(left,right,deviation){return left.map((value,index)=>Number.isFinite(value)&&Number.isFinite(right[index])&&Number.isFinite(deviation[index])&&deviation[index]!==0?(value-right[index])/deviation[index]:null);}
+  function htlInverse(z,deviation,center){return z.map((value,index)=>Number.isFinite(value)&&Number.isFinite(deviation[index])&&Number.isFinite(center[index])?(-value*deviation[index])+center[index]:null);}
+  function htlCross(left,right,index){if(index<1)return 0;const values=[left[index],right[index],left[index-1],right[index-1]];if(!values.every(Number.isFinite))return 0;if(left[index]>right[index]&&left[index-1]<=right[index-1])return 1;if(left[index]<right[index]&&left[index-1]>=right[index-1])return -1;return 0;}
+  function htlCore(data,length){
+    const close=data.map(c=>c.close),high=data.map(c=>c.high),low=data.map(c=>c.low);
+    const average=htlSeriesAverage(close,length),deviation=htlSeriesStdev(close,length);
+    const zero=deviation.map(value=>Number.isFinite(value)&&value!==0?0:null);
+    const u=zero.map((value,index)=>Number.isFinite(value)&&Number.isFinite(deviation[index])?(value*deviation[index])+average[index]:null);
+    const wmaU=htlSeriesWma(u,length),zu=htlNorm(u,wmaU,deviation),i=htlInverse(zu,deviation,wmaU);
+    const hl2=high.map((value,index)=>(value+low[index])/2),mui=htlPairAverage(i,u),wmaMui=htlSeriesWma(mui,length);
+    const zui=htlNorm(mui,wmaMui,deviation),iuz=zui.map(value=>Number.isFinite(value)?-value:null),ui=htlInverse(zui,deviation,wmaMui);
+    const uim=htlPairAverage(mui,ui),wmaUim=htlSeriesWma(uim,length),zim=htlNorm(uim,wmaUim,deviation),uir=htlInverse(zim,deviation,wmaUim);
+    const miu=htlPairAverage(uim,uir),wmaMiu=htlSeriesWma(miu,length),zmiu=htlNorm(miu,wmaMiu,deviation);
+    const ia=zmiu.map((value,index)=>Number.isFinite(value)&&Number.isFinite(deviation[index])&&Number.isFinite(wmaMiu[index])?((value+1)*deviation[index])+wmaMiu[index]:null);
+    const id=zmiu.map((value,index)=>Number.isFinite(value)&&Number.isFinite(deviation[index])&&Number.isFinite(wmaMiu[index])?((value-1)*deviation[index])+wmaMiu[index]:null);
+    const up=htlPairAverage(ia,id),wmaUp=htlSeriesWma(up,length),zup=htlNorm(close,wmaUp,deviation),upr=htlInverse(zup,deviation,wmaUp);
+    return {hl2,mui,zui,iuz,ui,upr};
+  }
+  function htlBuild(data,length){
+    const series=htlCore(data,length),families=[[series.hl2,series.upr],[series.mui,series.ui],[series.zui,series.iuz]],sourceCrosses=[];
+    for(let index=1;index<data.length;index++){const directions=families.map(pair=>htlCross(pair[0],pair[1],index)).filter(Boolean),vote=directions.reduce((sum,value)=>sum+value,0);if(vote)sourceCrosses.push({index,direction:Math.sign(vote)});}
+    const anchors=[];let active=null;
+    const finalize=(episode,end,status)=>{let price=episode.direction>0?-Infinity:Infinity,extremeIndex=episode.index;for(let index=episode.index;index<=end;index++){const value=episode.direction>0?data[index].high:data[index].low;if((episode.direction>0&&value>price)||(episode.direction<0&&value<price)){price=value;extremeIndex=index;}}return {index:extremeIndex,price,direction:episode.direction,status};};
+    sourceCrosses.forEach(event=>{if(active&&event.direction!==active.direction){anchors.push(finalize(active,Math.max(active.index,event.index-1),"FINAL"));active=event;}else if(!active)active=event;});
+    if(active)anchors.push(finalize(active,data.length-1,"PROVISIONAL"));
+    anchors.sort((a,b)=>a.index-b.index);const dedup=[];anchors.forEach(anchor=>{if(dedup.length&&dedup.at(-1).index===anchor.index)dedup[dedup.length-1]=anchor;else dedup.push(anchor);});
+    const asset=Array(data.length).fill(null);
+    if(dedup.length){for(let index=0;index<=dedup[0].index;index++)asset[index]=dedup[0].price;for(let position=1;position<dedup.length;position++){const from=dedup[position-1],to=dedup[position],span=Math.max(1,to.index-from.index);for(let index=from.index;index<=to.index;index++)asset[index]=from.price+(to.price-from.price)*((index-from.index)/span);}const last=dedup.at(-1);for(let index=last.index;index<data.length;index++)asset[index]=last.price;}
+    // Original compound recovery: normalize the instrument-extrema Asset around its own WMA and recover its inverse from that same center and deviation.
+    const assetMean=htlSeriesWma(asset,length),assetDeviation=htlSeriesStdev(asset,length),assetZ=htlNorm(asset,assetMean,assetDeviation),inverse=htlInverse(assetZ,assetDeviation,assetMean);
+    const sourceTotal=Array(data.length).fill(0);let total=0,crossPosition=0;
+    for(let index=0;index<data.length;index++){while(crossPosition<sourceCrosses.length&&sourceCrosses[crossPosition].index===index){total++;crossPosition++;}sourceTotal[index]=total;}
+    return {asset,inverse,assetMean,assetDeviation,assetZ,anchors:dedup,sourceCrosses,sourceTotal,series};
+  }
+  function htlCausal(data,length){
+    const asset=Array(data.length).fill(null),inverse=Array(data.length).fill(null),sourceTotal=Array(data.length).fill(0),first=Math.max(1,length*3-1);
+    for(let index=first;index<data.length;index++){const snapshot=htlBuild(data.slice(0,index+1),length);asset[index]=snapshot.asset.at(-1);inverse[index]=snapshot.inverse.at(-1);sourceTotal[index]=snapshot.sourceCrosses.length;}
+    return {asset,inverse,sourceTotal,causal:true};
+  }
+
+  // HTL event measurement and forecast.
+  function eventMean(values){return values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;}
+  function eventMedian(values){if(!values.length)return null;const ordered=[...values].sort((a,b)=>a-b),middle=Math.floor(ordered.length/2);return ordered.length%2?ordered[middle]:(ordered[middle-1]+ordered[middle])/2;}
+  function eventSlope(values){if(values.length<2)return 0;const xMean=(values.length-1)/2,yMean=eventMean(values);let numerator=0,denominator=0;values.forEach((value,index)=>{numerator+=(index-xMean)*(value-yMean);denominator+=(index-xMean)*(index-xMean);});return denominator?numerator/denominator:0;}
+  function eventFeatures(data,htl){
+    const crosses=[];for(let index=1;index<data.length;index++){const direction=htlCross(htl.asset,htl.inverse,index);if(direction)crosses.push({index,direction});}
+    const events=[];crosses.forEach((cross,position)=>{const end=position+1<crosses.length?crosses[position+1].index-1:data.length-1,status=position+1<crosses.length?"FINAL":"PROVISIONAL",segment=data.slice(cross.index,end+1),spreads=htl.asset.slice(cross.index,end+1).map((value,index)=>value-htl.inverse[cross.index+index]).filter(Number.isFinite),start=segment[0]?.close||0,high=Math.max(...segment.map(c=>c.high)),low=Math.min(...segment.map(c=>c.low)),mean=eventMean(spreads),variance=eventMean(spreads.map(value=>(value-mean)*(value-mean)));events.push({number:position+1,direction:cross.direction,startIndex:cross.index,endIndex:end,status,startTime:data[cross.index].time,endTime:data[end].time,openPrice:start,bars:end-cross.index+1,high,low,upBps:start?((high/start)-1)*10000:0,downBps:start?((low/start)-1)*10000:0,mean,variance,slope:eventSlope(spreads),area:spreads.reduce((sum,value)=>sum+Math.abs(value),0),sourceCrosses:Math.max(0,(htl.sourceTotal[end]||0)-(htl.sourceTotal[Math.max(0,cross.index-1)]||0))});});
+    return events;
+  }
+  function eventForecast(events){
+    const completed=events.filter(event=>event.status==="FINAL"),current=events.at(-1)||null;if(!current)return {completed,current:null};
+    const same=completed.filter(event=>event.direction===current.direction),eligible=same.filter(event=>event.bars>current.bars),probability=horizon=>eligible.length?eligible.filter(event=>event.bars-current.bars<=horizon).length/eligible.length:null;
+    const nextDirection=-current.direction,nextSample=completed.filter(event=>event.direction===nextDirection),duration=eventMedian(nextSample.map(event=>event.bars)),up=eventMedian(nextSample.map(event=>event.upBps)),down=eventMedian(nextSample.map(event=>event.downBps));
+    const durationErrors=[],envelopeErrors=[],brier=[],historicalBrier=[];for(let index=5;index<completed.length;index++){const prior=completed.slice(0,index),target=completed[index],outcome=target.bars<=10?1:0,historicalProbability=prior.filter(event=>event.bars<=10).length/prior.length;historicalBrier.push((historicalProbability-outcome)**2);const matching=prior.filter(event=>event.direction===target.direction);if(matching.length<2)continue;durationErrors.push(Math.abs(target.bars-eventMedian(matching.map(event=>event.bars))));envelopeErrors.push((Math.abs(target.upBps-eventMedian(matching.map(event=>event.upBps)))+Math.abs(target.downBps-eventMedian(matching.map(event=>event.downBps))))/2);const probability10=matching.filter(event=>event.bars<=10).length/matching.length;brier.push((probability10-outcome)**2);}
+    return {completed,current,prob5:probability(5),prob10:probability(10),nextDirection,duration,up,down,durationMae:eventMean(durationErrors),envelopeMae:eventMean(envelopeErrors),brier:eventMean(brier),historicalBrier:eventMean(historicalBrier),validationN:durationErrors.length};
+  }
+  function eventFmt(value,digits){return Number.isFinite(value)?Number(value).toFixed(digits):"—";}
+  function eventAxisLabel(time){
+    return new Date(time).toLocaleString(undefined,{year:"2-digit",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+  }
+  function buildEventRow(pair,data,length){
+    // Use the original reconstructed compound geometry; do not replace it with successive provisional endpoint snapshots.
+    const htl=htlBuild(data,length),events=eventFeatures(data,htl),forecast=eventForecast(events),current=forecast.current,latest=data.at(-1),average=eventMean(data.map(c=>c.close));
+    const envelopeHigh=Number.isFinite(forecast.up)?latest.close*(1+forecast.up/10000):null,envelopeLow=Number.isFinite(forecast.down)?latest.close*(1+forecast.down/10000):null;
+    return {pair,price:latest.close,currentEvent:current?(current.direction>0?"BUY":"SELL"):"—",eventOpen:current?.openPrice??null,location:latest.close>average?"AA":"BA",p5:forecast.prob5,p10:forecast.prob10,events:forecast.completed.length,durationMae:forecast.validationN?forecast.durationMae:null,envelopeMae:forecast.validationN?forecast.envelopeMae:null,brier:forecast.validationN?forecast.brier:null,historicalBrier:forecast.completed.length>5?forecast.historicalBrier:null,nextEvent:current?(forecast.nextDirection>0?"BUY":"SELL"):"—",envelopeLow,envelopeHigh,data,htl,eventList:events,forecast,length};
+  }
+  function eventCell(row,key){
+    if(key==="pair")return formatPair(row.pair);
+    if(key==="price"||key==="eventOpen")return formatPrice(row[key],row.pair);
+    if(key==="p5"||key==="p10")return Number.isFinite(row[key])?eventFmt(row[key]*100,1)+"%":"—";
+    if(key==="durationMae")return Number.isFinite(row[key])?eventFmt(row[key],2)+" bars":"—";
+    if(key==="envelopeMae")return Number.isFinite(row[key])?eventFmt(row[key],1)+" bps":"—";
+    if(key==="brier"||key==="historicalBrier")return Number.isFinite(row[key])?eventFmt(row[key],4):"—";
+    if(key==="envelopeLow")return Number.isFinite(row.envelopeLow)&&Number.isFinite(row.envelopeHigh)?`${formatPrice(row.envelopeLow,row.pair)} — ${formatPrice(row.envelopeHigh,row.pair)}`:"—";
+    return String(row[key]??"—");
+  }
+  function renderEventSchedule(){
+    const {key,direction}=state.eventSort,rows=[...state.eventRows].sort((a,b)=>{
+      const av=a[key],bv=b[key],aMissing=av==null||Number.isNaN(av),bMissing=bv==null||Number.isNaN(bv);
+      if(aMissing!==bMissing)return aMissing?1:-1;
+      return direction*(typeof av==="number"&&typeof bv==="number"?av-bv:String(av).localeCompare(String(bv)));
+    });
+    const selectedPair=el("eventPair").value,hasSelected=rows.some(row=>row.pair===selectedPair);
+    el("eventScheduleBody").innerHTML=rows.map((row,index)=>{const selected=row.pair===selectedPair,focusable=selected||(!hasSelected&&index===0);return `<tr data-pair="${row.pair}" class="${selected?"selected":""}" tabindex="${focusable?0:-1}" aria-selected="${selected}">${["pair","price","currentEvent","eventOpen","location","p5","p10","events","durationMae","envelopeMae","brier","historicalBrier","nextEvent","envelopeLow"].map(column=>{const value=eventCell(row,column),side=(column==="currentEvent"||column==="nextEvent")?(value.startsWith("BUY")?"buy":value.startsWith("SELL")?"sell":""):"";return `<td class="${side?`event-signal ${side}`:""}">${value}</td>`;}).join("")}</tr>`;}).join("");
+    document.querySelectorAll("[data-event-sort]").forEach(button=>button.parentElement.removeAttribute("aria-sort"));
+    const active=document.querySelector(`[data-event-sort="${key}"]`);
+    if(active)active.parentElement.setAttribute("aria-sort",direction>0?"ascending":"descending");
+  }
+  function renderEventDetail(row){
+    if(!row)return;
+    state.eventData=row.data;state.eventHtl=row.htl;state.eventEvents=row.eventList;
+    const {forecast}=row;
+    el("eventChartInstrument").textContent=formatPair(row.pair);
+    el("eventChart").setAttribute("aria-label",`${formatPair(row.pair)} completed OANDA candles with HTL Asset and Inverse Asset event overlays`);
+    el("eventLedger").innerHTML=row.eventList.slice(-40).reverse().map(event=>`<tr><td>${event.direction>0?"BUY":"SELL"} ${event.number}</td><td>${event.status}</td><td>${new Date(event.startTime).toLocaleString()}</td><td>${event.bars}</td><td>${eventFmt(event.high,5)}</td><td>${eventFmt(event.low,5)}</td><td>${eventFmt(event.mean,6)}</td><td>${eventFmt(event.variance,8)}</td><td>${eventFmt(event.slope,7)}</td><td>${eventFmt(event.area,6)}</td><td>${event.sourceCrosses}</td></tr>`).join("");
+    el("eventMethod").textContent=`Completed midpoint candles · ${formatPair(row.pair)} · ${el("eventTimeframe").value} · HTL length ${row.length} · ${row.data.length} candles · ${forecast.completed.length} FINAL events`;
+    el("eventMessage").hidden=true;eventDraw(row.data,row.htl,row.eventList);renderEventSchedule();
+  }
+  function selectEventScheduleRow(pair,focusRow=false){
+    const row=state.eventRows.find(item=>item.pair===pair);if(!row)return;
+    el("eventPair").value=pair;renderEventDetail(row);
+    if(focusRow)requestAnimationFrame(()=>{const target=el("eventScheduleBody").querySelector(`tr[data-pair="${pair}"]`);target?.focus();target?.scrollIntoView({block:"nearest",inline:"nearest"});});
+  }
+  function eventDraw(data,htl,events){
+    if(!data||!htl)return;
+    const canvas=el("eventChart"),rect=canvas.getBoundingClientRect(),dpr=Math.max(1,devicePixelRatio||1),width=Math.max(320,Math.round(rect.width)),height=Math.max(250,Math.round(rect.height));
+    canvas.width=width*dpr;canvas.height=height*dpr;const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#080c12";ctx.fillRect(0,0,width,height);
+    const count=Math.min(state.eventVisibleBars,data.length),maxOffset=Math.max(0,data.length-count),offset=clamp(state.eventOffsetBars,0,maxOffset),end=data.length-offset,start=Math.max(0,end-count),visible=data.slice(start,end);
+    const rightAxis=72+state.eventRightIndent,plot={x:12,y:12,w:Math.max(80,width-rightAxis-12),h:Math.max(80,height-42)},series=[...htl.asset.slice(start,end),...htl.inverse.slice(start,end),...(htl.series?.upr||[]).slice(start,end),...visible.flatMap(candle=>[candle.low,candle.high])].filter(Number.isFinite);if(!series.length)return;
+    let low=Math.min(...series),high=Math.max(...series),padding=Math.max((high-low)*.08,1e-8);low-=padding;high+=padding;
+    const x=index=>plot.x+index/Math.max(1,visible.length-1)*plot.w,y=value=>plot.y+(high-value)/(high-low)*plot.h,priceAtY=yy=>high-(yy-plot.y)/plot.h*(high-low),barWidth=Math.max(1,Math.min(8,plot.w/Math.max(1,visible.length)*.72));
+    ctx.font="10px system-ui";ctx.strokeStyle="#1c2632";ctx.lineWidth=1;
+    for(let index=0;index<=5;index++){const yy=plot.y+index*plot.h/5;ctx.beginPath();ctx.moveTo(plot.x,yy);ctx.lineTo(plot.x+plot.w,yy);ctx.stroke();ctx.fillStyle="#8b98aa";ctx.fillText(eventFmt(high-(high-low)*index/5,5),plot.x+plot.w+7,yy+3);}
+    const timeTicks=Math.min(5,visible.length),lastTick=Math.max(1,timeTicks-1);ctx.fillStyle="#8b98aa";
+    for(let tick=0;tick<timeTicks;tick++){const candleIndex=Math.round(tick*(visible.length-1)/lastTick),xx=x(candleIndex);ctx.strokeStyle="#263242";ctx.beginPath();ctx.moveTo(xx,plot.y+plot.h);ctx.lineTo(xx,plot.y+plot.h+4);ctx.stroke();ctx.textAlign=tick===0?"left":tick===timeTicks-1?"right":"center";ctx.fillText(eventAxisLabel(visible[candleIndex].time),xx,plot.y+plot.h+17);}
+    ctx.textAlign="left";
+    visible.forEach((candle,index)=>{const xx=x(index),up=candle.close>=candle.open,color=up?"#48c78e":"#ef6b73";ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(xx,y(candle.high));ctx.lineTo(xx,y(candle.low));ctx.stroke();const top=y(Math.max(candle.open,candle.close)),bottom=y(Math.min(candle.open,candle.close));ctx.fillRect(xx-barWidth/2,top,barWidth,Math.max(1,bottom-top));});
+    // Original HTL pair f(HL2)/UPR and original instrument-extrema HTL Asset/recovered inverse.
+    [[htl.series?.hl2,"#6ddcdb",1.05],[htl.series?.upr,"#e08430",1.15],[htl.asset,"#d7a85c",2.1],[htl.inverse,"#8d72d8",2.1],[htl.assetMean,"#48a46b",1.05]].forEach(([values,color,lineWidth])=>{if(!values)return;ctx.strokeStyle=color;ctx.lineWidth=lineWidth;ctx.beginPath();let begun=false;for(let index=start;index<end;index++){const value=values[index];if(!Number.isFinite(value)){begun=false;continue;}const xx=x(index-start),yy=y(value);if(!begun){ctx.moveTo(xx,yy);begun=true;}else ctx.lineTo(xx,yy);}ctx.stroke();});
+    events.forEach(event=>{if(event.startIndex<start||event.startIndex>=end)return;const xx=x(event.startIndex-start);ctx.strokeStyle=event.direction>0?"#48c78e":"#ef6b73";ctx.beginPath();ctx.moveTo(xx,plot.y);ctx.lineTo(xx,plot.y+plot.h);ctx.stroke();});
+    if(state.eventCrosshairEnabled&&state.eventCrosshair&&state.eventCrosshair.x>=plot.x&&state.eventCrosshair.x<=plot.x+plot.w&&state.eventCrosshair.y>=plot.y&&state.eventCrosshair.y<=plot.y+plot.h){
+      const {x:cx,y:cy}=state.eventCrosshair,price=priceAtY(cy);ctx.strokeStyle="#dce4ef";ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(plot.x,cy);ctx.lineTo(plot.x+plot.w,cy);ctx.moveTo(cx,plot.y);ctx.lineTo(cx,plot.y+plot.h);ctx.stroke();ctx.setLineDash([]);
+      const label=eventFmt(price,state.eventRows.find(row=>row.pair===el("eventPair").value)?.pair.endsWith("JPY")?3:5),labelWidth=ctx.measureText(label).width+12;ctx.fillStyle="#dce4ef";ctx.fillRect(plot.x+plot.w,cy-9,labelWidth,18);ctx.fillStyle="#080c12";ctx.fillText(label,plot.x+plot.w+6,cy+4);
+    }
+  }
+  async function loadEventForecast(){
+    if(!state.connected)return;
+    const timeframe=el("eventTimeframe").value,length=clamp(Math.trunc(Number(el("eventLength").value)||50),3,200);el("loadEvents").disabled=true;state.eventRows=[];renderEventSchedule();el("eventMessage").hidden=false;el("eventMessage").textContent=`Loading HTL schedule 0 / ${INSTRUMENTS.length}`;
+    let completed=0;
+    try{
+      await runPool(INSTRUMENTS,4,async pair=>{
+        try{const payload=await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=650`),data=completedCandles(payload);if(data.length)state.eventRows.push(buildEventRow(pair,data,length));}
+        finally{completed++;el("eventMessage").textContent=`Loading HTL schedule ${completed} / ${INSTRUMENTS.length}`;renderEventSchedule();}
+      });
+      const selected=state.eventRows.find(row=>row.pair===el("eventPair").value)||state.eventRows[0];
+      if(selected){el("eventPair").value=selected.pair;renderEventDetail(selected);}else{el("eventMessage").textContent="No completed candles returned.";}
+    }catch(error){el("eventMessage").hidden=false;el("eventMessage").textContent=error.message||"HTL schedule load failed.";}
+    finally{el("loadEvents").disabled=!state.connected;}
+  }
+  function renderStrategyConfiguration(){el("configurationScope").textContent=`${formatPair(state.selectedInstrument)} · ${state.selectedTimeframe} · completed candles`;el("strategyConfiguration").innerHTML=STRATEGIES.map(strategy=>{const config=STRATEGY_CONFIG[strategy.id],combined=strategy.id==='COMBO';return `<section class="config-card"><h3>${strategy.label}</h3><label class="field"><span>${combined?'Constituent length':'Length'}</span><input data-config-length="${strategy.id}" type="number" min="3" max="200" step="1" value="${config.length}" ${combined?'disabled':''}></label><label class="field"><span>${combined?'Required agreeing strategies':'Filter'}</span><input data-config-filter="${strategy.id}" type="number" min="0" max="${combined?5:10}" step="${combined?1:.01}" value="${config.filter}"></label></section>`;}).join('');}
+  function strategyTrades(candles,analysis,id){const signals=analysis.series[id]||[],pip=state.selectedInstrument.endsWith('JPY')?100:10000,trades=[];for(let i=0;i<signals.length;i++){const signal=signals[i],opposite=signals.slice(i+1).find(next=>next.direction===-signal.direction);if(!opposite)continue;const entryIndex=Math.min(candles.length-1,signal.index+1),exitIndex=Math.min(candles.length-1,opposite.index+1);if(exitIndex<=entryIndex)continue;const entry=candles[entryIndex].open,exit=candles[exitIndex].open,range=candles.slice(entryIndex,exitIndex+1),net=(exit-entry)*signal.direction*pip,mfe=(signal.direction>0?Math.max(...range.map(c=>c.high))-entry:entry-Math.min(...range.map(c=>c.low)))*pip,mae=(signal.direction>0?entry-Math.min(...range.map(c=>c.low)):Math.max(...range.map(c=>c.high))-entry)*pip;trades.push({net,mfe:Math.max(0,mfe),mae:Math.max(0,mae)});}return trades;}
+  function tradeStats(trades){const wins=trades.filter(t=>t.net>.05),losses=trades.filter(t=>t.net<-.05),flats=trades.length-wins.length-losses.length,net=trades.reduce((s,t)=>s+t.net,0),grossWin=wins.reduce((s,t)=>s+t.net,0),grossLoss=-losses.reduce((s,t)=>s+t.net,0);let equity=0,peak=0,maxDrawdown=0;trades.forEach(t=>{equity+=t.net;peak=Math.max(peak,equity);maxDrawdown=Math.max(maxDrawdown,peak-equity);});const mfe=trades.reduce((s,t)=>s+t.mfe,0),mae=trades.reduce((s,t)=>s+t.mae,0);return{trades:trades.length,wins:wins.length,losses:losses.length,flats,net,average:trades.length?net/trades.length:NaN,mfeMae:mae?mfe/mae:mfe?Infinity:NaN,maxDrawdown,profitFactor:grossLoss?grossWin/grossLoss:grossWin?Infinity:NaN,recoveryFactor:maxDrawdown?net/maxDrawdown:net>0?Infinity:NaN};}
+  function renderMacroPerformance(){if(!state.chartCandles.length||!state.chartAnalysis)return;const fmt=(value,digits=2)=>value===Infinity?'∞':Number.isFinite(value)?value.toFixed(digits):'—';el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const stats=tradeStats(strategyTrades(state.chartCandles,state.chartAnalysis,strategy.id));return `<tr><td>${strategy.label}</td><td>${stats.trades}</td><td>${stats.wins}/${stats.losses}/${stats.flats}</td><td class="${stats.net>=0?'positive':'negative'}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;}).join('');el("computeConfiguration").disabled=false;}
+  function applyConfiguration(){document.querySelectorAll('[data-config-length]').forEach(input=>{if(!input.disabled)STRATEGY_CONFIG[input.dataset.configLength].length=clamp(Math.round(Number(input.value)||50),3,200);});document.querySelectorAll('[data-config-filter]').forEach(input=>{const id=input.dataset.configFilter;STRATEGY_CONFIG[id].filter=clamp(Number(input.value)||0,0,id==='COMBO'?5:10);});el("eventLength").value=STRATEGY_CONFIG.ASSET.length;state.scheduleEvaluations.clear();for(const [key,candles] of state.scheduleCandles)try{state.scheduleEvaluations.set(key,analyzeCandles(candles,false));}catch{}if(state.chartCandles.length)state.chartAnalysis=analyzeCandles(state.chartCandles,true);renderSchedule();updateChartSummary();updateCompartments();drawChart();renderMacroPerformance();renderStrategyConfiguration();}
+  async function computeConfiguration(){if(!state.chartCandles.length)return;const button=el("computeConfiguration");button.disabled=true;button.textContent='Computing…';await new Promise(resolve=>setTimeout(resolve,0));const lengths=[10,20,30,40,50,75,100].filter(length=>length*2<state.chartCandles.length),filters={ASSET:[.7,1,1.25,1.5,2],DARE_N:[.3,.5,.7,1],DARE:[.03,.05,.08,.12,.2],COMBO:[1,2,3,4],NAI:[.7,1,1.25,1.5,2],APEX:[0,.01,.02,.05,.1]};for(const strategy of STRATEGIES){const config=STRATEGY_CONFIG[strategy.id],original={...config};let best={...original,score:-Infinity};for(const length of strategy.id==='COMBO'?[config.length]:lengths)for(const filter of filters[strategy.id]){config.length=length;config.filter=filter;try{const analysis=analyzeCandles(state.chartCandles,true),stats=tradeStats(strategyTrades(state.chartCandles,analysis,strategy.id)),score=stats.net-.25*stats.maxDrawdown;if(stats.trades>=2&&score>best.score)best={length,filter,score};}catch{}}config.length=best.length;config.filter=best.filter;}renderStrategyConfiguration();applyConfiguration();button.textContent='Compute configuration';button.disabled=false;}
+  function selectFacility(name){for(const facility of ['analysis','event','performance']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'&&state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}}
 
   function pointerPosition(event) { const rect=el("chart").getBoundingClientRect(); return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
 
   function bindEvents() {
     el("credentialForm").addEventListener("submit",connect);
+    el("analysisTab").addEventListener("click",()=>selectFacility("analysis"));
+    el("eventTab").addEventListener("click",()=>selectFacility("event"));
+    el("performanceTab").addEventListener("click",()=>selectFacility("performance"));
+    el("applyConfiguration").addEventListener("click",applyConfiguration);
+    el("computeConfiguration").addEventListener("click",computeConfiguration);
+    el("loadEvents").addEventListener("click",loadEventForecast);
+    el("eventPair").addEventListener("change",()=>selectEventScheduleRow(el("eventPair").value));
+    el("eventScheduleTable").addEventListener("click",event=>{
+      const sort=event.target.closest("[data-event-sort]");
+      if(sort){const key=sort.dataset.eventSort;if(state.eventSort.key===key)state.eventSort.direction*=-1;else state.eventSort={key,direction:1};renderEventSchedule();return;}
+      const row=event.target.closest("tr[data-pair]");if(row)selectEventScheduleRow(row.dataset.pair,true);
+    });
+    el("eventScheduleTable").addEventListener("keydown",event=>{
+      if(event.key!=="ArrowUp"&&event.key!=="ArrowDown")return;
+      const current=event.target.closest("tr[data-pair]");if(!current)return;
+      const rows=[...el("eventScheduleBody").querySelectorAll("tr[data-pair]")],index=rows.indexOf(current),nextIndex=clamp(index+(event.key==="ArrowDown"?1:-1),0,rows.length-1);
+      event.preventDefault();if(nextIndex!==index)selectEventScheduleRow(rows[nextIndex].dataset.pair,true);
+    });
+    el("eventZoomIn").addEventListener("click",()=>{state.eventVisibleBars=clamp(Math.round(state.eventVisibleBars*.8),30,300);eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
+    el("eventZoomOut").addEventListener("click",()=>{state.eventVisibleBars=clamp(Math.round(state.eventVisibleBars*1.25),30,300);eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
+    el("eventIndentOut").addEventListener("click",()=>{state.eventRightIndent=clamp(state.eventRightIndent+24,0,260);eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
+    el("eventIndentIn").addEventListener("click",()=>{state.eventRightIndent=clamp(state.eventRightIndent-24,0,260);eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
+    el("eventCrosshairToggle").addEventListener("click",event=>{state.eventCrosshairEnabled=!state.eventCrosshairEnabled;event.currentTarget.textContent=`Crosshair ${state.eventCrosshairEnabled?"on":"off"}`;event.currentTarget.setAttribute("aria-pressed",String(state.eventCrosshairEnabled));if(!state.eventCrosshairEnabled)state.eventCrosshair=null;eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
+    el("eventMaximize").addEventListener("click",async()=>{try{if(!document.fullscreenElement)await el("eventPanel").requestFullscreen();else await document.exitFullscreen();}catch{}setTimeout(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents),40);});
+    el("tradePair").addEventListener("change",()=>{el("tradeStatus").textContent="";loadTradeCapacity();});
+    el("tradeUnits").addEventListener("input",event=>{event.target.value=event.target.value.replace(/\D/g,"");updateTradeButtons();});
+    el("tradeBuy").addEventListener("click",()=>placeTrade("BUY"));
+    el("tradeSell").addEventListener("click",()=>placeTrade("SELL"));
     el("disconnectButton").addEventListener("click",disconnect);
     el("refreshSchedule").addEventListener("click",loadSchedule);
     el("refreshChart").addEventListener("click",loadChart);
     el("scheduleStrategy").addEventListener("change",event=>{ state.selectedScheduleStrategy=event.target.value; renderSchedule(); });
-    el("chartPair").addEventListener("change",event=>{ state.selectedInstrument=event.target.value; markSelectedRow(); if (state.connected) loadChart(); });
-    el("chartTimeframe").addEventListener("change",event=>{ state.selectedTimeframe=event.target.value; if (state.connected) loadChart(); });
+    el("chartPair").addEventListener("change",event=>{ state.selectedInstrument=event.target.value; markSelectedRow(); });
+    el("chartTimeframe").addEventListener("change",event=>{ state.selectedTimeframe=event.target.value; });
     el("chartStrategy").addEventListener("change",event=>{ state.selectedStrategy=event.target.value; updateChartSummary(); drawChart(); });
     el("signalMatrix").addEventListener("click",event=>{
       const pairButton=event.target.closest("[data-pair]"); if (pairButton) { selectChart(pairButton.dataset.pair,state.selectedTimeframe); return; }
@@ -789,10 +1202,17 @@
     canvas.addEventListener("pointercancel",()=>{state.dragging=false;});
     canvas.addEventListener("pointerleave",()=>{ if (!state.dragging) { state.crosshair=null; drawChart(); } });
     canvas.addEventListener("wheel",event=>{ event.preventDefault(); const factor=event.deltaY>0?1.15:.87; state.visibleBars=clamp(Math.round(state.visibleBars*factor),30,300); state.offsetBars=clamp(state.offsetBars,0,Math.max(0,state.chartCandles.length-state.visibleBars)); updateChartSummary(); drawChart(); },{passive:false});
-    window.addEventListener("resize",drawChart);
+    const eventCanvas=el("eventChart");
+    eventCanvas.addEventListener("pointerdown",event=>{if(!state.eventData)return;state.eventDragging=true;state.eventDragStartX=event.clientX;state.eventDragStartOffset=state.eventOffsetBars;eventCanvas.setPointerCapture(event.pointerId);});
+    eventCanvas.addEventListener("pointermove",event=>{const rect=eventCanvas.getBoundingClientRect();state.eventCrosshair={x:event.clientX-rect.left,y:event.clientY-rect.top};if(state.eventDragging){const delta=Math.round((event.clientX-state.eventDragStartX)/Math.max(2,rect.width/state.eventVisibleBars));state.eventOffsetBars=clamp(state.eventDragStartOffset+delta,0,Math.max(0,state.eventData.length-state.eventVisibleBars));}eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
+    eventCanvas.addEventListener("pointerup",event=>{state.eventDragging=false;try{eventCanvas.releasePointerCapture(event.pointerId);}catch{}});
+    eventCanvas.addEventListener("pointercancel",()=>{state.eventDragging=false;});
+    eventCanvas.addEventListener("pointerleave",()=>{if(!state.eventDragging){state.eventCrosshair=null;eventDraw(state.eventData,state.eventHtl,state.eventEvents);}});
+    eventCanvas.addEventListener("wheel",event=>{event.preventDefault();state.eventVisibleBars=clamp(Math.round(state.eventVisibleBars*(event.deltaY>0?1.15:.87)),30,300);state.eventOffsetBars=clamp(state.eventOffsetBars,0,Math.max(0,(state.eventData?.length||0)-state.eventVisibleBars));eventDraw(state.eventData,state.eventHtl,state.eventEvents);},{passive:false});
+    window.addEventListener("resize",()=>{drawChart();if(state.eventData&&!el("eventPanel").hidden)eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
   }
 
-  buildSelectors(); buildMatrix(); buildCompartments(); bindEvents(); updateChartSummary(); updateCompartments(); drawChart(); void updateEngineStatus();
+  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); renderStrategyConfiguration(); bindEvents(); updateChartSummary(); updateCompartments(); drawChart();
   </script>
 </body>
 </html>
