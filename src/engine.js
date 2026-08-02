@@ -67,6 +67,7 @@ export class HtlEngine{
   async alarm(){try{await this.tick();}finally{await this.ctx.storage.setAlarm(Date.now()+60000);}}
   async status(){const state=(await this.ctx.storage.get("state"))||{};return{armed:true,running:this.running,timeframe:TIMEFRAME,htlLength:HTL_LENGTH,triggerMode:"new-completed-candle-only",positionManagement:"all-open-positions",lastCandle:state.lastCandle||null,lastRun:state.lastRun||null,lastError:state.lastError||null,processedPairs:Object.keys(state.events||{}).length};}
   async write(entry){const ledger=(await this.ctx.storage.get("ledger"))||[];ledger.unshift({...entry,time:new Date().toISOString()});await this.ctx.storage.put("ledger",ledger.slice(0,500));await notify(this.env,entry);}
+  async scan(token){const rows=[];for(const pair of PAIRS){const data=await candles(pair,token),event=currentEvent(data);if(event)rows.push({pair,event});}return rows;}
   async reconcile(directions,token,accountId){
     const payload=await callOanda(`/v3/accounts/${accountId}/positions`,token),positions=payload.positions||[];
     for(const position of positions){
@@ -83,8 +84,11 @@ export class HtlEngine{
     try{
       const{token,configured}=secrets(this.env),accountId=await liveAccount(token,configured),probe=await candles("EUR_USD",token,2),lastCandle=probe.at(-1)?.time;
       if(!lastCandle)return;
-      if(lastCandle===state.lastCandle){if(state.directions)await this.reconcile(state.directions,token,accountId);state.lastRun=new Date().toISOString();state.lastError=null;return;}
-      const rows=[];for(const pair of PAIRS){const data=await candles(pair,token),event=currentEvent(data);if(event)rows.push({pair,event});}
+      if(lastCandle===state.lastCandle){
+        if(!state.directions){const rows=await this.scan(token);state.directions=Object.fromEntries(rows.map(row=>[row.pair,row.event.direction]));state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;}
+        await this.reconcile(state.directions,token,accountId);state.lastRun=new Date().toISOString();state.lastError=null;return;
+      }
+      const rows=await this.scan(token);
       state.directions=Object.fromEntries(rows.map(row=>[row.pair,row.event.direction]));
       await this.reconcile(state.directions,token,accountId);
       if(!state.initialized){state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;await this.write({type:"INITIALIZED",message:`${rows.length} HTL events registered`});}
