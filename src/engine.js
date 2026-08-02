@@ -1,6 +1,6 @@
 const API="https://api-fxtrade.oanda.com";
 const PAIRS=["EUR_USD","GBP_USD","USD_JPY","USD_CAD","USD_CHF","AUD_USD","NZD_USD","EUR_GBP","EUR_JPY","EUR_CHF","EUR_AUD","EUR_CAD","EUR_NZD","GBP_JPY","GBP_CHF","GBP_AUD","GBP_CAD","GBP_NZD","AUD_JPY","AUD_CHF","AUD_CAD","AUD_NZD","NZD_JPY","NZD_CHF","NZD_CAD","CAD_JPY","CAD_CHF","CHF_JPY"];
-const TIMEFRAME="M15",HTL_LENGTH=50,CANDLE_COUNT=650;
+const TIMEFRAME="M15",HTL_LENGTH=10,CANDLE_COUNT=650;
 
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
 const mean=values=>values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;
