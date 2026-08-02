@@ -14,5 +14,16 @@ binding = "AI"
 binding = "OANDA_ENGINE"
 service = "oanda-28pair-strategy"
 
+[[durable_objects.bindings]]
+name = "HTL_ENGINE"
+class_name = "HtlEngine"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = [ "HtlEngine" ]
+
+[triggers]
+crons = [ "* * * * *" ]
+
 [secrets]
 required = [ "OANDA_ACCOUNT_ID", "OANDA_API_KEY" ]
