@@ -74,7 +74,7 @@ export class HtlEngine{
       const rows=[];for(const pair of PAIRS){const data=await candles(pair,token),event=currentEvent(data);if(event)rows.push({pair,event});}
       if(!state.initialized){state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;await this.write({type:"INITIALIZED",message:`${rows.length} HTL events registered`});}
       else{
-        const candidates=rows.filter(row=>state.events[row.pair]!==row.event.id).sort((a,b)=>b.event.bars-a.event.bars);
+        const candidates=rows.filter(row=>state.events[row.pair]!==row.event.id&&row.event.startTime===lastCandle).sort((a,b)=>b.event.bars-a.event.bars);
         if(candidates.length)await this.execute(await this.choose(candidates),token,accountId,state);
         for(const row of rows)state.events[row.pair]=row.event.id;
       }
