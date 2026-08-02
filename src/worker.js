@@ -84,6 +84,11 @@ async function handleConnect(env) {
   return json({account:{id:account.id||accountId,alias:account.alias||"",currency:account.currency||"",balance:account.balance||"0",NAV:account.NAV||"0",marginAvailable:account.marginAvailable||"0",marginUsed:account.marginUsed||"0",hedgingEnabled:Boolean(account.hedgingEnabled),openPositionCount:account.openPositionCount||0,lastTransactionID:payload.lastTransactionID||null},live:true});
 }
 
+async function handleAccountDiagnostic(env) {
+  const {token,accountId}=credentials(env),payload=await oandaRequest("/v3/accounts",token),accounts=Array.isArray(payload.accounts)?payload.accounts:[];
+  return json({configuredSuffix:accountId.slice(-3),authorizedAccounts:accounts.map(account=>({suffix:String(account.id||"").slice(-3),selected:account.id===accountId,tags:account.tags||[]})),intendedAccountVisible:accounts.some(account=>account.id===accountId)});
+}
+
 async function handleProxy(request,env,url) {
   const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),method=request.method;
   if(!["GET","POST"].includes(method)) return json({error:"Method not allowed."},405,{Allow:"GET, POST"});
@@ -118,6 +123,7 @@ export default {
       if(url.pathname.startsWith("/api/")) {
         assertSameOrigin(request);
         if(url.pathname==="/api/oanda/connect"&&request.method==="GET") return await handleConnect(env);
+        if(url.pathname==="/api/oanda/accounts"&&request.method==="GET") return await handleAccountDiagnostic(env);
         if(url.pathname==="/api/oanda/proxy") return await handleProxy(request,env,url);
         if(url.pathname==="/api/oanda/candles"&&request.method==="GET") return await handleCandles(env,url);
         if(url.pathname==="/api/engine/health"&&request.method==="GET") {
