@@ -1,4 +1,5 @@
 const LIVE_OANDA_ORIGIN = "https://api-fxtrade.oanda.com";
+export { HtlEngine } from "./engine.js";
 
 const INSTRUMENTS = new Set([
   "EUR_USD","GBP_USD","USD_JPY","USD_CAD","USD_CHF","AUD_USD","NZD_USD",
@@ -124,6 +125,9 @@ export default {
         assertSameOrigin(request);
         if(url.pathname==="/api/oanda/connect"&&request.method==="GET") return await handleConnect(env);
         if(url.pathname==="/api/oanda/accounts"&&request.method==="GET") return await handleAccountDiagnostic(env);
+        if(url.pathname==="/api/engine/status"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/status");
+        if(url.pathname==="/api/engine/ledger"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/ledger");
+        if(url.pathname==="/api/engine/tick"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/tick",{method:"POST"}));
         if(url.pathname==="/api/oanda/proxy") return await handleProxy(request,env,url);
         if(url.pathname==="/api/oanda/candles"&&request.method==="GET") return await handleCandles(env,url);
         if(url.pathname==="/api/engine/health"&&request.method==="GET") {
@@ -138,5 +142,6 @@ export default {
     } catch(error) {
       return json({error:error?.message||"Request failed.",details:error?.payload||undefined},Number(error?.status)||500);
     }
-  }
+  },
+  async scheduled(_event,env,ctx){ctx.waitUntil(env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/tick",{method:"POST"})));}
 };
