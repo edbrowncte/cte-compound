@@ -106,9 +106,9 @@ export default {
     try {
       if(url.pathname.startsWith("/api/")) {
         assertSameOrigin(request);
-        if(url.pathname==="/api/oanda/connect"&&request.method==="GET") return handleConnect(env);
-        if(url.pathname==="/api/oanda/proxy") return handleProxy(request,env,url);
-        if(url.pathname==="/api/oanda/candles"&&request.method==="GET") return handleCandles(env,url);
+        if(url.pathname==="/api/oanda/connect"&&request.method==="GET") return await handleConnect(env);
+        if(url.pathname==="/api/oanda/proxy") return await handleProxy(request,env,url);
+        if(url.pathname==="/api/oanda/candles"&&request.method==="GET") return await handleCandles(env,url);
         if(url.pathname==="/api/engine/health"&&request.method==="GET") {
           if(!env.OANDA_ENGINE) return json({error:"OANDA engine binding is not configured."},503);
           const downstream=await env.OANDA_ENGINE.fetch(new Request("https://internal/api/health"));
