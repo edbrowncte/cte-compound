@@ -25,8 +25,8 @@ async function resolveAccount(token,configuredAccountId) {
   if(accountCache&&accountCache.expires>Date.now()) return accountCache.id;
   const payload=await oandaRequest("/v3/accounts",token);
   const accounts=Array.isArray(payload.accounts)?payload.accounts:[];
-  const selected=accounts.find(account=>account.id===configuredAccountId);
-  if(!selected?.id) throw Object.assign(new Error("The configured OANDA account is not authorized by the configured token."),{status:401});
+  const selected=accounts.find(account=>account.id===configuredAccountId&&!account.tags?.includes("MT4"))||accounts.find(account=>String(account.id||"").endsWith("-001")&&!account.tags?.includes("MT4"));
+  if(!selected?.id) throw Object.assign(new Error("The authorized non-MT4 OANDA account ending -001 was not found."),{status:401});
   accountCache={id:selected.id,expires:Date.now()+300000};
   return selected.id;
 }
