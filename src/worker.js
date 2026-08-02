@@ -84,8 +84,9 @@ async function handleAccountDiagnostic(env) {
 }
 
 async function handleProxy(request,env,url) {
-  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),method=request.method;
+  const method=request.method;
   if(method!=="GET") return json({error:"Method not allowed."},405,{Allow:"GET"});
+  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId);
   const path=proxyPath(url.searchParams.get("path"),accountId,method);
   return json(await oandaRequest(path,token,{method}));
 }
