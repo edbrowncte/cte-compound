@@ -298,7 +298,7 @@
           <div class="event-controls">
             <label class="field"><span>Currency pair</span><select id="eventPair"></select></label>
             <label class="field"><span>Timeframe</span><select id="eventTimeframe"></select></label>
-            <label class="field"><span>HTL length</span><input id="eventLength" type="number" min="3" max="200" value="50"></label>
+            <label class="field"><span>HTL length</span><input id="eventLength" type="number" min="3" max="200" value="10"></label>
             <button id="loadEvents" type="button" disabled>Forecast events</button>
           </div>
         </div>
@@ -370,7 +370,7 @@
     { id:"NAI", label:"NAI" },
     { id:"APEX", label:"APEX" }
   ]);
-  const STRATEGY_CONFIG={ASSET:{length:50,filter:1.05},DARE_N:{length:50,filter:.62},DARE:{length:50,filter:.08},COMBO:{length:50,filter:2},NAI:{length:50,filter:1.25},APEX:{length:20,filter:.02}};
+  const STRATEGY_CONFIG={ASSET:{length:10,filter:1.05},DARE_N:{length:50,filter:.62},DARE:{length:50,filter:.08},COMBO:{length:50,filter:2},NAI:{length:50,filter:1.25},APEX:{length:20,filter:.02}};
 
   const state = {
     connected:false,
@@ -1119,7 +1119,7 @@
   }
   async function loadEventForecast(){
     if(!state.connected)return;
-    const timeframe=el("eventTimeframe").value,length=clamp(Math.trunc(Number(el("eventLength").value)||50),3,200);el("loadEvents").disabled=true;state.eventRows=[];renderEventSchedule();el("eventMessage").hidden=false;el("eventMessage").textContent=`Loading HTL schedule 0 / ${INSTRUMENTS.length}`;
+    const timeframe=el("eventTimeframe").value,length=clamp(Math.trunc(Number(el("eventLength").value)||10),3,200);el("loadEvents").disabled=true;state.eventRows=[];renderEventSchedule();el("eventMessage").hidden=false;el("eventMessage").textContent=`Loading HTL schedule 0 / ${INSTRUMENTS.length}`;
     let completed=0;
     try{
       await runPool(INSTRUMENTS,4,async pair=>{
