@@ -65,7 +65,7 @@ export class HtlEngine{
   constructor(ctx,env){this.ctx=ctx;this.env=env;this.running=false;}
   async fetch(request){const path=new URL(request.url).pathname;if(path==="/status")return response(await this.status());if(path==="/ledger")return response({ledger:(await this.ctx.storage.get("ledger"))||[]});if(path==="/tick"&&request.method==="POST"){await this.tick();return response(await this.status());}return response({error:"Not found"},404);}
   async alarm(){try{await this.tick();}finally{await this.ctx.storage.setAlarm(Date.now()+60000);}}
-  async status(){const state=(await this.ctx.storage.get("state"))||{};return{armed:true,running:this.running,timeframe:TIMEFRAME,htlLength:HTL_LENGTH,lastCandle:state.lastCandle||null,lastRun:state.lastRun||null,lastError:state.lastError||null,processedPairs:Object.keys(state.events||{}).length};}
+  async status(){const state=(await this.ctx.storage.get("state"))||{};return{armed:true,running:this.running,timeframe:TIMEFRAME,htlLength:HTL_LENGTH,triggerMode:"new-completed-candle-only",lastCandle:state.lastCandle||null,lastRun:state.lastRun||null,lastError:state.lastError||null,processedPairs:Object.keys(state.events||{}).length};}
   async write(entry){const ledger=(await this.ctx.storage.get("ledger"))||[];ledger.unshift({...entry,time:new Date().toISOString()});await this.ctx.storage.put("ledger",ledger.slice(0,500));await notify(this.env,entry);}
   async tick(){
     if(this.running)return;this.running=true;let state=(await this.ctx.storage.get("state"))||{events:{},initialized:false};
