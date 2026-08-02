@@ -199,12 +199,14 @@
       <form id="credentialForm" autocomplete="off" novalidate>
         <div class="credential-grid">
           <div class="field">
-            <label for="oandaAccountId">OANDA Account ID</label>
-            <input id="oandaAccountId" type="text" inputmode="numeric" pattern="[0-9-]+" autocomplete="off" required>
+            <span>OANDA account</span>
+            <strong class="runtime-value" id="oandaAccountState">Cloudflare secret</strong>
+            <input id="oandaAccountId" type="hidden">
           </div>
           <div class="field">
-            <label for="oandaApiToken">OANDA API Token</label>
-            <input id="oandaApiToken" type="password" autocomplete="off" spellcheck="false" required>
+            <span>OANDA API</span>
+            <strong class="runtime-value" id="oandaApiState">Server managed</strong>
+            <input id="oandaApiToken" type="hidden">
           </div>
           <button class="connect" id="connectButton" type="submit">Connect</button>
           <button class="disconnect" id="disconnectButton" type="button" disabled>Disconnect</button>
@@ -616,8 +618,7 @@
   }
 
   async function oanda(path,controller) {
-    const token=el("oandaApiToken").value.trim();
-    const response=await fetch(`${OANDA_URL}${path}`,{method:"GET",headers:{"Accept":"application/json","Authorization":`Bearer ${token}`},credentials:"omit",cache:"no-store",signal:controller?.signal});
+    const response=await fetch(`/api/oanda/proxy?path=${encodeURIComponent(path)}`,{method:"GET",headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store",signal:controller?.signal});
     const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
     if (!response.ok) {
       const message=payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`;
@@ -627,8 +628,7 @@
   }
 
   async function oandaPost(path,body) {
-    const token=el("oandaApiToken").value.trim();
-    const response=await fetch(`${OANDA_URL}${path}`,{method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json","Authorization":`Bearer ${token}`},credentials:"omit",cache:"no-store",body:JSON.stringify(body)});
+    const response=await fetch(`/api/oanda/proxy?path=${encodeURIComponent(path)}`,{method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)});
     const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
     if(!response.ok){const message=payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`;throw new Error(message);}
     return payload;
@@ -687,13 +687,14 @@
 
   async function connect(event) {
     event?.preventDefault?.();
-    const accountId=el("oandaAccountId").value.trim();
-    const token=el("oandaApiToken").value.trim();
-    if (!accountId||!token) return;
     el("connectButton").disabled=true;
     setConnectionStatus("Connecting to live OANDA…");
     try {
-      const payload=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/summary`);
+      const response=await fetch("/api/oanda/connect",{headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store"});
+      const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
+      if(!response.ok)throw new Error(payload.error||payload.message||`HTTP ${response.status}`);
+      const accountId=payload.account?.id||"";
+      el("oandaAccountId").value=accountId;
       state.connected=true;
       el("disconnectButton").disabled=false;
       el("refreshSchedule").disabled=false;
@@ -701,6 +702,8 @@
       el("loadEvents").disabled=false;
       el("accountFacts").hidden=false;
       applyAccountFacts(payload.account,accountId);
+      el("oandaAccountState").textContent=payload.account?.alias||accountId||"Connected";
+      el("oandaApiState").textContent="Connected through Worker";
       setConnectionStatus("Live OANDA connected · completed midpoint candles only","connected");
       await Promise.all([loadTradeCapacity(),loadSchedule(),loadChart(),loadEventForecast()]);
     } catch (error) {
@@ -716,7 +719,7 @@
     state.chartCandles=[]; state.chartAnalysis=null; state.eventData=null; state.eventHtl=null; state.eventEvents=[]; state.eventRows=[]; state.crosshair=null;state.tradeLongAvailable=0;state.tradeShortAvailable=0;state.tradeBusy=false;
     el("accountFacts").hidden=true;
     el("connectButton").disabled=false; el("disconnectButton").disabled=true; el("refreshSchedule").disabled=true; el("refreshChart").disabled=true; el("loadEvents").disabled=true;
-    el("oandaAccountId").value=""; el("oandaApiToken").value="";
+    el("oandaAccountId").value=""; el("oandaApiToken").value="";el("oandaAccountState").textContent="Cloudflare secret";el("oandaApiState").textContent="Server managed";
     el("factUnitsAvailable").textContent="—";el("tradeStatus").textContent="";el("eventChartInstrument").textContent="—";updateTradeButtons();
     setConnectionStatus("Not connected");
     resetMatrix(); updateChartSummary(); updateCompartments(); drawChart();
@@ -1212,7 +1215,7 @@
     window.addEventListener("resize",()=>{drawChart();if(state.eventData&&!el("eventPanel").hidden)eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
   }
 
-  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); renderStrategyConfiguration(); bindEvents(); updateChartSummary(); updateCompartments(); drawChart();
+  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); renderStrategyConfiguration(); bindEvents(); updateChartSummary(); updateCompartments(); drawChart(); void connect();
   </script>
 </body>
 </html>
