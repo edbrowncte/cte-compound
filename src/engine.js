@@ -1,6 +1,6 @@
 const API="https://api-fxtrade.oanda.com";
 const PAIRS=["EUR_USD","GBP_USD","USD_JPY","USD_CAD","USD_CHF","AUD_USD","NZD_USD","EUR_GBP","EUR_JPY","EUR_CHF","EUR_AUD","EUR_CAD","EUR_NZD","GBP_JPY","GBP_CHF","GBP_AUD","GBP_CAD","GBP_NZD","AUD_JPY","AUD_CHF","AUD_CAD","AUD_NZD","NZD_JPY","NZD_CHF","NZD_CAD","CAD_JPY","CAD_CHF","CHF_JPY"];
-const TIMEFRAME="M15",HTL_LENGTH=10,CANDLE_COUNT=650;
+const MTF_TIMEFRAMES=["W","D","H4","H1","M30","M15","M5","M1","S30","S5"],TIMEFRAMES=new Set(MTF_TIMEFRAMES),DECISION_MODES=new Set(["EVENT","MTF","COMBINED"]),DEFAULT_CONFIG={timeframe:"M15",htlLength:10,decisionMode:"EVENT"},CANDLE_COUNT=650;
 
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
 const mean=values=>values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;
@@ -47,13 +47,13 @@ function htlBuild(data,length){
   return{asset,inverse:recovered,sourceTotal};
 }
 
-function currentEvent(data){
-  const htl=htlBuild(data,HTL_LENGTH),crosses=[];for(let index=1;index<data.length;index++){const direction=cross(htl.asset,htl.inverse,index);if(direction)crosses.push({index,direction});}
+function currentEvent(data,length){
+  const htl=htlBuild(data,length),crosses=[];for(let index=1;index<data.length;index++){const direction=cross(htl.asset,htl.inverse,index);if(direction)crosses.push({index,direction});}
   if(!crosses.length)return null;const current=crosses.at(-1),start=data[current.index];return{direction:current.direction,startTime:start.time,openPrice:start.close,bars:data.length-current.index,id:`${current.direction}:${start.time}`};
 }
 
 function normalizeCandles(payload){return(payload.candles||[]).filter(c=>c.complete&&c.mid).map(c=>({time:c.time,open:Number(c.mid.o),high:Number(c.mid.h),low:Number(c.mid.l),close:Number(c.mid.c),volume:Number(c.volume||0)})).filter(c=>[c.open,c.high,c.low,c.close].every(Number.isFinite));}
-async function candles(pair,token,count=CANDLE_COUNT){const q=new URLSearchParams({price:"M",granularity:TIMEFRAME,count:String(count),smooth:"false"});return normalizeCandles(await callOanda(`/v3/instruments/${pair}/candles?${q}`,token));}
+async function candles(pair,token,timeframe,count=CANDLE_COUNT){const q=new URLSearchParams({price:"M",granularity:timeframe,count:String(count),smooth:"false"});return normalizeCandles(await callOanda(`/v3/instruments/${pair}/candles?${q}`,token));}
 
 async function notify(env,entry){
   const text=`CTE ${entry.type}: ${entry.pair||"system"} ${entry.direction||""} ${entry.message||""}`.trim();
@@ -61,13 +61,17 @@ async function notify(env,entry){
   if(env.TWILIO_ACCOUNT_SID&&env.TWILIO_AUTH_TOKEN&&env.TWILIO_FROM&&env.SMS_TO){const body=new URLSearchParams({To:env.SMS_TO,From:env.TWILIO_FROM,Body:text});await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,{method:"POST",headers:{Authorization:`Basic ${btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)}`,"Content-Type":"application/x-www-form-urlencoded"},body}).catch(()=>{});}
 }
 
+function normalizeConfig(value={}){const timeframe=TIMEFRAMES.has(value.timeframe)?value.timeframe:DEFAULT_CONFIG.timeframe,htlLength=Math.max(3,Math.min(200,Math.trunc(Number(value.htlLength))||DEFAULT_CONFIG.htlLength)),decisionMode=DECISION_MODES.has(value.decisionMode)?value.decisionMode:DEFAULT_CONFIG.decisionMode;return{timeframe,htlLength,decisionMode};}
+
 export class HtlEngine{
   constructor(ctx,env){this.ctx=ctx;this.env=env;this.running=false;}
-  async fetch(request){const path=new URL(request.url).pathname;if(path==="/status")return response(await this.status());if(path==="/ledger")return response({ledger:(await this.ctx.storage.get("ledger"))||[]});if(path==="/tick"&&request.method==="POST"){await this.tick();return response(await this.status());}return response({error:"Not found"},404);}
-  async alarm(){try{await this.tick();}finally{await this.ctx.storage.setAlarm(Date.now()+60000);}}
-  async status(){const state=(await this.ctx.storage.get("state"))||{};return{armed:true,running:this.running,timeframe:TIMEFRAME,htlLength:HTL_LENGTH,triggerMode:"new-completed-candle-only",positionManagement:"all-open-positions",lastCandle:state.lastCandle||null,lastRun:state.lastRun||null,lastError:state.lastError||null,processedPairs:Object.keys(state.events||{}).length};}
+  async fetch(request){const path=new URL(request.url).pathname;if(path==="/status")return response(await this.status());if(path==="/config"&&request.method==="GET")return response(await this.config());if(path==="/config"&&request.method==="PUT")return response(await this.configure(await request.json()));if(path==="/ledger")return response({ledger:(await this.ctx.storage.get("ledger"))||[]});if(path==="/tick"&&request.method==="POST"){await this.tick();return response(await this.status());}return response({error:"Not found"},404);}
+  async alarm(){await this.ctx.storage.deleteAlarm();}
+  async config(){const state=(await this.ctx.storage.get("state"))||{};return normalizeConfig(state.config);}
+  async configure(value){const state=(await this.ctx.storage.get("state"))||{events:{}},prior=normalizeConfig(state.config),next=normalizeConfig(value);if(prior.timeframe!==next.timeframe||prior.htlLength!==next.htlLength){state.events={};state.directions=null;state.lastCandle=null;state.initialized=false;}state.config=next;await this.ctx.storage.put("state",state);await this.write({type:"CONFIGURATION",message:`${next.timeframe} · HTL ${next.htlLength} · ${next.decisionMode}`});return next;}
+  async status(){const state=(await this.ctx.storage.get("state"))||{},config=normalizeConfig(state.config);return{armed:true,running:this.running,...config,triggerMode:"new-completed-candle-only",positionManagement:"all-open-positions",mtfCoverage:Object.keys(state.mtf||{}).length,lastCandle:state.lastCandle||null,lastRun:state.lastRun||null,lastError:state.lastError||null,processedPairs:Object.keys(state.events||{}).length};}
   async write(entry){const ledger=(await this.ctx.storage.get("ledger"))||[];ledger.unshift({...entry,time:new Date().toISOString()});await this.ctx.storage.put("ledger",ledger.slice(0,500));await notify(this.env,entry);}
-  async scan(token){const rows=[];for(const pair of PAIRS){const data=await candles(pair,token),event=currentEvent(data);if(event)rows.push({pair,event});}return rows;}
+  async scan(token,config,timeframe=config.timeframe){const rows=[];for(const pair of PAIRS){const data=await candles(pair,token,timeframe),event=currentEvent(data,config.htlLength);if(event)rows.push({pair,event});}return rows;}
   async reconcile(directions,token,accountId){
     const payload=await callOanda(`/v3/accounts/${accountId}/positions`,token),positions=payload.positions||[];
     for(const position of positions){
@@ -79,27 +83,31 @@ export class HtlEngine{
       await this.write({type:"POSITION_CLOSED",pair:position.instrument,direction:existing>0?"BUY":"SELL",units:existing>0?longUnits:shortUnits,message:"Position opposed current HTL direction"});
     }
   }
+  mtfCandidates(state,rows,lastCandle){const byPair=new Map(rows.map(row=>[row.pair,row]));return PAIRS.map(pair=>{let score=0,count=0;for(const timeframe of MTF_TIMEFRAMES){const direction=Number(state.mtf?.[timeframe]?.directions?.[pair]||0);if(direction){score+=direction;count++;}}const direction=Math.sign(score),confidence=count?Math.abs(score)/count:0,row=byPair.get(pair);return direction&&count>=3&&row?{pair,event:{...row.event,direction,id:`MTF:${direction}:${lastCandle}`},confidence,count}:null;}).filter(Boolean).sort((left,right)=>right.confidence-left.confidence||right.count-left.count);}
   async tick(){
     if(this.running)return;this.running=true;let state=(await this.ctx.storage.get("state"))||{events:{},initialized:false};
     try{
-      const{token,configured}=secrets(this.env),accountId=await liveAccount(token,configured),probe=await candles("EUR_USD",token,2),lastCandle=probe.at(-1)?.time;
+      const config=normalizeConfig(state.config);state.config=config;const{token,configured}=secrets(this.env),accountId=await liveAccount(token,configured),rotationIndex=Number(state.mtfRotation||0)%MTF_TIMEFRAMES.length,rotationTimeframe=MTF_TIMEFRAMES[rotationIndex],rotationRows=await this.scan(token,config,rotationTimeframe);state.mtf=state.mtf||{};state.mtf[rotationTimeframe]={directions:Object.fromEntries(rotationRows.map(row=>[row.pair,row.event.direction])),updated:new Date().toISOString()};state.mtfRotation=(rotationIndex+1)%MTF_TIMEFRAMES.length;const probe=await candles("EUR_USD",token,config.timeframe,2),lastCandle=probe.at(-1)?.time;
       if(!lastCandle)return;
       if(lastCandle===state.lastCandle){
-        if(!state.directions){const rows=await this.scan(token);state.directions=Object.fromEntries(rows.map(row=>[row.pair,row.event.direction]));state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;}
+        if(!state.directions){const rows=rotationTimeframe===config.timeframe?rotationRows:await this.scan(token,config);state.directions=Object.fromEntries(rows.map(row=>[row.pair,row.event.direction]));state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;}
         await this.reconcile(state.directions,token,accountId);state.lastRun=new Date().toISOString();state.lastError=null;return;
       }
-      const rows=await this.scan(token);
+      const rows=rotationTimeframe===config.timeframe?rotationRows:await this.scan(token,config);
       state.directions=Object.fromEntries(rows.map(row=>[row.pair,row.event.direction]));
       await this.reconcile(state.directions,token,accountId);
       if(!state.initialized){state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;await this.write({type:"INITIALIZED",message:`${rows.length} HTL events registered`});}
       else{
-        const candidates=rows.filter(row=>state.events[row.pair]!==row.event.id&&row.event.startTime===lastCandle).sort((a,b)=>b.event.bars-a.event.bars);
-        if(candidates.length)await this.execute(await this.choose(candidates),token,accountId,state);
+        const eventCandidates=rows.filter(row=>state.events[row.pair]!==row.event.id&&row.event.startTime===lastCandle).sort((a,b)=>b.event.bars-a.event.bars),mtfCandidates=this.mtfCandidates(state,rows,lastCandle);let candidate=null;
+        if(config.decisionMode==="EVENT"&&eventCandidates.length)candidate=await this.choose(eventCandidates);
+        if(config.decisionMode==="MTF"&&mtfCandidates.length)candidate=mtfCandidates[0];
+        if(config.decisionMode==="COMBINED"){const combined=eventCandidates.map(event=>{const mtf=mtfCandidates.find(item=>item.pair===event.pair&&item.event.direction===event.event.direction);return mtf?{...event,confidence:mtf.confidence}:null;}).filter(Boolean).sort((left,right)=>right.confidence-left.confidence);if(combined.length)candidate=await this.choose(combined);}
+        if(candidate)await this.execute(candidate,token,accountId,state);
         for(const row of rows)state.events[row.pair]=row.event.id;
       }
       state.lastCandle=lastCandle;state.lastRun=new Date().toISOString();state.lastError=null;
     }catch(error){state.lastRun=new Date().toISOString();state.lastError=error.message||"Engine failure";await this.write({type:"ERROR",message:state.lastError});}
-    finally{await this.ctx.storage.put("state",state);if(await this.ctx.storage.getAlarm()===null)await this.ctx.storage.setAlarm(Date.now()+60000);this.running=false;}
+    finally{await this.ctx.storage.put("state",state);if(await this.ctx.storage.getAlarm()!==null)await this.ctx.storage.deleteAlarm();this.running=false;}
   }
   async choose(candidates){
     if(candidates.length===1||!this.env.AI)return candidates[0];
