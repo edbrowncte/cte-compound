@@ -52,6 +52,18 @@
     .trade-action.buy { color:#b9f5d8; background:rgba(72,199,142,.18); border-color:rgba(72,199,142,.5); }
     .trade-action.sell { color:#ffc1c5; background:rgba(239,107,115,.18); border-color:rgba(239,107,115,.5); }
     .trade-status { flex-basis:100%; min-height:15px; color:var(--muted); font-size:9px; }
+    .positions-panel { grid-column:1/-1; min-width:0; border-top:1px solid var(--line); padding-top:10px; }
+    .positions-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
+    .positions-head h2 { margin:0; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+    .positions-stream { color:var(--muted); font-size:9px; }
+    .positions-stream.live { color:var(--buy); }
+    .positions-wrap { overflow:auto; max-height:190px; border:1px solid var(--line); background:#090d13; }
+    .positions-table { width:100%; min-width:940px; font-size:9px; }
+    .positions-table th,.positions-table td { height:27px; padding:4px 7px; text-align:right; }
+    .positions-table th:first-child,.positions-table td:first-child { text-align:left; }
+    .positions-table .side { font-weight:900; text-align:center; }
+    .positions-table .side.buy { color:var(--buy); background:rgba(72,199,142,.13); }
+    .positions-table .side.sell { color:var(--sell); background:rgba(239,107,115,.13); }
     main { display:grid; gap:14px; margin-top:14px; }
     .panel { border:1px solid var(--line2); background:linear-gradient(180deg,var(--panel),#0d1219); box-shadow:var(--shadow); }
     .panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-bottom:1px solid var(--line); }
@@ -216,6 +228,15 @@
           </div>
         </div>
       </form>
+      <section class="positions-panel" id="positionsPanel" hidden aria-labelledby="positionsTitle">
+        <div class="positions-head"><h2 id="positionsTitle">Open Positions</h2><span class="positions-stream" id="positionsStreamStatus">Not connected</span></div>
+        <div class="positions-wrap">
+          <table class="positions-table">
+            <thead><tr><th>Currency Pair</th><th>Side</th><th>Units</th><th>Average Price</th><th>Current Price</th><th>Pips</th><th>Change</th><th>Unrealized P/L</th><th>Margin Used</th><th>Updated</th></tr></thead>
+            <tbody id="positionsBody"><tr><td colspan="10">No open positions</td></tr></tbody>
+          </table>
+        </div>
+      </section>
     </header>
 
     <nav class="app-tabs" role="tablist" aria-label="Analytical compound facilities">
@@ -377,6 +398,12 @@
     tradeLongAvailable:0,
     tradeShortAvailable:0,
     tradeBusy:false,
+    positionsBusy:false,
+    openPositions:[],
+    positionPrices:new Map(),
+    positionTimer:null,
+    positionStreamController:null,
+    positionStreamSignature:"",
     scheduleCandles:new Map(),
     scheduleEvaluations:new Map(),
     scheduleController:null,
@@ -642,6 +669,52 @@
     el("factMargin").textContent=finite(account.marginAvailable).toLocaleString(undefined,{maximumFractionDigits:2});
   }
 
+  function renderOpenPositions(){
+    if(!state.openPositions.length){el("positionsBody").innerHTML='<tr><td colspan="10">No open positions</td></tr>';return;}
+    el("positionsBody").innerHTML=state.openPositions.map(position=>{
+      const pair=position.instrument,longUnits=Number(position.long?.units||0),shortUnits=Math.abs(Number(position.short?.units||0)),isLong=longUnits>0,side=isLong?"BUY":"SELL",units=isLong?longUnits:shortUnits,details=isLong?position.long:position.short,entry=Number(details?.averagePrice),price=state.positionPrices.get(pair),current=Number(isLong?price?.bid:price?.ask),pipSize=pair.endsWith("JPY")?.01:.0001,pips=Number.isFinite(current)&&Number.isFinite(entry)?(isLong?current-entry:entry-current)/pipSize:NaN,change=Number.isFinite(current)&&Number.isFinite(entry)&&entry?(isLong?current-entry:entry-current)/entry*100:NaN,unrealized=Number(details?.unrealizedPL??position.unrealizedPL),margin=Number(position.marginUsed);
+      const signed=(value,digits,suffix="")=>Number.isFinite(value)?`${value>0?"+":""}${value.toFixed(digits)}${suffix}`:"—";
+      return `<tr><td>${formatPair(pair)}</td><td class="side ${isLong?"buy":"sell"}">${side}</td><td>${units.toLocaleString()}</td><td>${formatPrice(entry,pair)}</td><td>${formatPrice(current,pair)}</td><td class="${pips>0?"positive":pips<0?"negative":""}">${signed(pips,1)}</td><td class="${change>0?"positive":change<0?"negative":""}">${signed(change,3,"%")}</td><td class="${unrealized>0?"positive":unrealized<0?"negative":""}">${signed(unrealized,2)}</td><td>${Number.isFinite(margin)?margin.toFixed(2):"—"}</td><td>${formatTime(price?.time)}</td></tr>`;
+    }).join("");
+  }
+
+  function setPositionPrice(price){
+    if(price?.type!=="PRICE"||!price.instrument)return;
+    const bid=Number(price.closeoutBid??price.bids?.[0]?.price),ask=Number(price.closeoutAsk??price.asks?.[0]?.price);
+    state.positionPrices.set(price.instrument,{bid,ask,time:price.time});renderOpenPositions();
+  }
+
+  async function startPositionStream(instruments){
+    const signature=[...instruments].sort().join(",");
+    if(signature===state.positionStreamSignature)return;
+    state.positionStreamController?.abort();state.positionStreamSignature=signature;
+    if(!signature){el("positionsStreamStatus").textContent="No open positions";el("positionsStreamStatus").classList.remove("live");return;}
+    const controller=new AbortController();state.positionStreamController=controller;
+    try{
+      const response=await fetch(`/api/oanda/stream?instruments=${encodeURIComponent(signature)}`,{headers:{Accept:"application/octet-stream"},credentials:"same-origin",cache:"no-store",signal:controller.signal});
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      el("positionsStreamStatus").textContent="Live pricing stream";el("positionsStreamStatus").classList.add("live");
+      const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="";
+      while(state.connected&&!controller.signal.aborted){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split("\n");buffer=lines.pop()||"";for(const line of lines){if(!line.trim())continue;try{setPositionPrice(JSON.parse(line));}catch{}}}
+    }catch(error){if(controller.signal.aborted)return;el("positionsStreamStatus").textContent="Live refresh";el("positionsStreamStatus").classList.remove("live");}
+    finally{if(state.connected&&!controller.signal.aborted&&state.positionStreamSignature===signature){state.positionStreamSignature="";setTimeout(()=>{if(state.connected)void startPositionStream(instruments);},2000);}}
+  }
+
+  async function refreshOpenPositions(){
+    if(!state.connected||state.positionsBusy)return;state.positionsBusy=true;
+    try{
+      const accountId=el("oandaAccountId").value.trim(),[positionsPayload,summaryPayload]=await Promise.all([oanda(`/v3/accounts/${encodeURIComponent(accountId)}/positions`),oanda(`/v3/accounts/${encodeURIComponent(accountId)}/summary`)]),positions=(positionsPayload.positions||[]).filter(position=>Number(position.long?.units||0)!==0||Number(position.short?.units||0)!==0),instruments=positions.map(position=>position.instrument);
+      state.openPositions=positions;applyAccountFacts(summaryPayload.account||{},accountId);
+      if(instruments.length){const pricing=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/pricing?instruments=${encodeURIComponent(instruments.join(","))}`);for(const price of pricing.prices||[])setPositionPrice(price);}
+      renderOpenPositions();void startPositionStream(instruments);
+    }catch(error){el("positionsStreamStatus").textContent=error.message||"Position refresh failed";el("positionsStreamStatus").classList.remove("live");}
+    finally{state.positionsBusy=false;}
+  }
+
+  function startPositionMonitor(){clearInterval(state.positionTimer);void refreshOpenPositions();state.positionTimer=setInterval(refreshOpenPositions,3000);}
+
+  function stopPositionMonitor(){clearInterval(state.positionTimer);state.positionTimer=null;state.positionStreamController?.abort();state.positionStreamController=null;state.positionStreamSignature="";state.openPositions=[];state.positionPrices.clear();renderOpenPositions();}
+
   function tradeUnitAmount(){return Math.trunc(Number(el("tradeUnits").value.replace(/\D/g,"")));}
 
   function updateTradeButtons(){
@@ -701,14 +774,17 @@
       el("refreshChart").disabled=false;
       el("loadEvents").disabled=false;
       el("accountFacts").hidden=false;
+      el("positionsPanel").hidden=false;
       applyAccountFacts(payload.account,accountId);
       el("oandaAccountState").textContent=payload.account?.alias||accountId||"Connected";
       el("oandaApiState").textContent="Connected through Worker";
       setConnectionStatus("Live OANDA connected · completed midpoint candles only","connected");
+      startPositionMonitor();
       await Promise.all([loadTradeCapacity(),loadSchedule(),loadChart(),loadEventForecast()]);
     } catch (error) {
       state.connected=false;
       el("accountFacts").hidden=true;
+      el("positionsPanel").hidden=true;stopPositionMonitor();
       setConnectionStatus(error.message||"OANDA connection failed.","error");
     } finally { el("connectButton").disabled=state.connected; }
   }
@@ -718,6 +794,7 @@
     state.connected=false; state.scheduleCandles.clear(); state.scheduleEvaluations.clear();
     state.chartCandles=[]; state.chartAnalysis=null; state.eventData=null; state.eventHtl=null; state.eventEvents=[]; state.eventRows=[]; state.crosshair=null;state.tradeLongAvailable=0;state.tradeShortAvailable=0;state.tradeBusy=false;
     el("accountFacts").hidden=true;
+    el("positionsPanel").hidden=true;stopPositionMonitor();
     el("connectButton").disabled=false; el("disconnectButton").disabled=true; el("refreshSchedule").disabled=true; el("refreshChart").disabled=true; el("loadEvents").disabled=true;
     el("oandaAccountId").value=""; el("oandaApiToken").value="";el("oandaAccountState").textContent="Cloudflare secret";el("oandaApiState").textContent="Server managed";
     el("factUnitsAvailable").textContent="—";el("tradeStatus").textContent="";el("eventChartInstrument").textContent="—";updateTradeButtons();

@@ -1,4 +1,5 @@
 const LIVE_OANDA_ORIGIN = "https://api-fxtrade.oanda.com";
+const LIVE_OANDA_STREAM_ORIGIN = "https://stream-fxtrade.oanda.com";
 export { HtlEngine } from "./engine.js";
 
 const INSTRUMENTS = new Set([
@@ -99,6 +100,15 @@ async function handleCandles(env,url) {
   return json({instrument,granularity,candles:normalizeCandles(await oandaRequest(`/v3/instruments/${instrument}/candles?${query}`,token)),completedOnly:true});
 }
 
+async function handlePricingStream(env,url) {
+  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),instruments=String(url.searchParams.get("instruments")||"").split(",").filter(Boolean);
+  if(!instruments.length||instruments.length>INSTRUMENTS.size||instruments.some(instrument=>!INSTRUMENTS.has(instrument))) return json({error:"Invalid instruments."},400);
+  const query=new URLSearchParams({instruments:instruments.join(","),snapshot:"true"});
+  const upstream=await fetch(`${LIVE_OANDA_STREAM_ORIGIN}/v3/accounts/${encodeURIComponent(accountId)}/pricing/stream?${query}`,{headers:{Authorization:`Bearer ${token}`,Accept:"application/octet-stream"},redirect:"manual",cache:"no-store"});
+  if(!upstream.ok){const payload=await upstream.json().catch(()=>({}));return json({error:payload.errorMessage||payload.errorCode||`OANDA HTTP ${upstream.status}`},upstream.status);}
+  return new Response(upstream.body,{status:200,headers:{"Content-Type":"application/octet-stream","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
+}
+
 function secureAsset(response,url) {
   const headers=new Headers(response.headers);
   headers.set("X-Content-Type-Options","nosniff");
@@ -121,6 +131,7 @@ export default {
         if(url.pathname==="/api/engine/ledger"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/ledger");
         if(url.pathname==="/api/oanda/proxy") return await handleProxy(request,env,url);
         if(url.pathname==="/api/oanda/candles"&&request.method==="GET") return await handleCandles(env,url);
+        if(url.pathname==="/api/oanda/stream"&&request.method==="GET") return await handlePricingStream(env,url);
         if(url.pathname==="/api/engine/health"&&request.method==="GET") {
           if(!env.OANDA_ENGINE) return json({error:"OANDA engine binding is not configured."},503);
           const downstream=await env.OANDA_ENGINE.fetch(new Request("https://internal/api/health"));
