@@ -299,7 +299,7 @@
           <div class="metric"><span>Signal</span><strong id="metricSignal">—</strong></div>
           <div class="metric"><span>Confidence</span><strong id="metricConfidence">—</strong></div>
           <div class="metric"><span>Regime</span><strong id="metricRegime">—</strong></div>
-          <div class="metric"><span>Last close</span><strong id="metricClose">—</strong></div>
+          <div class="metric"><span>Current price</span><strong id="metricClose">—</strong></div>
           <div class="metric"><span>Completed candle</span><strong id="metricTime">—</strong></div>
           <div class="metric"><span>Visible bars</span><strong id="metricBars">120</strong></div>
         </div>
@@ -682,10 +682,15 @@
     if(price?.type!=="PRICE"||!price.instrument)return;
     const bid=Number(price.closeoutBid??price.bids?.[0]?.price),ask=Number(price.closeoutAsk??price.asks?.[0]?.price);
     state.positionPrices.set(price.instrument,{bid,ask,time:price.time});renderOpenPositions();
+    if(price.instrument===state.selectedInstrument){updateChartSummary();drawChart();}
+    if(price.instrument===el("eventPair").value&&state.eventData)eventDraw(state.eventData,state.eventHtl,state.eventEvents);
   }
 
+  function liveMid(pair){const price=state.positionPrices.get(pair);return Number.isFinite(price?.bid)&&Number.isFinite(price?.ask)?(price.bid+price.ask)/2:NaN;}
+
   async function startPositionStream(instruments){
-    const signature=[...instruments].sort().join(",");
+    const tracked=new Set(instruments);if(state.selectedInstrument)tracked.add(state.selectedInstrument);if(el("eventPair").value)tracked.add(el("eventPair").value);
+    const signature=[...tracked].sort().join(",");
     if(signature===state.positionStreamSignature)return;
     state.positionStreamController?.abort();state.positionStreamSignature=signature;
     if(!signature){el("positionsStreamStatus").textContent="No open positions";el("positionsStreamStatus").classList.remove("live");return;}
@@ -893,7 +898,7 @@
     el("metricSignal").className=latest?directionClass(latest.direction):"";
     el("metricConfidence").textContent=latest&&latest.direction?formatPct(latest.confidence):"—";
     el("metricRegime").textContent=latest?.regime||"—";
-    el("metricClose").textContent=candle?formatPrice(candle.close):"—";
+    const live=liveMid(state.selectedInstrument);el("metricClose").textContent=Number.isFinite(live)?formatPrice(live):candle?formatPrice(candle.close):"—";
     el("metricTime").textContent=candle?formatTime(candle.time):"—";
     el("metricBars").textContent=String(state.visibleBars);
   }
@@ -929,6 +934,7 @@
     state.selectedTimeframe=timeframe||state.selectedTimeframe;
     el("chartPair").value=state.selectedInstrument; el("chartTimeframe").value=state.selectedTimeframe;
     markSelectedRow();
+    if(state.connected)void startPositionStream(state.openPositions.map(position=>position.instrument));
     el("chartPanel").scrollIntoView({behavior:"smooth",block:"start"});
   }
 
@@ -984,8 +990,8 @@
     const hasOscillator=indicatorSet.osc.length>0;
     const pricePlot=hasOscillator?{...plot,h:plot.h*.72}:plot;
     const oscPlot=hasOscillator?{x:plot.x,y:plot.y+plot.h*.78,w:plot.w,h:plot.h*.22}:null;
-    const priceValues=indicatorSet.price.flatMap(([key])=>(indicators[key]||[]).slice(visible.start,visible.end).filter(Number.isFinite));
-    let low=Math.min(...visible.candles.map(c=>c.low),...priceValues),high=Math.max(...visible.candles.map(c=>c.high),...priceValues);
+    const priceValues=indicatorSet.price.flatMap(([key])=>(indicators[key]||[]).slice(visible.start,visible.end).filter(Number.isFinite)),live=state.offsetBars===0?liveMid(state.selectedInstrument):NaN;
+    let low=Math.min(...visible.candles.map(c=>c.low),...priceValues,...(Number.isFinite(live)?[live]:[])),high=Math.max(...visible.candles.map(c=>c.high),...priceValues,...(Number.isFinite(live)?[live]:[]));
     const pad=Math.max((high-low)*.08,high*1e-6); low-=pad; high+=pad;
     const priceToY=price=>pricePlot.y+(high-price)/(high-low)*pricePlot.h;
     const yToPrice=y=>high-(y-pricePlot.y)/pricePlot.h*(high-low);
@@ -1047,9 +1053,9 @@
       ctx.closePath(); ctx.fill();
     }
 
-    const latest=visible.candles.at(-1),latestY=priceToY(latest.close);
-    ctx.setLineDash([4,4]); ctx.strokeStyle="#d7a85c"; ctx.beginPath(); ctx.moveTo(plot.x,latestY); ctx.lineTo(axisX,latestY); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle="#d7a85c"; ctx.fillRect(axisX,latestY-10,68,20); ctx.fillStyle="#0b0e14"; ctx.font="bold 10px ui-monospace,monospace"; ctx.fillText(formatPrice(latest.close),axisX+5,latestY);
+    const latest=visible.candles.at(-1),displayPrice=Number.isFinite(live)?live:latest.close,latestY=priceToY(displayPrice),priceColor=Number.isFinite(live)?"#7dc4ff":"#d7a85c";
+    ctx.setLineDash([4,4]); ctx.strokeStyle=priceColor; ctx.beginPath(); ctx.moveTo(plot.x,latestY); ctx.lineTo(axisX,latestY); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=priceColor; ctx.fillRect(axisX,latestY-10,68,20); ctx.fillStyle="#0b0e14"; ctx.font="bold 10px ui-monospace,monospace"; ctx.fillText(formatPrice(displayPrice),axisX+5,latestY);
 
     if (state.crosshairEnabled&&state.crosshair&&state.crosshair.x>=pricePlot.x&&state.crosshair.x<=pricePlot.x+pricePlot.w&&state.crosshair.y>=pricePlot.y&&state.crosshair.y<=pricePlot.y+pricePlot.h) {
       const x=state.crosshair.x,y=state.crosshair.y,price=yToPrice(y);
@@ -1169,7 +1175,7 @@
   }
   function selectEventScheduleRow(pair,focusRow=false){
     const row=state.eventRows.find(item=>item.pair===pair);if(!row)return;
-    el("eventPair").value=pair;renderEventDetail(row);
+    el("eventPair").value=pair;renderEventDetail(row);if(state.connected)void startPositionStream(state.openPositions.map(position=>position.instrument));
     if(focusRow)requestAnimationFrame(()=>{const target=el("eventScheduleBody").querySelector(`tr[data-pair="${pair}"]`);target?.focus();target?.scrollIntoView({block:"nearest",inline:"nearest"});});
   }
   function eventDraw(data,htl,events){
@@ -1177,7 +1183,7 @@
     const canvas=el("eventChart"),rect=canvas.getBoundingClientRect(),dpr=Math.max(1,devicePixelRatio||1),width=Math.max(320,Math.round(rect.width)),height=Math.max(250,Math.round(rect.height));
     canvas.width=width*dpr;canvas.height=height*dpr;const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#080c12";ctx.fillRect(0,0,width,height);
     const count=Math.min(state.eventVisibleBars,data.length),maxOffset=Math.max(0,data.length-count),offset=clamp(state.eventOffsetBars,0,maxOffset),end=data.length-offset,start=Math.max(0,end-count),visible=data.slice(start,end);
-    const rightAxis=72+state.eventRightIndent,plot={x:12,y:12,w:Math.max(80,width-rightAxis-12),h:Math.max(80,height-42)},series=[...htl.asset.slice(start,end),...htl.inverse.slice(start,end),...(htl.series?.upr||[]).slice(start,end),...visible.flatMap(candle=>[candle.low,candle.high])].filter(Number.isFinite);if(!series.length)return;
+    const live=state.eventOffsetBars===0?liveMid(el("eventPair").value):NaN,rightAxis=72+state.eventRightIndent,plot={x:12,y:12,w:Math.max(80,width-rightAxis-12),h:Math.max(80,height-42)},series=[...htl.asset.slice(start,end),...htl.inverse.slice(start,end),...(htl.series?.upr||[]).slice(start,end),...visible.flatMap(candle=>[candle.low,candle.high]),...(Number.isFinite(live)?[live]:[])].filter(Number.isFinite);if(!series.length)return;
     let low=Math.min(...series),high=Math.max(...series),padding=Math.max((high-low)*.08,1e-8);low-=padding;high+=padding;
     const x=index=>plot.x+index/Math.max(1,visible.length-1)*plot.w,y=value=>plot.y+(high-value)/(high-low)*plot.h,priceAtY=yy=>high-(yy-plot.y)/plot.h*(high-low),barWidth=Math.max(1,Math.min(8,plot.w/Math.max(1,visible.length)*.72));
     ctx.font="10px system-ui";ctx.strokeStyle="#1c2632";ctx.lineWidth=1;
@@ -1189,6 +1195,7 @@
     // Original HTL pair f(HL2)/UPR and original instrument-extrema HTL Asset/recovered inverse.
     [[htl.series?.hl2,"#6ddcdb",1.05],[htl.series?.upr,"#e08430",1.15],[htl.asset,"#d7a85c",2.1],[htl.inverse,"#8d72d8",2.1],[htl.assetMean,"#48a46b",1.05]].forEach(([values,color,lineWidth])=>{if(!values)return;ctx.strokeStyle=color;ctx.lineWidth=lineWidth;ctx.beginPath();let begun=false;for(let index=start;index<end;index++){const value=values[index];if(!Number.isFinite(value)){begun=false;continue;}const xx=x(index-start),yy=y(value);if(!begun){ctx.moveTo(xx,yy);begun=true;}else ctx.lineTo(xx,yy);}ctx.stroke();});
     events.forEach(event=>{if(event.startIndex<start||event.startIndex>=end)return;const xx=x(event.startIndex-start);ctx.strokeStyle=event.direction>0?"#48c78e":"#ef6b73";ctx.beginPath();ctx.moveTo(xx,plot.y);ctx.lineTo(xx,plot.y+plot.h);ctx.stroke();});
+    if(Number.isFinite(live)){const yy=y(live),label=eventFmt(live,el("eventPair").value.endsWith("JPY")?3:5);ctx.strokeStyle="#7dc4ff";ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(plot.x,yy);ctx.lineTo(plot.x+plot.w,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#7dc4ff";ctx.fillRect(plot.x+plot.w,yy-9,68,18);ctx.fillStyle="#080c12";ctx.fillText(label,plot.x+plot.w+5,yy+4);}
     if(state.eventCrosshairEnabled&&state.eventCrosshair&&state.eventCrosshair.x>=plot.x&&state.eventCrosshair.x<=plot.x+plot.w&&state.eventCrosshair.y>=plot.y&&state.eventCrosshair.y<=plot.y+plot.h){
       const {x:cx,y:cy}=state.eventCrosshair,price=priceAtY(cy);ctx.strokeStyle="#dce4ef";ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(plot.x,cy);ctx.lineTo(plot.x+plot.w,cy);ctx.moveTo(cx,plot.y);ctx.lineTo(cx,plot.y+plot.h);ctx.stroke();ctx.setLineDash([]);
       const label=eventFmt(price,state.eventRows.find(row=>row.pair===el("eventPair").value)?.pair.endsWith("JPY")?3:5),labelWidth=ctx.measureText(label).width+12;ctx.fillStyle="#dce4ef";ctx.fillRect(plot.x+plot.w,cy-9,labelWidth,18);ctx.fillStyle="#080c12";ctx.fillText(label,plot.x+plot.w+6,cy+4);
@@ -1252,7 +1259,7 @@
     el("refreshSchedule").addEventListener("click",loadSchedule);
     el("refreshChart").addEventListener("click",loadChart);
     el("scheduleStrategy").addEventListener("change",event=>{ state.selectedScheduleStrategy=event.target.value; renderSchedule(); });
-    el("chartPair").addEventListener("change",event=>{ state.selectedInstrument=event.target.value; markSelectedRow(); });
+    el("chartPair").addEventListener("change",event=>{ state.selectedInstrument=event.target.value; markSelectedRow();if(state.connected)void startPositionStream(state.openPositions.map(position=>position.instrument)); });
     el("chartTimeframe").addEventListener("change",event=>{ state.selectedTimeframe=event.target.value; });
     el("chartStrategy").addEventListener("change",event=>{ state.selectedStrategy=event.target.value; updateChartSummary(); drawChart(); });
     el("signalMatrix").addEventListener("click",event=>{
