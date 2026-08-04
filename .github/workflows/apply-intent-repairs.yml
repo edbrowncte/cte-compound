@@ -7,6 +7,12 @@ on:
     paths:
       - scripts/apply-intent-repairs.mjs
       - .github/workflows/apply-intent-repairs.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/apply-intent-repairs.mjs
+      - .github/workflows/apply-intent-repairs.yml
 
 permissions:
   contents: write
