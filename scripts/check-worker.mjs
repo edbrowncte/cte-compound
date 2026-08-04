@@ -16,7 +16,8 @@ const workerChecks=[
   [/oandaTelemetry/,"OANDA retry telemetry"],
   [/handleManualOrder/,"strict manual order route"],
   [/Optimizer records are server-managed/,"server-authoritative optimizer boundary"],
-  [/api\/platform\/preferences/,"cross-device preference route"]
+  [/api\/platform\/preferences/,"cross-device preference route"],
+  [/api\/engine\/compute/,"authoritative Compute Configuration route"]
 ];
 const engineChecks=[
   [/clientExtensions:\{id:clientId/,"OANDA client order identity"],
@@ -29,7 +30,10 @@ const engineChecks=[
   [/await this\.reconcile\(requirements/,"full-position reconciliation"],
   [/optimizerScore/,"effective optimizer ledger attribution"],
   [/state\.requirements/,"durable optimized reconciliation context"],
-  [/uiPreferences/,"durable UI preference storage"]
+  [/uiPreferences/,"durable UI preference storage"],
+  [/candlesForRange/,"date-range Compute Configuration candles"],
+  [/COMPUTE_CONFIGURATION/,"authoritative optimizer source"],
+  [/MAX_COMPUTE_BARS/,"bounded causal optimization range"]
 ];
 for(const [pattern,label] of [...workerChecks,...engineChecks]){
   const source=workerChecks.some(item=>item[0]===pattern)?worker:engine;
