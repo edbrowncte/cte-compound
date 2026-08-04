@@ -4,6 +4,7 @@ on:
     branches: [feature/platform-horizon-crossing]
     paths:
       - scripts/apply-platform-horizon.mjs
+      - scripts/apply-platform-horizon-fixup.mjs
       - public/htl-horizon-contract.js
       - .github/workflows/finalize-platform-horizon.yml
 jobs:
@@ -29,15 +30,22 @@ jobs:
           node scripts/apply-platform-horizon.mjs > tmp/platform-migration.log 2>&1
           transform_status=$?
           if [ "$transform_status" -eq 0 ]; then
+            node scripts/apply-platform-horizon-fixup.mjs >> tmp/platform-migration.log 2>&1
+            fixup_status=$?
+          else
+            fixup_status=99
+          fi
+          if [ "$transform_status" -eq 0 ] && [ "$fixup_status" -eq 0 ]; then
             npm run check >> tmp/platform-migration.log 2>&1
             check_status=$?
           else
             check_status=99
           fi
           echo "transform_status=$transform_status" >> tmp/platform-migration.log
+          echo "fixup_status=$fixup_status" >> tmp/platform-migration.log
           echo "check_status=$check_status" >> tmp/platform-migration.log
           cat tmp/platform-migration.log
-          if [ "$transform_status" -eq 0 ] && [ "$check_status" -eq 0 ]; then
+          if [ "$transform_status" -eq 0 ] && [ "$fixup_status" -eq 0 ] && [ "$check_status" -eq 0 ]; then
             echo "verified=true" >> "$GITHUB_OUTPUT"
           else
             echo "verified=false" >> "$GITHUB_OUTPUT"
