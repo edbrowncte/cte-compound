@@ -90,6 +90,7 @@ jobs:
               'causal cancellation test')
           test_path.write_text(test)
 
+          Path('scripts/finalize-repair-trigger').unlink(missing_ok=True)
           Path('.github/workflows/finalize-intent-repairs.yml').unlink(missing_ok=True)
           Path('.github/workflows/verify.yml').write_text('''name: Verify analytical compound
 
