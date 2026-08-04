@@ -27,13 +27,13 @@ response=await worker.fetch(browser("/api/oanda/candles?instrument=EUR_USD&granu
 
 class Storage{constructor(){this.map=new Map();}async get(key){if(Array.isArray(key))return new Map(key.map(item=>[item,this.map.get(item)]));return this.map.get(key);}async put(key,value){this.map.set(key,value);}async delete(key){if(Array.isArray(key))for(const item of key)this.map.delete(item);else this.map.delete(key);}async getAlarm(){return null;}async deleteAlarm(){}}
 const ctx={storage:new Storage()},engine=new HtlEngine(ctx,env),config=await engine.config();
-assert.equal(config.strategy,"ASSET");assert.equal(config.configurationSource,"OPTIMIZED");
+assert.equal(config.strategy,"ASSET");assert.equal(config.configurationSource,"OPTIMIZED");const forced=await engine.configure({...config,configurationSource:"FIXED"});assert.equal(forced.configurationSource,"OPTIMIZED");
 engine.write=async entry=>{engine.lastWrite=entry;};
 await engine.reconcile({EUR_USD:{pair:"EUR_USD",event:{direction:-1,id:"-1:t"},configuration:{primary:{length:20,filter:1,score:3,trades:8,net:12,maxDrawdown:2,winRate:.625},confirmation:null}}},token,accountId,{events:{}},config);
 assert.equal(closed.length,1);assert.equal(engine.lastWrite.type,"POSITION_CLOSED");assert.equal(engine.lastWrite.htlLength,20);assert.equal(engine.lastWrite.optimizerScore,3);
 response=await engine.fetch(new Request("https://engine/optimizer",{method:"PUT",headers:{"Content-Type":"application/json"},body:"{}"}));assert.equal(response.status,405);
 
 const html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");
-assert.match(html,/id="connectButton"[^>]*>TEST<\/button>/);assert.match(html,/selectedStrategy:"ASSET"/);assert.match(html,/configurationSource:"OPTIMIZED"/);assert.match(html,/selectChart\(event\.target\.value,state\.selectedTimeframe\)/);assert.match(html,/async function causalIndicatorSet/);assert.match(html,/token!==state\.chartCausalToken/);assert.doesNotMatch(html,/\/api\/engine\/optimizer[^\n]+method:"PUT"/);
+assert.match(html,/id="connectButton"[^>]*>TEST<\/button>/);assert.match(html,/selectedStrategy:"ASSET"/);assert.match(html,/configurationSource:"OPTIMIZED"/);assert.match(html,/selectChart\(event\.target\.value,state\.selectedTimeframe\)/);assert.match(html,/async function causalIndicatorSet/);assert.match(html,/token!==state\.chartCausalToken/);assert.match(html,/MAX_CANDLE_REQUESTS=3/);assert.match(html,/const assetAt=/);assert.doesNotMatch(html,/htlBuild\(data\.slice\(0,index\+1\),length\)/);assert.match(html,/eventLoadedKey/);assert.match(html,/await loadTradeCapacity\(\);void loadChart\(\);void loadSchedule\(\);/);assert.doesNotMatch(html,/Fixed controls/);assert.doesNotMatch(html,/\/api\/engine\/optimizer[^\n]+method:"PUT"/);
 globalThis.fetch=originalFetch;
-console.log("Runtime route, reconciliation, optimizer, forensic context, chart, and connection contracts verified.");
+console.log("Runtime route, reconciliation, optimizer, forensic context, chart, connection, and no-data orchestration contracts verified.");

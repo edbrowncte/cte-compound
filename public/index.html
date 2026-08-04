@@ -272,7 +272,7 @@
           <label class="field"><span>HTL length</span><input id="engineHtlLength" type="number" min="3" max="200" value="10"></label>
           <label class="field"><span>Filter</span><input id="engineFilter" type="number" min="0" max="10" step="0.1" value="0"></label>
           <label class="field"><span>Decision / execution</span><select id="engineDecisionMode"><option value="EVENT">Event Forecast</option><option value="MTF">MTF Forecast</option><option value="COMBINED">Combined Forecast</option></select></label>
-          <label class="field"><span>Configuration source</span><select id="engineConfigurationSource"><option value="OPTIMIZED" selected>Pair × timeframe optimizer</option><option value="FIXED">Fixed controls</option></select></label>
+          <label class="field"><span>Configuration source</span><select id="engineConfigurationSource"><option value="OPTIMIZED" selected>Pair × timeframe optimizer</option></select></label>
           <button id="saveEngineConfig" type="button">Save trading controls</button>
           <div class="automation-status" id="automationStatus"></div>
         </div>
@@ -496,6 +496,13 @@
     chartCausalIndicators:null,
     chartCausalSeries:[],
     chartCausalToken:0,
+    candleQueue:[],
+    candleInflight:new Map(),
+    candleActive:0,
+    candleSequence:0,
+    eventController:null,
+    eventLoading:false,
+    eventLoadedKey:"",
     eventData:null,
     eventHtl:null,
     eventEvents:[],
@@ -708,15 +715,17 @@
     el("statusDot").className=`status-dot ${type==="connected"?"connected":type==="error"?"error":""}`;
   }
 
-  async function oanda(path,controller) {
-    const candle=String(path).match(/^\/v3\/instruments\/([A-Z]{3}_[A-Z]{3})\/candles\?(.*)$/),params=candle?new URLSearchParams(candle[2]):null,url=candle?`/api/oanda/candles?instrument=${encodeURIComponent(candle[1])}&granularity=${encodeURIComponent(params.get("granularity")||"")}&count=${encodeURIComponent(params.get("count")||650)}`:`/api/oanda/proxy?path=${encodeURIComponent(path)}`;
-    const response=await fetch(url,{method:"GET",headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store",signal:controller?.signal});
-    const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
-    if (!response.ok) {
-      const message=payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`;
-      throw new Error(message);
-    }
-    return payload;
+  const MAX_CANDLE_REQUESTS=3,CANDLE_TIMEOUT_MS=20000;
+  function pumpCandleQueue(){while(state.candleActive<MAX_CANDLE_REQUESTS&&state.candleQueue.length){state.candleQueue.sort((a,b)=>b.priority-a.priority||a.sequence-b.sequence);const job=state.candleQueue.shift();if(job.cancelled?.()){job.reject(new DOMException("Aborted","AbortError"));continue;}state.candleActive++;fetchCandleJob(job).then(job.resolve,job.reject).finally(()=>{state.candleActive--;pumpCandleQueue();});}}
+  async function fetchCandleJob(job){let lastError=null;for(let attempt=0;attempt<2;attempt++){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),CANDLE_TIMEOUT_MS);try{const response=await fetch(`/api/oanda/candles?instrument=${encodeURIComponent(job.instrument)}&granularity=${encodeURIComponent(job.timeframe)}&count=${encodeURIComponent(job.count)}`,{method:"GET",headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store",signal:controller.signal}),payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));if(!response.ok)throw new Error(payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`);return payload;}catch(error){lastError=controller.signal.aborted?new Error(`OANDA candle request timed out · ${formatPair(job.instrument)} ${job.timeframe}`):error;}finally{clearTimeout(timer);}if(attempt===0)await new Promise(resolve=>setTimeout(resolve,350));}throw lastError||new Error("Candle request failed.");}
+  function queueCandleRequest(instrument,timeframe,count,priority=0,signal=null){const key=`${instrument}|${timeframe}|${count}`;let request=state.candleInflight.get(key);if(!request){request=new Promise((resolve,reject)=>{state.candleQueue.push({instrument,timeframe,count,priority,sequence:state.candleSequence++,resolve,reject,cancelled:()=>Boolean(signal?.aborted)});pumpCandleQueue();});state.candleInflight.set(key,request);request.then(()=>state.candleInflight.delete(key),()=>state.candleInflight.delete(key));}if(!signal)return request;if(signal.aborted)return Promise.reject(new DOMException("Aborted","AbortError"));return Promise.race([request,new Promise((_,reject)=>signal.addEventListener("abort",()=>reject(new DOMException("Aborted","AbortError")),{once:true}))]);}
+  async function oanda(path,controller,priority=0) {
+    const candle=String(path).match(/^\/v3\/instruments\/([A-Z]{3}_[A-Z]{3})\/candles\?(.*)$/),params=candle?new URLSearchParams(candle[2]):null;
+    if(candle)return queueCandleRequest(candle[1],params.get("granularity")||"",Number(params.get("count")||650),priority,controller?.signal);
+    const local=new AbortController(),relay=()=>local.abort(),timer=setTimeout(()=>local.abort(),CANDLE_TIMEOUT_MS);controller?.signal?.addEventListener("abort",relay,{once:true});
+    try{const response=await fetch(`/api/oanda/proxy?path=${encodeURIComponent(path)}`,{method:"GET",headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store",signal:local.signal}),payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));if(!response.ok)throw new Error(payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`);return payload;}
+    catch(error){if(local.signal.aborted&&!controller?.signal?.aborted)throw new Error("OANDA request timed out.");throw error;}
+    finally{clearTimeout(timer);controller?.signal?.removeEventListener("abort",relay);}
   }
 
   async function oandaPost(path,body) {
@@ -786,11 +795,11 @@
 
   function stopPositionMonitor(){clearInterval(state.positionTimer);state.positionTimer=null;state.positionStreamController?.abort();state.positionStreamController=null;state.positionStreamSignature="";state.openPositions=[];state.positionPrices.clear();renderOpenPositions();}
 
-  function applyEngineConfig(config){const ids=new Set(STRATEGIES.map(item=>item.id));state.engineConfig={timeframe:TIMEFRAMES.includes(config?.timeframe)?config.timeframe:"M15",htlLength:clamp(Math.trunc(Number(config?.htlLength))||10,3,200),decisionMode:["EVENT","MTF","COMBINED"].includes(config?.decisionMode)?config.decisionMode:"EVENT",strategy:ids.has(config?.strategy)?config.strategy:"ASSET",confirmationStrategy:config?.confirmationStrategy==="NONE"||ids.has(config?.confirmationStrategy)?config.confirmationStrategy:"NONE",filter:clamp(Number(config?.filter)||0,0,10),configurationSource:config?.configurationSource==="FIXED"?"FIXED":"OPTIMIZED"};el("engineTimeframe").value=state.engineConfig.timeframe;el("engineStrategy").value=state.engineConfig.strategy;el("engineConfirmationStrategy").value=state.engineConfig.confirmationStrategy;el("engineHtlLength").value=state.engineConfig.htlLength;el("engineFilter").value=state.engineConfig.filter;el("engineDecisionMode").value=state.engineConfig.decisionMode;el("engineConfigurationSource").value=state.engineConfig.configurationSource;const name=STRATEGIES.find(item=>item.id===state.engineConfig.strategy)?.label||state.engineConfig.strategy;el("automationStatus").textContent=`Active · ${state.engineConfig.timeframe} · ${name} · length ${state.engineConfig.htlLength} · filter ${state.engineConfig.filter} · ${state.engineConfig.decisionMode} · ${state.engineConfig.configurationSource}`;state.mtfEventCache.clear();if(el("mtfBody"))renderMtfForecast();}
+  function applyEngineConfig(config){const ids=new Set(STRATEGIES.map(item=>item.id));state.engineConfig={timeframe:TIMEFRAMES.includes(config?.timeframe)?config.timeframe:"M15",htlLength:clamp(Math.trunc(Number(config?.htlLength))||10,3,200),decisionMode:["EVENT","MTF","COMBINED"].includes(config?.decisionMode)?config.decisionMode:"EVENT",strategy:ids.has(config?.strategy)?config.strategy:"ASSET",confirmationStrategy:config?.confirmationStrategy==="NONE"||ids.has(config?.confirmationStrategy)?config.confirmationStrategy:"NONE",filter:clamp(Number(config?.filter)||0,0,10),configurationSource:"OPTIMIZED"};el("engineTimeframe").value=state.engineConfig.timeframe;el("engineStrategy").value=state.engineConfig.strategy;el("engineConfirmationStrategy").value=state.engineConfig.confirmationStrategy;el("engineHtlLength").value=state.engineConfig.htlLength;el("engineFilter").value=state.engineConfig.filter;el("engineDecisionMode").value=state.engineConfig.decisionMode;el("engineConfigurationSource").value=state.engineConfig.configurationSource;const name=STRATEGIES.find(item=>item.id===state.engineConfig.strategy)?.label||state.engineConfig.strategy;el("automationStatus").textContent=`Active · ${state.engineConfig.timeframe} · ${name} · length ${state.engineConfig.htlLength} · filter ${state.engineConfig.filter} · ${state.engineConfig.decisionMode} · ${state.engineConfig.configurationSource}`;state.mtfEventCache.clear();if(el("mtfBody"))renderMtfForecast();}
 
   async function loadEngineConfig(){const response=await fetch("/api/engine/config",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);}
 
-  async function saveEngineConfig(){const button=el("saveEngineConfig");button.disabled=true;el("automationStatus").textContent="Saving…";try{const body={timeframe:el("engineTimeframe").value,strategy:el("engineStrategy").value,confirmationStrategy:el("engineConfirmationStrategy").value,htlLength:clamp(Math.trunc(Number(el("engineHtlLength").value)||10),3,200),filter:clamp(Number(el("engineFilter").value)||0,0,10),decisionMode:el("engineDecisionMode").value,configurationSource:el("engineConfigurationSource").value},response=await fetch("/api/engine/config",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);await loadTradingLedger();}catch(error){el("automationStatus").textContent=error.message||"Configuration failed";}finally{button.disabled=false;}}
+  async function saveEngineConfig(){const button=el("saveEngineConfig");button.disabled=true;el("automationStatus").textContent="Saving…";try{const body={timeframe:el("engineTimeframe").value,strategy:el("engineStrategy").value,confirmationStrategy:el("engineConfirmationStrategy").value,htlLength:clamp(Math.trunc(Number(el("engineHtlLength").value)||10),3,200),filter:clamp(Number(el("engineFilter").value)||0,0,10),decisionMode:el("engineDecisionMode").value,configurationSource:"OPTIMIZED"},response=await fetch("/api/engine/config",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);await loadTradingLedger();}catch(error){el("automationStatus").textContent=error.message||"Configuration failed";}finally{button.disabled=false;}}
 
   function renderTradingLedger(entries){const rows=Array.isArray(entries)?entries:[];state.tradingLedger=rows;el("downloadTradingLedger").disabled=!rows.length;const fmt=value=>value??"—";el("tradingLedgerBody").innerHTML=rows.map(item=>`<tr><td>${formatTime(item.time)}</td><td>${fmt(item.type)}</td><td>${item.pair?formatPair(item.pair):"—"}</td><td>${fmt(item.strategy)}</td><td class="${item.direction==="BUY"?"positive":item.direction==="SELL"?"negative":""}">${fmt(item.direction)}</td><td>${fmt(item.units)}</td><td>${fmt(item.price)}</td><td>${fmt(item.realizedPL)}</td><td>${fmt(item.message)}</td></tr>`).join("")||`<tr><td colspan="9">No engine records.</td></tr>`;const groups=new Map(STRATEGIES.map(item=>[item.id,{label:item.label,orders:0,closed:0,wins:0,losses:0,flat:0,pl:0,last:null}]));for(const item of [...rows].reverse()){const id=item.strategy||((item.type==="ORDER_FILLED"||item.type==="POSITION_CLOSED")?"ASSET":null),group=groups.get(id);if(!group)continue;if(item.type==="ORDER_FILLED")group.orders++;if(item.type==="POSITION_CLOSED"){group.closed++;const pl=Number(item.realizedPL);if(Number.isFinite(pl)){group.pl+=pl;if(pl>0)group.wins++;else if(pl<0)group.losses++;else group.flat++;}}if(item.pair){group.last=item;}}el("microPerformanceBody").innerHTML=[...groups.entries()].map(([id,g])=>`<tr><td>${g.label}</td><td>${g.orders||"—"}</td><td>${g.closed||"—"}</td><td>${g.closed?`${g.wins}/${g.losses}/${g.flat}`:"—"}</td><td class="${g.pl>0?"positive":g.pl<0?"negative":""}">${g.closed?g.pl.toFixed(2):"—"}</td><td>${g.last?.direction||"—"}</td><td>${g.last?.pair?formatPair(g.last.pair):"—"}</td><td>${g.last?formatTime(g.last.time):"—"}</td></tr>`).join("");}
   function downloadTradingLedger(){const rows=state.tradingLedger||[];if(!rows.length)return;const fields=[["Ledger ID","ledgerId"],["Time","time"],["Type","type"],["OANDA Type","transactionType"],["Pair","pair"],["Strategy","strategy"],["Confirmation Strategy","confirmationStrategy"],["Side","direction"],["Units","units"],["Price","price"],["Realized P/L","realizedPL"],["Financing","financing"],["Commission","commission"],["Account Balance","accountBalance"],["Transaction ID","transaction"],["Client Order ID","clientOrderId"],["Event ID","event"],["Decision Mode","decisionMode"],["Timeframe","timeframe"],["HTL Length","htlLength"],["Filter","filter"],["Configuration Source","configurationSource"],["Optimizer Score","optimizerScore"],["Optimizer Trades","optimizerTrades"],["Optimizer Net","optimizerNet"],["Optimizer Drawdown","optimizerDrawdown"],["Optimizer Win Rate","optimizerWinRate"],["Confirmation HTL Length","confirmationHtlLength"],["Confirmation Filter","confirmationFilter"],["Reason","reason"],["Message","message"]],csv=[fields.map(([label])=>label),...rows.map(item=>fields.map(([,key])=>item[key]??""))].map(row=>row.map(value=>`"${String(value).replaceAll('"','""')}"`).join(",")).join("\r\n"),url=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"})),link=document.createElement("a");link.href=url;link.download=`cte-compound-trading-ledger-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
@@ -865,7 +874,7 @@
       startPositionMonitor();
       await Promise.all([loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";}),loadOptimizerRecords()]);
       void loadTradingLedger();void loadEngineStatus();
-      await Promise.all([loadTradeCapacity(),loadSchedule(),loadChart(),loadEventForecast()]);
+      await loadTradeCapacity();void loadChart();void loadSchedule();
     } catch (error) {
       if(wasConnected){setConnectionStatus(`${error.message||"Connection test failed"} · active session retained`,"error");}
       else{state.connected=false;el("accountFacts").hidden=true;el("positionsPanel").hidden=true;el("automationPanel").hidden=true;stopPositionMonitor();stopAdaptiveMonitor();setConnectionStatus(error.message||"OANDA connection failed.","error");}
@@ -873,8 +882,8 @@
   }
 
   function disconnect() {
-    state.scheduleController?.abort(); state.chartController?.abort();
-    state.connected=false; state.scheduleCandles.clear(); state.scheduleEvaluations.clear();
+    state.scheduleController?.abort();state.chartController?.abort();state.eventController?.abort();
+    state.connected=false;state.scheduleCandles.clear();state.scheduleEvaluations.clear();state.candleQueue=[];state.candleInflight.clear();state.eventLoadedKey="";
     state.chartCandles=[]; state.chartAnalysis=null; state.eventData=null; state.eventHtl=null; state.eventEvents=[]; state.eventRows=[]; state.crosshair=null;state.tradeLongAvailable=0;state.tradeShortAvailable=0;state.tradeBusy=false;
     el("accountFacts").hidden=true;
     el("positionsPanel").hidden=true;el("automationPanel").hidden=true;stopPositionMonitor();stopAdaptiveMonitor();
@@ -920,38 +929,24 @@
   }
 
   async function loadSchedule() {
-    if (!state.connected) return;
+    if(!state.connected)return;
     state.scheduleController?.abort();
-    const controller=new AbortController(); state.scheduleController=controller;
-    el("refreshSchedule").disabled=true;
-    document.querySelectorAll(".signal-cell").forEach(cell=>cell.classList.add("loading"));
-    let completed=0,errors=0;
-    el("progressText").textContent="Loading 0 / 10 timeframes";
-    try {
-      await runPool(TIMEFRAMES,2,async timeframe=>{
-        try {
-          await runPool(INSTRUMENTS,4,async instrument=>{
-            try {
-              const payload=await oanda(`/v3/instruments/${encodeURIComponent(instrument)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=180`,controller);
-              const candles=completedCandles(payload);
-              const key=scheduleKey(instrument,timeframe);
-              state.scheduleCandles.set(key,candles);
-              const optimized=state.autoConfigurations.get(key)?.config;
-              state.scheduleEvaluations.set(key,optimized?analyzeWithConfiguration(candles,optimized,false):analyzeCandles(candles,false));
-              renderScheduleCell(instrument,timeframe);
-            } catch (error) { if (error.name!=="AbortError") errors++; }
-          });
-        } catch (error) { if (error.name!=="AbortError") errors++; }
-        completed++;
-        el("progressFill").style.width=`${completed/TIMEFRAMES.length*100}%`;
-        el("progressText").textContent=`Loading ${completed} / ${TIMEFRAMES.length} timeframes${errors?` · ${errors} errors`:""}`;
-      });
-      if (!controller.signal.aborted) {
-        el("progressText").textContent=`Loaded ${TIMEFRAMES.length} / ${TIMEFRAMES.length}${errors?` · ${errors} errors`:""}`;
-        el("scheduleStamp").textContent=`Last schedule refresh ${new Date().toLocaleTimeString()} · completed candles only`;
-        renderMtfForecast();queueAutomaticOptimization();startAdaptiveMonitor();
-      }
-    } finally { if (!controller.signal.aborted) el("refreshSchedule").disabled=false; }
+    const controller=new AbortController();state.scheduleController=controller;
+    el("refreshSchedule").disabled=true;document.querySelectorAll(".signal-cell").forEach(cell=>cell.classList.add("loading"));
+    const timeframes=[state.selectedTimeframe,...TIMEFRAMES.filter(item=>item!==state.selectedTimeframe)],instruments=[state.selectedInstrument,...INSTRUMENTS.filter(item=>item!==state.selectedInstrument)],total=TIMEFRAMES.length*INSTRUMENTS.length;
+    let completed=0,errors=0,lastError="";el("progressText").textContent=`Loading 0 / ${total} datasets`;
+    try{
+      await runPool(timeframes,1,async timeframe=>runPool(instruments,3,async instrument=>{
+        try{
+          const payload=await oanda(`/v3/instruments/${encodeURIComponent(instrument)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=180`,controller,20),candles=completedCandles(payload),key=scheduleKey(instrument,timeframe);
+          if(!candles.length)throw new Error(`No completed candles · ${formatPair(instrument)} ${timeframe}`);
+          state.scheduleCandles.set(key,candles);const optimized=state.autoConfigurations.get(key)?.config;state.scheduleEvaluations.set(key,analyzeWithConfiguration(candles,optimized||STRATEGY_CONFIG,false));renderScheduleCell(instrument,timeframe);
+          if(instrument===state.selectedInstrument&&timeframe===state.selectedTimeframe&&!state.chartCandles.length)applyChartDataset(instrument,timeframe,candles);
+        }catch(error){if(error.name!=="AbortError"){errors++;lastError=error.message||"Candle load failed";}}
+        finally{completed++;el("progressFill").style.width=`${completed/total*100}%`;el("progressText").textContent=`Loading ${completed} / ${total} datasets${errors?` · ${errors} errors`:""}`;}
+      }));
+      if(!controller.signal.aborted){el("progressText").textContent=`Loaded ${total-errors} / ${total} datasets${errors?` · ${errors} errors · ${lastError}`:""}`;el("scheduleStamp").textContent=`Last schedule refresh ${new Date().toLocaleTimeString()} · completed candles only`;renderMtfForecast();queueAutomaticOptimization();startAdaptiveMonitor();}
+    }finally{if(!controller.signal.aborted)el("refreshSchedule").disabled=false;}
   }
 
   function applyChartDataset(instrument,timeframe,candles) {
@@ -968,11 +963,11 @@
     const controller=new AbortController(); state.chartController=controller;
     el("refreshChart").disabled=true;el("chartMessage").hidden=false;el("chartMessage").textContent="Loading completed OANDA candles…";
     try {
-      const payload=await oanda(`/v3/instruments/${encodeURIComponent(instrument)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=650`,controller),candles=completedCandles(payload),key=scheduleKey(instrument,timeframe);
+      const payload=await oanda(`/v3/instruments/${encodeURIComponent(instrument)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=650`,controller,100),candles=completedCandles(payload),key=scheduleKey(instrument,timeframe);
       state.chartCache.set(key,candles);state.scheduleCandles.set(key,candles);
       applyChartDataset(instrument,timeframe,candles);
     } catch (error) {
-      if(error.name!=="AbortError"&&instrument===state.selectedInstrument&&timeframe===state.selectedTimeframe){el("chartMessage").hidden=false;el("chartMessage").textContent=error.message||"Chart load failed.";state.chartCandles=[];state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];updateChartSummary();updateCompartments();drawChart();}
+      if(error.name!=="AbortError"&&instrument===state.selectedInstrument&&timeframe===state.selectedTimeframe){const cached=state.chartCache.get(scheduleKey(instrument,timeframe))||state.scheduleCandles.get(scheduleKey(instrument,timeframe));if(cached?.length){applyChartDataset(instrument,timeframe,cached);el("chartMessage").hidden=false;el("chartMessage").textContent=`Showing cached completed candles · ${error.message||"full refresh unavailable"}`;}else{el("chartMessage").hidden=false;el("chartMessage").textContent=error.message||"Chart load failed.";state.chartCandles=[];state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];updateChartSummary();updateCompartments();drawChart();}}
     } finally {if(!controller.signal.aborted)el("refreshChart").disabled=false;}
   }
 
@@ -1015,10 +1010,11 @@
   }
 
   function selectChart(instrument,timeframe) {
-    state.selectedInstrument=instrument||state.selectedInstrument;state.selectedTimeframe=timeframe||state.selectedTimeframe;
+    state.selectedInstrument=instrument||state.selectedInstrument;state.selectedTimeframe=timeframe||state.selectedTimeframe;state.chartCausalToken++;
     el("chartPair").value=state.selectedInstrument;el("chartTimeframe").value=state.selectedTimeframe;markSelectedRow();renderMtfForecast();
     const key=scheduleKey(state.selectedInstrument,state.selectedTimeframe),cached=state.chartCache.get(key)||state.scheduleCandles.get(key);
     if(cached?.length)try{applyChartDataset(state.selectedInstrument,state.selectedTimeframe,cached);}catch{}
+    else{state.chartCandles=[];state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];el("chartMessage").hidden=false;el("chartMessage").textContent="Loading selected completed OANDA candles…";updateChartSummary();updateCompartments();drawChart();}
     if(state.connected){void startPositionStream(state.openPositions.map(position=>position.instrument));void loadChart(state.selectedInstrument,state.selectedTimeframe);}
     el("chartPanel").scrollIntoView({behavior:"smooth",block:"start"});
   }
@@ -1195,9 +1191,21 @@
     return {asset,inverse,assetMean,assetDeviation,assetZ,anchors:dedup,sourceCrosses,sourceTotal,series};
   }
   function htlCausal(data,length){
-    const asset=Array(data.length).fill(null),inverse=Array(data.length).fill(null),sourceTotal=Array(data.length).fill(0),first=Math.max(1,length*3-1);
-    for(let index=first;index<data.length;index++){const snapshot=htlBuild(data.slice(0,index+1),length);asset[index]=snapshot.asset.at(-1);inverse[index]=snapshot.inverse.at(-1);sourceTotal[index]=snapshot.sourceCrosses.length;}
-    return {asset,inverse,sourceTotal,causal:true};
+    const series=htlCore(data,length),families=[[series.hl2,series.upr],[series.mui,series.ui],[series.zui,series.iuz]],crosses=new Map();
+    for(let index=1;index<data.length;index++){const directions=families.map(pair=>htlCross(pair[0],pair[1],index)).filter(Boolean),vote=directions.reduce((sum,value)=>sum+value,0);if(vote)crosses.set(index,{index,direction:Math.sign(vote)});}
+    const asset=Array(data.length).fill(null),inverse=Array(data.length).fill(null),assetMean=Array(data.length).fill(null),sourceTotal=Array(data.length).fill(0),finalized=[];let active=null,total=0;
+    const begin=event=>({index:event.index,direction:event.direction,price:event.direction>0?data[event.index].high:data[event.index].low,extremeIndex:event.index});
+    const update=(episode,index)=>{const price=episode.direction>0?data[index].high:data[index].low;if((episode.direction>0&&price>episode.price)||(episode.direction<0&&price<episode.price)){episode.price=price;episode.extremeIndex=index;}};
+    const dedup=anchors=>{const out=[];for(const anchor of anchors.sort((a,b)=>a.index-b.index)){if(out.length&&out.at(-1).index===anchor.index)out[out.length-1]=anchor;else out.push(anchor);}return out;};
+    const assetAt=(anchors,index)=>{if(!anchors.length)return null;if(index<=anchors[0].index)return anchors[0].price;for(let position=1;position<anchors.length;position++){const from=anchors[position-1],to=anchors[position];if(index<=to.index){const span=Math.max(1,to.index-from.index);return from.price+(to.price-from.price)*((index-from.index)/span);}}return anchors.at(-1).price;};
+    const first=Math.max(1,length*3-1),denominator=length*(length+1)/2;
+    for(let index=0;index<data.length;index++){
+      const event=crosses.get(index);if(event){total++;if(!active)active=begin(event);else if(event.direction!==active.direction){finalized.push({index:active.extremeIndex,price:active.price,direction:active.direction,status:"FINAL"});active=begin(event);}}
+      if(active)update(active,index);sourceTotal[index]=total;if(index<first||!active)continue;
+      const anchors=dedup([...finalized,{index:active.extremeIndex,price:active.price,direction:active.direction,status:"PROVISIONAL"}]),start=Math.max(0,index-length+1),window=[];for(let cursor=start;cursor<=index;cursor++)window.push(assetAt(anchors,cursor));
+      if(window.length!==length||!window.every(Number.isFinite))continue;const current=window.at(-1),mean=window.reduce((sum,value,position)=>sum+(position+1)*value,0)/denominator,average=window.reduce((sum,value)=>sum+value,0)/length,deviation=Math.sqrt(window.reduce((sum,value)=>sum+(value-average)**2,0)/length);asset[index]=current;assetMean[index]=mean;inverse[index]=deviation>0?(2*mean)-current:null;
+    }
+    return {asset,inverse,assetMean,sourceTotal,series,causal:true};
   }
   async function causalIndicatorSet(data,length,token){const keys=["asset","inverse","meanAsset","meanInverse","dareNAsset","dareNInverse","naiAsset","naiInverse","zup","puz"],out=Object.fromEntries(keys.map(key=>[key,Array(data.length).fill(null)])),first=Math.max(2,length);for(let index=first;index<data.length;index++){if(index%16===0){await new Promise(resolve=>setTimeout(resolve,0));if(token!==state.chartCausalToken)return null;}const indicators=prepareIndicators(data.slice(0,index+1),{length});for(const key of keys)out[key][index]=indicators[key]?.at(-1)??null;}return out;}
   function causalDirection(indicators,index,strategy,filter=0){const relation=(left,right)=>Number.isFinite(left?.[index])&&Number.isFinite(right?.[index])?left[index]-right[index]>filter?1:left[index]-right[index]<-filter?-1:0:0;if(strategy==="ASSET")return relation(indicators.asset,indicators.inverse);if(strategy==="DARE")return relation(indicators.meanAsset,indicators.meanInverse);if(strategy==="DARE_N")return relation(indicators.dareNAsset,indicators.dareNInverse);if(strategy==="NAI")return relation(indicators.naiAsset,indicators.naiInverse);if(strategy==="APEX"){const z=indicators.zup?.[index],p=indicators.puz?.[index];return Number.isFinite(z)&&Number.isFinite(p)?z<=-filter&&p>=filter?1:z>=filter&&p<=-filter?-1:0:0;}return 0;}
@@ -1302,18 +1310,20 @@
     }
   }
   async function loadEventForecast(){
-    if(!state.connected)return;
-    const timeframe=el("eventTimeframe").value,length=clamp(Math.trunc(Number(el("eventLength").value)||10),3,200);el("loadEvents").disabled=true;state.eventRows=[];renderEventSchedule();el("eventMessage").hidden=false;el("eventMessage").textContent=`Loading HTL schedule 0 / ${INSTRUMENTS.length}`;
-    let completed=0;
+    if(!state.connected||state.eventLoading)return;
+    state.eventController?.abort();const controller=new AbortController();state.eventController=controller;state.eventLoading=true;
+    const timeframe=el("eventTimeframe").value,length=clamp(Math.trunc(Number(el("eventLength").value)||10),3,200),loadKey=`${timeframe}|${length}`,selectedPair=el("eventPair").value||state.selectedInstrument,pairs=[selectedPair,...INSTRUMENTS.filter(pair=>pair!==selectedPair)];
+    el("loadEvents").disabled=true;state.eventRows=[];renderEventSchedule();el("eventMessage").hidden=false;el("eventMessage").textContent=`Loading HTL schedule 0 / ${INSTRUMENTS.length}`;
+    let completed=0,errors=0,lastError="";
     try{
-      await runPool(INSTRUMENTS,4,async pair=>{
-        try{const payload=await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=650`),data=completedCandles(payload);if(data.length)state.eventRows.push(buildEventRow(pair,data,length));}
-        finally{completed++;el("eventMessage").textContent=`Loading HTL schedule ${completed} / ${INSTRUMENTS.length}`;renderEventSchedule();}
+      await runPool(pairs,2,async pair=>{
+        try{const key=scheduleKey(pair,timeframe),cached=state.chartCache.get(key),payload=cached?.length>=300?{candles:cached.map(c=>({time:c.time,mid:{o:c.open,h:c.high,l:c.low,c:c.close},volume:c.volume,complete:true}))}:await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=650`,controller,pair===selectedPair?80:40),data=completedCandles(payload);if(!data.length)throw new Error(`No completed candles · ${formatPair(pair)} ${timeframe}`);const row=buildEventRow(pair,data,length);state.eventRows.push(row);if(pair===selectedPair)renderEventDetail(row);}
+        catch(error){if(error.name!=="AbortError"){errors++;lastError=error.message||"Event candle load failed";}}
+        finally{completed++;el("eventMessage").textContent=`Loading HTL schedule ${completed} / ${INSTRUMENTS.length}${errors?` · ${errors} errors`:""}`;renderEventSchedule();}
       });
-      const selected=state.eventRows.find(row=>row.pair===el("eventPair").value)||state.eventRows[0];
-      if(selected){el("eventPair").value=selected.pair;renderEventDetail(selected);}else{el("eventMessage").textContent="No completed candles returned.";}updateDecisionDisplays();
-    }catch(error){el("eventMessage").hidden=false;el("eventMessage").textContent=error.message||"HTL schedule load failed.";}
-    finally{el("loadEvents").disabled=!state.connected;}
+      if(!controller.signal.aborted){state.eventLoadedKey=errors?"":loadKey;const selected=state.eventRows.find(row=>row.pair===selectedPair)||state.eventRows[0];if(selected)renderEventDetail(selected);else{el("eventMessage").hidden=false;el("eventMessage").textContent=`No completed candles returned${lastError?` · ${lastError}`:""}.`;}updateDecisionDisplays();}
+    }catch(error){if(error.name!=="AbortError"){el("eventMessage").hidden=false;el("eventMessage").textContent=error.message||"HTL schedule load failed.";}}
+    finally{state.eventLoading=false;el("loadEvents").disabled=!state.connected;}
   }
   function renderStrategyConfiguration(){const automatic=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe));el("configurationScope").textContent=`${formatPair(state.selectedInstrument)} · ${state.selectedTimeframe} · ${automatic?`automatically optimized ${formatTime(automatic.stamp)}`:'awaiting automatic optimization'}`;el("strategyConfiguration").innerHTML=STRATEGIES.map(strategy=>{const config=automatic?.config?.[strategy.id]||STRATEGY_CONFIG[strategy.id],combined=strategy.id==='COMBO';return `<section class="config-card"><h3>${strategy.label}${automatic?' · AUTO':''}</h3><label class="field"><span>${combined?'Constituent length':'Length'}</span><input data-config-length="${strategy.id}" type="number" min="3" max="200" step="1" value="${config.length}" ${combined?'disabled':''}></label><label class="field"><span>${combined?'Required agreeing strategies':'Filter'}</span><input data-config-filter="${strategy.id}" type="number" min="0" max="${combined?5:10}" step="${combined?1:.01}" value="${config.filter}"></label></section>`;}).join('');}
   function strategyTrades(candles,analysis,id,instrument=state.selectedInstrument){const signals=analysis.series[id]||[],pip=instrument.endsWith('JPY')?100:10000,trades=[];for(let i=0;i<signals.length;i++){const signal=signals[i],opposite=signals.slice(i+1).find(next=>next.direction===-signal.direction);if(!opposite)continue;const entryIndex=Math.min(candles.length-1,signal.index+1),exitIndex=Math.min(candles.length-1,opposite.index+1);if(exitIndex<=entryIndex)continue;const entry=candles[entryIndex].open,exit=candles[exitIndex].open,range=candles.slice(entryIndex,exitIndex+1),net=(exit-entry)*signal.direction*pip,mfe=(signal.direction>0?Math.max(...range.map(c=>c.high))-entry:entry-Math.min(...range.map(c=>c.low)))*pip,mae=(signal.direction>0?entry-Math.min(...range.map(c=>c.low)):Math.max(...range.map(c=>c.high))-entry)*pip;trades.push({net,mfe:Math.max(0,mfe),mae:Math.max(0,mae)});}return trades;}
@@ -1331,7 +1341,7 @@
   function renderMacroPerformance(){const record=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),configs=record?.config||{},fmt=(value,digits=2)=>Number.isFinite(value)?Number(value).toFixed(digits):"—";el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const stats=configs[strategy.id]||{},trades=Number(stats.trades)||0,wins=trades&&Number.isFinite(stats.winRate)?Math.round(trades*stats.winRate):0,losses=trades-wins,recovery=Number(stats.maxDrawdown)?Number(stats.net)/Number(stats.maxDrawdown):null;return `<tr><td>${strategy.label}</td><td>${trades||"—"}</td><td>${trades?`${wins}/${losses}/0`:"—"}</td><td class="${Number(stats.net)>=0?"positive":"negative"}">${fmt(stats.net,1)}</td><td>${trades?fmt(Number(stats.net)/trades):"—"}</td><td>—</td><td>${fmt(stats.maxDrawdown,1)}</td><td>—</td><td>${fmt(recovery)}</td></tr>`;}).join("");el("computeConfiguration").disabled=false;}
   function applyConfiguration(){document.querySelectorAll('[data-config-length]').forEach(input=>{if(!input.disabled)STRATEGY_CONFIG[input.dataset.configLength].length=clamp(Math.round(Number(input.value)||50),3,200);});document.querySelectorAll('[data-config-filter]').forEach(input=>{const id=input.dataset.configFilter;STRATEGY_CONFIG[id].filter=clamp(Number(input.value)||0,0,id==='COMBO'?5:10);});el("eventLength").value=STRATEGY_CONFIG.ASSET.length;state.scheduleEvaluations.clear();for(const [key,candles] of state.scheduleCandles)try{state.scheduleEvaluations.set(key,analyzeCandles(candles,false));}catch{}if(state.chartCandles.length)state.chartAnalysis=analyzeCandles(state.chartCandles,true);renderSchedule();updateChartSummary();updateCompartments();drawChart();renderMacroPerformance();renderStrategyConfiguration();}
   async function computeConfiguration(){const button=el("computeConfiguration");button.disabled=true;button.textContent="Refreshing…";await loadOptimizerRecords();renderStrategyConfiguration();renderMacroPerformance();button.textContent="Refresh optimizer";button.disabled=false;}
-  function selectFacility(name){for(const facility of ['analysis','event','performance']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'&&state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}}
+  function selectFacility(name){for(const facility of ['analysis','event','performance']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}}
 
   function pointerPosition(event) { const rect=el("chart").getBoundingClientRect(); return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
 
