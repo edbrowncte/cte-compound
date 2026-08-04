@@ -12,9 +12,10 @@ const INSTRUMENTS = new Set([
 const GRANULARITIES = new Set(["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]);
 const JSON_HEADERS = {"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
 const candleCache=new Map();
-const OANDA_MAX_CONCURRENCY=4,OANDA_REQUEST_TIMEOUT_MS=15000;
+const OANDA_MAX_CONCURRENCY=3,OANDA_REQUEST_TIMEOUT_MS=15000;
 let oandaActive=0,oandaLastStart=0;
 const oandaWaiters=[];
+const oandaTelemetry={requests:0,retries:0,timeouts:0,failures:0,statuses:{}};
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{...JSON_HEADERS,...headers}});
 
@@ -49,26 +50,27 @@ function releaseOandaSlot(){const next=oandaWaiters.shift();if(next)next();else 
 
 async function oandaRequest(path,token,init={}) {
   await acquireOandaSlot();
-  const delay=Math.max(0,35-(Date.now()-oandaLastStart));
-  if(delay) await new Promise(resolve=>setTimeout(resolve,delay));
-  oandaLastStart=Date.now();
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),OANDA_REQUEST_TIMEOUT_MS);
   try{
-    const response=await fetch(LIVE_OANDA_ORIGIN+path,{
-      method:init.method||"GET",
-      headers:{Authorization:`Bearer ${token}`,Accept:"application/json",...(init.body?{"Content-Type":"application/json"}:{})},
-      body:init.body,
-      redirect:"manual",
-      cache:"no-store",
-      signal:controller.signal
-    });
-    const payload=await response.json().catch(()=>({}));
-    if(!response.ok) throw Object.assign(new Error(payload.errorMessage||payload.errorCode||`OANDA HTTP ${response.status}`),{status:response.status,payload});
-    return payload;
-  } catch(error){
-    if(controller.signal.aborted)throw Object.assign(new Error("OANDA request timed out."),{status:504});
-    throw error;
-  } finally {clearTimeout(timer);releaseOandaSlot();}
+    let lastError=null;
+    for(let attempt=0;attempt<3;attempt++){
+      const delay=Math.max(0,45-(Date.now()-oandaLastStart));
+      if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+      oandaLastStart=Date.now();oandaTelemetry.requests++;
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),OANDA_REQUEST_TIMEOUT_MS);
+      try{
+        const response=await fetch(LIVE_OANDA_ORIGIN+path,{method:init.method||"GET",headers:{Authorization:`Bearer ${token}`,Accept:"application/json",...(init.body?{"Content-Type":"application/json"}:{})},body:init.body,redirect:"manual",cache:"no-store",signal:controller.signal});
+        const payload=await response.json().catch(()=>({}));
+        if(!response.ok){const error=Object.assign(new Error(payload.errorMessage||payload.errorCode||`OANDA HTTP ${response.status}`),{status:response.status,payload});oandaTelemetry.statuses[response.status]=Number(oandaTelemetry.statuses[response.status]||0)+1;throw error;}
+        return payload;
+      }catch(error){
+        const timedOut=controller.signal.aborted;if(timedOut){oandaTelemetry.timeouts++;lastError=Object.assign(new Error("OANDA request timed out."),{status:504});}else lastError=error;
+        const status=Number(lastError?.status)||0,retryable=timedOut||status===429||status>=500;
+        if(!retryable||attempt===2){oandaTelemetry.failures++;throw lastError;}
+        oandaTelemetry.retries++;await new Promise(resolve=>setTimeout(resolve,500*(2**attempt)+Math.floor(Math.random()*250)));
+      }finally{clearTimeout(timer);}
+    }
+    throw lastError||new Error("OANDA request failed.");
+  }finally{releaseOandaSlot();}
 }
 
 function normalizeCandles(payload) {
@@ -147,6 +149,15 @@ async function handleCandles(env,url) {
   try{const value=await promise;candleCache.set(key,{value,count:requestCount,expires:Date.now()+ttl});if(candleCache.size>400)candleCache.delete(candleCache.keys().next().value);return json(select(value));}catch(error){if(candleCache.get(key)?.promise===promise)candleCache.delete(key);throw error;}
 }
 
+
+async function handlePlatformDiagnostic(env,url){
+  const started=Date.now(),instrument=(url.searchParams.get("instrument")||"EUR_USD").toUpperCase(),granularity=(url.searchParams.get("granularity")||"M15").toUpperCase();
+  if(!INSTRUMENTS.has(instrument)||!GRANULARITIES.has(granularity))return json({error:"Invalid diagnostic instrument or granularity."},400);
+  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),summaryStart=Date.now();
+  const summary=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token),summaryLatencyMs=Date.now()-summaryStart,candleStart=Date.now(),candles=await oandaRequest(`/v3/instruments/${instrument}/candles?price=M&granularity=${granularity}&count=60&smooth=false`,token),candleLatencyMs=Date.now()-candleStart,engineResponse=await env.HTL_ENGINE.getByName("live").fetch("https://engine/status"),engine=await engineResponse.json().catch(()=>({}));
+  return json({time:new Date().toISOString(),totalLatencyMs:Date.now()-started,worker:{oandaActive,oandaQueued:oandaWaiters.length,maxConcurrency:OANDA_MAX_CONCURRENCY,requestTimeoutMs:OANDA_REQUEST_TIMEOUT_MS,candleCacheEntries:candleCache.size,telemetry:oandaTelemetry},oanda:{accountSuffix:String(accountId).slice(-3),summaryLatencyMs,candleLatencyMs,completedCandles:normalizeCandles(candles).length,NAV:summary.account?.NAV||null,marginAvailable:summary.account?.marginAvailable||null},engine:{reachable:engineResponse.ok,armed:engine.armed,running:engine.running,lastRun:engine.lastRun,lastError:engine.lastError,optimizerCoverage:engine.optimizerCoverage,optimizerTotal:engine.optimizerTotal,optimizerLastError:engine.optimizerLastError,mtfCoverage:engine.mtfCoverage,pendingOrders:engine.pendingOrders},cloneAssessment:{structuredCloneCalls:0,applicable:false,verdict:"No structuredClone hot path exists in this repository."}});
+}
+
 async function handlePricingStream(env,url) {
   const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),instruments=String(url.searchParams.get("instruments")||"").split(",").filter(Boolean);
   if(!instruments.length||instruments.length>INSTRUMENTS.size||instruments.some(instrument=>!INSTRUMENTS.has(instrument))) return json({error:"Invalid instruments."},400);
@@ -174,10 +185,14 @@ export default {
         assertSameOrigin(request);
         if(url.pathname==="/api/oanda/connect"&&request.method==="GET") return await handleConnect(env);
         if(url.pathname==="/api/oanda/accounts"&&request.method==="GET") return await handleAccountDiagnostic(env);
+        if(url.pathname==="/api/platform/diagnostic"&&request.method==="GET") return await handlePlatformDiagnostic(env,url);
+        if(url.pathname==="/api/platform/preferences"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/preferences");
+        if(url.pathname==="/api/platform/preferences"&&request.method==="PUT") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/engine/status"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/status");
         if(url.pathname==="/api/engine/config"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/config");
         if(url.pathname==="/api/engine/config"&&request.method==="PUT") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/engine/optimizer"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/optimizer");
+        if(url.pathname==="/api/engine/compute"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/compute",{method:"POST",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/engine/optimizer"&&request.method==="PUT") return json({error:"Optimizer records are server-managed."},405,{Allow:"GET"});
         if(url.pathname==="/api/engine/ledger"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/ledger");
         if(url.pathname==="/api/oanda/order"&&request.method==="POST") return await handleManualOrder(request,env);
