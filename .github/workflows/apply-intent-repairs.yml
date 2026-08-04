@@ -27,6 +27,37 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Restore escaped transformation literals
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('scripts/apply-intent-repairs.mjs')
+          lines=path.read_text().splitlines()
+          replacements={
+            44: r'''  return json(await oandaRequest(\`/v3/accounts/\${encodeURIComponent(accountId)}/orders\`,token,{method:"POST",body:JSON.stringify(body)}));''',
+            84: r'''`?{pair,event:{...row.event,direction,id:\`MTF:\${direction}:\${lastCandle}\`},confidence,count}:null;`,''',
+            85: r'''`?{pair,event:{...row.event,direction,id:\`MTF:\${direction}:\${lastCandle}\`},confidence,count,configuration:row.configuration}:null;`,''',
+            91: r'''    const body=existing>0?{longUnits:"ALL"}:{shortUnits:"ALL"},result=await callOanda(\`/v3/accounts/\${accountId}/positions/\${pair}/close\`,token,{method:"PUT",body:JSON.stringify(body)}),fill=result.longOrderFillTransaction||result.shortOrderFillTransaction;''',
+            96: r'''    const payload=await callOanda(\`/v3/accounts/\${accountId}/positions\`,token),positions=payload.positions||[];''',
+            108: r'''    const body=existing>0?{longUnits:"ALL"}:{shortUnits:"ALL"},result=await callOanda(\`/v3/accounts/\${accountId}/positions/\${pair}/close\`,token,{method:"PUT",body:JSON.stringify(body)}),fill=result.longOrderFillTransaction||result.shortOrderFillTransaction;''',
+            113: r'''    const payload=await callOanda(\`/v3/accounts/\${accountId}/positions\`,token),positions=payload.positions||[];''',
+            208: r'''    const response=await fetch(\`/api/oanda/proxy?path=\${encodeURIComponent(path)}\`,{method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)});''',
+            229: r'''      const payload=await response.json().catch(()=>({error:\`HTTP \${response.status}\`}));''',
+            230: r'''      if(!response.ok)throw new Error(payload.error||payload.message||\`HTTP \${response.status}\`);''',
+            245: r'''      if(wasConnected){setConnectionStatus(\`\${error.message||"Connection test failed"} · active session retained\`,"error");}''',
+            260: r'''      const payload=await oanda(\`/v3/instruments/\${encodeURIComponent(state.selectedInstrument)}/candles?price=M&granularity=\${encodeURIComponent(state.selectedTimeframe)}&count=650\`,controller);''',
+            287: r'''      const payload=await oanda(\`/v3/instruments/\${encodeURIComponent(instrument)}/candles?price=M&granularity=\${encodeURIComponent(timeframe)}&count=650\`,controller),candles=completedCandles(payload),key=scheduleKey(instrument,timeframe);''',
+            347: r'''`  function renderMacroPerformance(){const record=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),configs=record?.config||{},fmt=(value,digits=2)=>Number.isFinite(value)?Number(value).toFixed(digits):"—";el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const stats=configs[strategy.id]||{},trades=Number(stats.trades)||0,wins=trades&&Number.isFinite(stats.winRate)?Math.round(trades*stats.winRate):0,losses=trades-wins,recovery=Number(stats.maxDrawdown)?Number(stats.net)/Number(stats.maxDrawdown):null;return \`<tr><td>\${strategy.label}</td><td>\${trades||"—"}</td><td>\${trades?\`\${wins}/\${losses}/0\`:"—"}</td><td class="\${Number(stats.net)>=0?"positive":"negative"}">\${fmt(stats.net,1)}</td><td>\${trades?fmt(Number(stats.net)/trades):"—"}</td><td>—</td><td>\${fmt(stats.maxDrawdown,1)}</td><td>—</td><td>\${fmt(recovery)}</td></tr>\`;}).join("");el("computeConfiguration").disabled=false;}''',
+            417: r'''  if(value.endsWith(\`/v3/accounts/\${accountId}/summary\`))return new Response(JSON.stringify({account:{id:accountId,balance:"1000",NAV:"1000",marginAvailable:"900"},lastTransactionID:"1"}),{status:200});''',
+            418: r'''  if(value.endsWith(\`/v3/accounts/\${accountId}/orders\`)&&init.method==="POST"){capturedOrder=JSON.parse(init.body);return new Response(JSON.stringify({orderFillTransaction:{id:"2",price:"1.1",units:capturedOrder.order.units},lastTransactionID:"2"}),{status:200});}''',
+            420: r'''  if(value.endsWith(\`/v3/accounts/\${accountId}/positions\`))return new Response(JSON.stringify({positions:[{instrument:"EUR_USD",long:{units:"10"},short:{units:"0"}}]}),{status:200});''',
+            421: r'''  if(value.endsWith(\`/v3/accounts/\${accountId}/positions/EUR_USD/close\`)){closed.push(JSON.parse(init.body));return new Response(JSON.stringify({longOrderFillTransaction:{id:"3",units:"-10",price:"1.09",pl:"1"}}),{status:200});}''',
+            422: r'''  throw new Error(\`Unexpected fetch: \${value}\`);'''
+          }
+          for number,text in replacements.items():
+              lines[number-1]=text
+          path.write_text('\n'.join(lines)+'\n')
+          PY
       - name: Apply controlled source transformations
         run: node scripts/apply-intent-repairs.mjs
       - name: Execute repository checks
