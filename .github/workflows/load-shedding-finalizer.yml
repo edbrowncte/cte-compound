@@ -24,6 +24,9 @@ jobs:
           if [ -f scripts/apply-load-shedding.py ]; then
             python scripts/apply-load-shedding.py
           fi
+          if [ -f scripts/fix-load-shedding-check.py ]; then
+            python scripts/fix-load-shedding-check.py
+          fi
       - name: Execute complete repository checks
         run: npm run check
       - name: Commit verified source
