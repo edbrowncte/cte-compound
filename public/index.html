@@ -612,7 +612,7 @@
   function prepareIndicators(candles,config={length:50}) {
     const closes=candles.map(c=>c.close);
     const length=clamp(Math.round(config.length||50),3,200),htl=htlBuild(candles,length),meanAsset=htlPairAverage(htl.asset,htl.inverse),meanCenter=htlSeriesWma(meanAsset,length),meanInverse=meanAsset.map((value,index)=>Number.isFinite(value)&&Number.isFinite(meanCenter[index])?(2*meanCenter[index])-value:null),assetCenter=htlSeriesWma(htl.asset,length),inverseCenter=htlSeriesWma(htl.inverse,length),naiAsset=htlNorm(htl.asset,assetCenter,htlSeriesStdev(htl.asset,length)),naiInverse=htlNorm(htl.inverse,inverseCenter,htlSeriesStdev(htl.inverse,length)),dareNAsset=htlNorm(meanAsset,htlSeriesWma(meanAsset,length),htlSeriesStdev(meanAsset,length)),dareNInverse=htlNorm(meanInverse,htlSeriesWma(meanInverse,length),htlSeriesStdev(meanInverse,length));
-    return {closes,asset:htl.asset,inverse:htl.inverse,meanAsset,meanInverse,naiAsset,naiInverse,dareNAsset,dareNInverse,zup:htl.series.zup,puz:htl.series.zup.map(value=>Number.isFinite(value)?-value:null),htl};
+    return {closes,asset:htl.asset,inverse:htl.inverse,meanAsset,meanInverse,naiAsset,naiInverse,dareNAsset,dareNInverse,zup:htl.series.zup,puz:htl.series.puz,htl};
   }
 
   function output(direction,score,regime,metrics={}) {
@@ -1160,7 +1160,7 @@
     const ia=zmiu.map((value,index)=>Number.isFinite(value)&&Number.isFinite(deviation[index])&&Number.isFinite(wmaMiu[index])?((value+1)*deviation[index])+wmaMiu[index]:null);
     const id=zmiu.map((value,index)=>Number.isFinite(value)&&Number.isFinite(deviation[index])&&Number.isFinite(wmaMiu[index])?((value-1)*deviation[index])+wmaMiu[index]:null);
     const up=htlPairAverage(ia,id),wmaUp=htlSeriesWma(up,length),zup=htlNorm(close,wmaUp,deviation),upr=htlInverse(zup,deviation,wmaUp);
-    return {hl2,mui,zui,iuz,ui,upr};
+    return {hl2,mui,zui,iuz,ui,upr,zup,puz:zup.map(value=>Number.isFinite(value)?-value:null)};
   }
   function htlBuild(data,length){
     const series=htlCore(data,length),families=[[series.hl2,series.upr],[series.mui,series.ui],[series.zui,series.iuz]],sourceCrosses=[];
