@@ -6,11 +6,11 @@ on:
     paths: [.github/workflows/deploy-no-data-repair.yml]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
-    if: github.event.head_commit.message == 'deploy: publish no-data repair'
+    if: github.event.head_commit.message == 'deploy: publish no-data repair with receipt'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,10 +20,17 @@ jobs:
           cache: npm
       - run: npm install
       - run: npm run check
-      - uses: cloudflare/wrangler-action@v3
+      - name: Deploy cte-compound
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
-
-# One-time deployment trigger.
+      - name: Record successful deployment
+        run: |
+          printf '{"worker":"cte-compound","source":"%s","deployed_at":"%s"}\n' "$(git rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment-receipt.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deployment-receipt.json
+          git commit -m "deployment: cte-compound no-data repair published"
+          git push origin HEAD:main
