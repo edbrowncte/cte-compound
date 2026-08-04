@@ -1,0 +1,102 @@
+from pathlib import Path
+
+
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{label}: expected 1 occurrence, found {count}")
+    return text.replace(old, new, 1)
+
+
+engine_path = Path("src/engine.js")
+engine = engine_path.read_text()
+engine = replace_once(
+    engine,
+    "state.events={};state.directions=null;state.lastCandle=null;state.mtf={};",
+    "state.events={};state.directions=null;state.requirements=null;state.lastCandle=null;state.mtf={};",
+    "configuration reset requirements",
+)
+engine = replace_once(
+    engine,
+    "if(!state.directions){const rows=rotationTimeframe===config.timeframe?rotationRows:await this.scan(token,config,config.timeframe,optimizer);state.directions=Object.fromEntries(rows.map(row=>[row.pair,row.event.direction]));state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;}\n        await this.reconcile(state.directions,token,accountId,state,config);",
+    "if(!state.requirements){const rows=rotationTimeframe===config.timeframe?rotationRows:await this.scan(token,config,config.timeframe,optimizer);state.directions=Object.fromEntries(rows.map(row=>[row.pair,row.event.direction]));state.requirements=Object.fromEntries(rows.map(row=>[row.pair,row]));state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;}\n        await this.reconcile(state.requirements,token,accountId,state,config);",
+    "same-candle optimized requirements",
+)
+engine = replace_once(
+    engine,
+    "const requirements=Object.fromEntries(rows.map(row=>[row.pair,row])),mtfNow=this.mtfCandidates(state,rows,lastCandle,fingerprint);\n      await this.reconcile(requirements,token,accountId,state,config);",
+    "const requirements=Object.fromEntries(rows.map(row=>[row.pair,row])),mtfNow=this.mtfCandidates(state,rows,lastCandle,fingerprint);state.requirements=requirements;\n      await this.reconcile(requirements,token,accountId,state,config);",
+    "persist optimized requirements",
+)
+engine_path.write_text(engine)
+
+html_path = Path("public/index.html")
+html = html_path.read_text()
+old = '''  function causalIndicatorSet(data,length){const keys=["asset","inverse","meanAsset","meanInverse","dareNAsset","dareNInverse","naiAsset","naiInverse","zup","puz"],out=Object.fromEntries(keys.map(key=>[key,Array(data.length).fill(null)])),first=Math.max(2,length);for(let index=first;index<data.length;index++){const indicators=prepareIndicators(data.slice(0,index+1),{length});for(const key of keys)out[key][index]=indicators[key]?.at(-1)??null;}return out;}
+  function causalDirection(indicators,index,strategy,filter=0){const relation=(left,right)=>Number.isFinite(left?.[index])&&Number.isFinite(right?.[index])?left[index]-right[index]>filter?1:left[index]-right[index]<-filter?-1:0:0;if(strategy==="ASSET")return relation(indicators.asset,indicators.inverse);if(strategy==="DARE")return relation(indicators.meanAsset,indicators.meanInverse);if(strategy==="DARE_N")return relation(indicators.dareNAsset,indicators.dareNInverse);if(strategy==="NAI")return relation(indicators.naiAsset,indicators.naiInverse);if(strategy==="APEX"){const z=indicators.zup?.[index],p=indicators.puz?.[index];return Number.isFinite(z)&&Number.isFinite(p)?z<=-filter&&p>=filter?1:z>=filter&&p<=-filter?-1:0:0;}return 0;}
+  async function refreshCausalChartAnalysis(instrument,timeframe,candles,configuration,strategy){const token=++state.chartCausalToken;await new Promise(resolve=>requestAnimationFrame(resolve));const config=configuration?.[strategy]||STRATEGY_CONFIG[strategy]||STRATEGY_CONFIG.ASSET,primary=causalIndicatorSet(candles,config.length),sets=new Map([[config.length,primary]]);let series=[],prior=0;if(strategy==="COMBO"){const dareConfig=configuration?.DARE||STRATEGY_CONFIG.DARE,naiConfig=configuration?.NAI||STRATEGY_CONFIG.NAI,dare=sets.get(dareConfig.length)||causalIndicatorSet(candles,dareConfig.length),nai=dareConfig.length===naiConfig.length?dare:causalIndicatorSet(candles,naiConfig.length);for(let index=0;index<candles.length;index++){const d=causalDirection(dare,index,"DARE",dareConfig.filter),n=causalDirection(nai,index,"NAI",naiConfig.filter),direction=d&&d===n?d:0;if(direction&&direction!==prior)series.push({index,direction,confidence:.5,time:candles[index].time,price:candles[index].close});prior=direction;}state.chartCausalIndicators=dare;}else{for(let index=0;index<candles.length;index++){const direction=causalDirection(primary,index,strategy,config.filter);if(direction&&direction!==prior)series.push({index,direction,confidence:.5,time:candles[index].time,price:candles[index].close});prior=direction;}state.chartCausalIndicators=primary;}if(token!==state.chartCausalToken||instrument!==state.selectedInstrument||timeframe!==state.selectedTimeframe||strategy!==state.selectedStrategy)return;state.chartCausalSeries=series;drawChart();}
+'''
+new = '''  async function causalIndicatorSet(data,length,token){const keys=["asset","inverse","meanAsset","meanInverse","dareNAsset","dareNInverse","naiAsset","naiInverse","zup","puz"],out=Object.fromEntries(keys.map(key=>[key,Array(data.length).fill(null)])),first=Math.max(2,length);for(let index=first;index<data.length;index++){if(index%16===0){await new Promise(resolve=>setTimeout(resolve,0));if(token!==state.chartCausalToken)return null;}const indicators=prepareIndicators(data.slice(0,index+1),{length});for(const key of keys)out[key][index]=indicators[key]?.at(-1)??null;}return out;}
+  function causalDirection(indicators,index,strategy,filter=0){const relation=(left,right)=>Number.isFinite(left?.[index])&&Number.isFinite(right?.[index])?left[index]-right[index]>filter?1:left[index]-right[index]<-filter?-1:0:0;if(strategy==="ASSET")return relation(indicators.asset,indicators.inverse);if(strategy==="DARE")return relation(indicators.meanAsset,indicators.meanInverse);if(strategy==="DARE_N")return relation(indicators.dareNAsset,indicators.dareNInverse);if(strategy==="NAI")return relation(indicators.naiAsset,indicators.naiInverse);if(strategy==="APEX"){const z=indicators.zup?.[index],p=indicators.puz?.[index];return Number.isFinite(z)&&Number.isFinite(p)?z<=-filter&&p>=filter?1:z>=filter&&p<=-filter?-1:0:0;}return 0;}
+  async function refreshCausalChartAnalysis(instrument,timeframe,candles,configuration,strategy){const token=++state.chartCausalToken;await new Promise(resolve=>requestAnimationFrame(resolve));if(token!==state.chartCausalToken)return;const config=configuration?.[strategy]||STRATEGY_CONFIG[strategy]||STRATEGY_CONFIG.ASSET,primary=await causalIndicatorSet(candles,config.length,token);if(!primary)return;const sets=new Map([[config.length,primary]]);let series=[],prior=0,displayIndicators=primary;if(strategy==="COMBO"){const dareConfig=configuration?.DARE||STRATEGY_CONFIG.DARE,naiConfig=configuration?.NAI||STRATEGY_CONFIG.NAI,dare=sets.get(dareConfig.length)||await causalIndicatorSet(candles,dareConfig.length,token);if(!dare)return;sets.set(dareConfig.length,dare);const nai=dareConfig.length===naiConfig.length?dare:sets.get(naiConfig.length)||await causalIndicatorSet(candles,naiConfig.length,token);if(!nai)return;for(let index=0;index<candles.length;index++){const d=causalDirection(dare,index,"DARE",dareConfig.filter),n=causalDirection(nai,index,"NAI",naiConfig.filter),direction=d&&d===n?d:0;if(direction&&direction!==prior)series.push({index,direction,confidence:.5,time:candles[index].time,price:candles[index].close});prior=direction;}displayIndicators={...dare,naiAsset:nai.naiAsset,naiInverse:nai.naiInverse};}else{for(let index=0;index<candles.length;index++){const direction=causalDirection(primary,index,strategy,config.filter);if(direction&&direction!==prior)series.push({index,direction,confidence:.5,time:candles[index].time,price:candles[index].close});prior=direction;}}if(token!==state.chartCausalToken||instrument!==state.selectedInstrument||timeframe!==state.selectedTimeframe||strategy!==state.selectedStrategy)return;state.chartCausalIndicators=displayIndicators;state.chartCausalSeries=series;drawChart();}
+'''
+html = replace_once(html, old, new, "cancelable causal chart calculation")
+html_path.write_text(html)
+
+check_path = Path("scripts/check-worker.mjs")
+check = check_path.read_text()
+check = replace_once(
+    check,
+    '  [/optimizerScore/,"effective optimizer ledger attribution"]',
+    '  [/optimizerScore/,"effective optimizer ledger attribution"],\n  [/state\\.requirements/,"durable optimized reconciliation context"]',
+    "engine requirements check",
+)
+check_path.write_text(check)
+
+test_path = Path("scripts/test-runtime.mjs")
+test = test_path.read_text()
+test = replace_once(
+    test,
+    'assert.match(html,/selectChart\\(event\\.target\\.value,state\\.selectedTimeframe\\)/);',
+    'assert.match(html,/selectChart\\(event\\.target\\.value,state\\.selectedTimeframe\\)/);assert.match(html,/async function causalIndicatorSet/);assert.match(html,/token!==state\\.chartCausalToken/);',
+    "causal cancellation test",
+)
+test_path.write_text(test)
+
+for temporary in [
+    "scripts/finalize-repair-trigger",
+    "scripts/finalize-artifact-trigger",
+    "scripts/main-finalizer-trigger",
+    ".github/workflows/finalize-intent-repairs.yml",
+]:
+    Path(temporary).unlink(missing_ok=True)
+
+Path(".github/workflows/verify.yml").write_text(
+    '''name: Verify analytical compound
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Verify Worker and standalone HTML
+        run: npm run check
+'''
+)
+Path(__file__).unlink(missing_ok=True)
