@@ -35,10 +35,11 @@
   if(typeof root.oandaPost==="function"){
     const priorPost=root.oandaPost;
     root.oandaPost=async function(path,body){
-      if(/\/orders$/.test(path)&&body?.cteContext?.candidate){
-        const key=body.cteContext.candidate,candidate=state?.decisionCandidates?.[key],evidence=latestEvidence(candidate);
+      const selectedKey=body?.cteContext?.candidate||state?.selectedDecisionCandidate;
+      if(/\/orders$/.test(path)&&selectedKey){
+        const candidate=state?.decisionCandidates?.[selectedKey],evidence=latestEvidence(candidate);
         if(!evidence)throw new Error("The selected candidate does not have a qualified Asset/Inverse crossing on the latest completed OANDA candle.");
-        body={...body,cteContext:{...body.cteContext,pair:evidence.pair,timeframe:evidence.timeframe,strategy:evidence.strategy,configuredStrategy:evidence.strategy,crossingStrategy:"ASSET",length:evidence.length,filter:evidence.filter,crossingIdentity:evidence.identity,crossingTime:evidence.crossing.time,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,rawDirection:evidence.crossing.direction,priorAsset:evidence.crossing.priorAsset,priorInverse:evidence.crossing.priorInverse,currentAsset:evidence.crossing.asset,currentInverse:evidence.crossing.inverse,qualificationResult:"QUALIFIED",qualificationReason:evidence.qualification.reason}};
+        body={...body,cteContext:{...(body?.cteContext||{}),candidate:selectedKey,pair:evidence.pair,timeframe:evidence.timeframe,strategy:evidence.strategy,configuredStrategy:evidence.strategy,crossingStrategy:"ASSET",length:evidence.length,filter:evidence.filter,crossingIdentity:evidence.identity,crossingTime:evidence.crossing.time,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,rawDirection:evidence.crossing.direction,priorAsset:evidence.crossing.priorAsset,priorInverse:evidence.crossing.priorInverse,currentAsset:evidence.crossing.asset,currentInverse:evidence.crossing.inverse,qualificationResult:"QUALIFIED",qualificationReason:evidence.qualification.reason}};
       }
       return priorPost(path,body);
     };
