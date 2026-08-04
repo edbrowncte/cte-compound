@@ -1,0 +1,34 @@
+name: Finalize performance diagnostics and persistence
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'repair/performance-diagnostics'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: repair/performance-diagnostics
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply performance and diagnostic repair
+        run: python scripts/apply-performance-diagnostics.py
+      - name: Apply NAI z-axis and cross-device persistence
+        run: python scripts/apply-nai-persistence.py
+      - name: Execute complete repository checks
+        run: npm run check
+      - name: Commit verified source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add performance windows diagnostics NAI z-axis and persistence"
+          git push origin HEAD:repair/performance-diagnostics
