@@ -64,9 +64,19 @@ async function oandaRequest(path,token,init={}) {
 }
 
 function normalizeCandles(payload) {
-  return (payload.candles||[]).filter(c=>c.complete===true&&c.mid).map(c=>({
-    time:c.time,open:Number(c.mid.o),high:Number(c.mid.h),low:Number(c.mid.l),close:Number(c.mid.c),volume:Number(c.volume||0),complete:true
-  })).filter(c=>[c.open,c.high,c.low,c.close].every(Number.isFinite));
+  return (payload.candles||[]).filter(c=>c.complete===true&&c.mid).map(c=>{
+    const open=Number(c.mid.o),high=Number(c.mid.h),low=Number(c.mid.l),close=Number(c.mid.c);
+    return {
+      time:c.time,
+      open,
+      high,
+      low,
+      close,
+      mid:{o:String(c.mid.o),h:String(c.mid.h),l:String(c.mid.l),c:String(c.mid.c)},
+      volume:Number(c.volume||0),
+      complete:true
+    };
+  }).filter(c=>[c.open,c.high,c.low,c.close].every(Number.isFinite));
 }
 
 function proxyPath(raw,accountId,method) {
