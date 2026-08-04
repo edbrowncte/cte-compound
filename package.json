@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/worker.js && node --check src/engine.js && node scripts/check-worker.mjs && node scripts/check-html.mjs && node scripts/test-runtime.mjs && node scripts/test-browser.mjs"
+    "check": "node --check src/worker.js && node --check src/worker-candidate-base.js && node --check src/worker-horizon-base.js && node --check src/worker-base.js && node --check src/engine.js && node --check src/engine-horizon-base.js && node --check src/engine-base.js && node scripts/check-worker.mjs && node scripts/check-html.mjs && node scripts/test-runtime.mjs && node scripts/test-browser.mjs && node scripts/test-horizon-platform.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.28.1",
