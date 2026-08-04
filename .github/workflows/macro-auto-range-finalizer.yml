@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
       - name: Remove editable Macro dates and restore automatic history
         run: |
+          rm -f scripts/macro-auto-range.trigger
           if [ -f scripts/apply-macro-auto-range.py ]; then
             python - <<'PY'
             from pathlib import Path
