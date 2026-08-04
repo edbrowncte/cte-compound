@@ -22,7 +22,8 @@ const engineChecks=[
   [/result\.choices\?\.\[0\]/,"Workers AI response compatibility"],
   [/configurationSource:"OPTIMIZED"/,"optimized runtime default"],
   [/await this\.reconcile\(requirements/,"full-position reconciliation"],
-  [/optimizerScore/,"effective optimizer ledger attribution"]
+  [/optimizerScore/,"effective optimizer ledger attribution"],
+  [/state\.requirements/,"durable optimized reconciliation context"]
 ];
 for(const [pattern,label] of [...workerChecks,...engineChecks]){
   const source=workerChecks.some(item=>item[0]===pattern)?worker:engine;

@@ -34,6 +34,6 @@ assert.equal(closed.length,1);assert.equal(engine.lastWrite.type,"POSITION_CLOSE
 response=await engine.fetch(new Request("https://engine/optimizer",{method:"PUT",headers:{"Content-Type":"application/json"},body:"{}"}));assert.equal(response.status,405);
 
 const html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");
-assert.match(html,/id="connectButton"[^>]*>TEST<\/button>/);assert.match(html,/selectedStrategy:"ASSET"/);assert.match(html,/configurationSource:"OPTIMIZED"/);assert.match(html,/selectChart\(event\.target\.value,state\.selectedTimeframe\)/);assert.doesNotMatch(html,/\/api\/engine\/optimizer[^\n]+method:"PUT"/);
+assert.match(html,/id="connectButton"[^>]*>TEST<\/button>/);assert.match(html,/selectedStrategy:"ASSET"/);assert.match(html,/configurationSource:"OPTIMIZED"/);assert.match(html,/selectChart\(event\.target\.value,state\.selectedTimeframe\)/);assert.match(html,/async function causalIndicatorSet/);assert.match(html,/token!==state\.chartCausalToken/);assert.doesNotMatch(html,/\/api\/engine\/optimizer[^\n]+method:"PUT"/);
 globalThis.fetch=originalFetch;
 console.log("Runtime route, reconciliation, optimizer, forensic context, chart, and connection contracts verified.");
