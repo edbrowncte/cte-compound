@@ -1,0 +1,37 @@
+name: Finalize automatic Macro history scope
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.head_ref == 'repair/macro-auto-range'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: repair/macro-auto-range
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Remove editable Macro dates and restore automatic history
+        run: |
+          if [ -f scripts/apply-macro-auto-range.py ]; then
+            python scripts/apply-macro-auto-range.py
+          fi
+      - name: Execute complete repository checks
+        run: npm run check
+      - name: Commit verified source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Restore automatic Macro history scope"
+            git push origin HEAD:repair/macro-auto-range
+          fi
