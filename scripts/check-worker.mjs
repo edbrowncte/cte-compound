@@ -33,7 +33,9 @@ const engineChecks=[
   [/uiPreferences/,"durable UI preference storage"],
   [/candlesForRange/,"date-range Compute Configuration candles"],
   [/COMPUTE_CONFIGURATION/,"authoritative optimizer source"],
-  [/MAX_COMPUTE_BARS/,"bounded causal optimization range"]
+  [/MAX_COMPUTE_BARS/,"bounded causal optimization range"],
+  [/function htlCausal/,"incremental causal optimizer"],
+  [/stage="causal-optimization"/,"Compute Configuration error stage"]
 ];
 for(const [pattern,label] of [...workerChecks,...engineChecks]){
   const source=workerChecks.some(item=>item[0]===pattern)?worker:engine;
