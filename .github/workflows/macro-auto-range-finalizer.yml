@@ -22,6 +22,11 @@ jobs:
       - name: Remove editable Macro dates and restore automatic history
         run: |
           if [ -f scripts/apply-macro-auto-range.py ]; then
+            python - <<'PY'
+            from pathlib import Path
+            path = Path('scripts/apply-macro-auto-range.py')
+            path.write_text(path.read_text().replace(r'\\d', '[0-9]'))
+            PY
             python scripts/apply-macro-auto-range.py
           fi
       - name: Execute complete repository checks
