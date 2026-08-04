@@ -2,15 +2,19 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 
 const targets = [
   ['public/index.html', [
-    'Automated Trading Control',
     'Open Positions',
     'id="chart"',
     'id="eventChart"',
     'function htlBuild',
+    'function causalIndicatorSetFast',
+    'function currentOptimizer',
+    'function renderStrategyConfiguration',
     'function drawChart',
     'function eventDraw',
+    'function renderPositions',
     'function renderOpenPositions',
     'function renderEngineStatus',
+    'function saveEngineConfig',
     'function executeSelectedCandidate',
     'function bindEvents',
   ]],
@@ -18,6 +22,7 @@ const targets = [
     'function htlBuild',
     'function htlCausal',
     'function strategyEvents',
+    'function currentOptimizer',
     'async execute',
     'async reconcile',
     'async optimizeDataset',
@@ -26,6 +31,7 @@ const targets = [
   ['src/worker.js', [
     'async function handleManualOrder',
     'async function handleProxy',
+    'async function handleCandles',
     'export default',
   ]],
 ];
@@ -38,8 +44,8 @@ for (const [path, markers] of targets) {
     const index = source.indexOf(marker);
     output.push(`\n--- ${marker} @ ${index} ---\n`);
     if (index < 0) continue;
-    const start = Math.max(0, index - 2500);
-    const end = Math.min(source.length, index + 7500);
+    const start = Math.max(0, index - 3000);
+    const end = Math.min(source.length, index + 10000);
     output.push(source.slice(start, end));
     output.push('\n');
   }
