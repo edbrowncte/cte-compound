@@ -1,1 +1,1 @@
-Run the current-main refresh-boundary transformation and executable DOM regression suite.
+Rerun after correcting the static assertion quoting; require the full DOM suite to pass.
