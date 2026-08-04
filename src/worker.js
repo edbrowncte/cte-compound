@@ -112,6 +112,20 @@ async function handleProxy(request,env,url) {
   return json(await oandaRequest(path,token,{method}));
 }
 
+function normalizeManualOrder(value) {
+  const source=value?.order||{},instrument=String(source.instrument||"").toUpperCase(),units=Number(source.units);
+  if(!INSTRUMENTS.has(instrument)) throw Object.assign(new Error("Invalid order instrument."),{status:400});
+  if(!Number.isFinite(units)||!Number.isInteger(units)||units===0) throw Object.assign(new Error("Order units must be a non-zero integer."),{status:400});
+  if(source.type!=="MARKET"||source.timeInForce!=="FOK"||source.positionFill!=="DEFAULT") throw Object.assign(new Error("Only MARKET FOK DEFAULT orders are permitted."),{status:400});
+  return {order:{instrument,units:String(units),type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT"}};
+}
+
+async function handleManualOrder(request,env) {
+  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId);
+  const body=normalizeManualOrder(await request.json().catch(()=>null));
+  return json(await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/orders`,token,{method:"POST",body:JSON.stringify(body)}));
+}
+
 async function handleCandles(env,url) {
   const {token}=credentials(env),instrument=(url.searchParams.get("instrument")||"").toUpperCase(),granularity=(url.searchParams.get("granularity")||"").toUpperCase();
   if(!INSTRUMENTS.has(instrument)||!GRANULARITIES.has(granularity)) return json({error:"Invalid instrument or granularity."},400);
@@ -156,8 +170,9 @@ export default {
         if(url.pathname==="/api/engine/config"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/config");
         if(url.pathname==="/api/engine/config"&&request.method==="PUT") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/engine/optimizer"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/optimizer");
-        if(url.pathname==="/api/engine/optimizer"&&request.method==="PUT") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/optimizer",{method:"PUT",headers:{"Content-Type":"application/json"},body:request.body}));
+        if(url.pathname==="/api/engine/optimizer"&&request.method==="PUT") return json({error:"Optimizer records are server-managed."},405,{Allow:"GET"});
         if(url.pathname==="/api/engine/ledger"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/ledger");
+        if(url.pathname==="/api/oanda/order"&&request.method==="POST") return await handleManualOrder(request,env);
         if(url.pathname==="/api/oanda/proxy") return await handleProxy(request,env,url);
         if(url.pathname==="/api/oanda/candles"&&request.method==="GET") return await handleCandles(env,url);
         if(url.pathname==="/api/oanda/stream"&&request.method==="GET") return await handlePricingStream(env,url);

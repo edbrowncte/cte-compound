@@ -9,7 +9,9 @@ const workerChecks=[
   [/redirect:\s*"manual"/,"Cloudflare-compatible redirects"],
   [/handlePricingStream/,"live pricing stream"],
   [/candleCache/,"completed-candle cache"],
-  [/oandaWaiters/,"upstream request limiter"]
+  [/oandaWaiters/,"upstream request limiter"],
+  [/handleManualOrder/,"strict manual order route"],
+  [/Optimizer records are server-managed/,"server-authoritative optimizer boundary"]
 ];
 const engineChecks=[
   [/clientExtensions:\{id:clientId/,"OANDA client order identity"],
@@ -17,7 +19,11 @@ const engineChecks=[
   [/ORDER_RECONCILED/,"lost-response reconciliation"],
   [/ledgerIndex/,"durable ledger index"],
   [/ROLLING_ORIGIN_CAUSAL/,"causal optimizer validation"],
-  [/result\.choices\?\.\[0\]/,"Workers AI response compatibility"]
+  [/result\.choices\?\.\[0\]/,"Workers AI response compatibility"],
+  [/configurationSource:"OPTIMIZED"/,"optimized runtime default"],
+  [/await this\.reconcile\(requirements/,"full-position reconciliation"],
+  [/optimizerScore/,"effective optimizer ledger attribution"],
+  [/state\.requirements/,"durable optimized reconciliation context"]
 ];
 for(const [pattern,label] of [...workerChecks,...engineChecks]){
   const source=workerChecks.some(item=>item[0]===pattern)?worker:engine;
