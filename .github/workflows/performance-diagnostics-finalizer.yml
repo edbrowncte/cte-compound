@@ -1,4 +1,4 @@
-name: Finalize selectable candidates and causal performance
+name: Finalize unique candidate availability
 
 on:
   pull_request:
@@ -19,8 +19,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Apply selectable candidate and causal performance repair
-        run: python scripts/apply-candidate-selection.py
+      - name: Apply unique candidate availability repair
+        run: python scripts/apply-candidate-availability.py
       - name: Execute complete repository checks
         run: npm run check
       - name: Commit verified source
@@ -28,5 +28,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Add selectable A B C trades and causal performance"
+          git commit -m "Enforce unique candidates and live position validation"
           git push origin HEAD:repair/performance-diagnostics
