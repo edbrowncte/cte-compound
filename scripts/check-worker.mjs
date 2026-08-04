@@ -1,49 +1,10 @@
 import {readFile} from "node:fs/promises";
-
-const worker=await readFile(new URL("../src/worker.js",import.meta.url),"utf8");
-const engine=await readFile(new URL("../src/engine.js",import.meta.url),"utf8");
-
-const workerChecks=[
-  [/api-fxtrade\.oanda\.com/,"live OANDA origin"],
-  [/Authorization:\s*`Bearer \$\{token\}`/,"Bearer authentication"],
-  [/redirect:\s*"manual"/,"Cloudflare-compatible redirects"],
-  [/handlePricingStream/,"live pricing stream"],
-  [/candleCache/,"completed-candle cache"],
-  [/oandaWaiters/,"upstream request limiter"],
-  [/OANDA_REQUEST_TIMEOUT_MS/,"upstream timeout boundary"],
-  [/requestCount/,"count-aware candle cache"],
-  [/handlePlatformDiagnostic/,"platform diagnostic endpoint"],
-  [/handlePlatformVersion/,"deployment version endpoint"],
-  [/CF_VERSION_METADATA/,"Cloudflare version metadata binding"],
-  [/oandaTelemetry/,"OANDA retry telemetry"],
-  [/handleManualOrder/,"strict manual order route"],
-  [/Optimizer records are server-managed/,"server-authoritative optimizer boundary"],
-  [/api\/platform\/preferences/,"cross-device preference route"],
-  [/api\/engine\/compute/,"authoritative Compute Configuration route"]
-];
-const engineChecks=[
-  [/clientExtensions:\{id:clientId/,"OANDA client order identity"],
-  [/pendingOrders/,"durable pending-order state"],
-  [/ORDER_RECONCILED/,"lost-response reconciliation"],
-  [/ledgerIndex/,"durable ledger index"],
-  [/ROLLING_ORIGIN_CAUSAL/,"causal optimizer validation"],
-  [/result\.choices\?\.\[0\]/,"Workers AI response compatibility"],
-  [/configurationSource:"OPTIMIZED"/,"optimized runtime default"],
-  [/await this\.reconcile\(requirements/,"full-position reconciliation"],
-  [/optimizerScore/,"effective optimizer ledger attribution"],
-  [/state\.requirements/,"durable optimized reconciliation context"],
-  [/uiPreferences/,"durable UI preference storage"],
-  [/candlesForRange/,"date-range Compute Configuration candles"],
-  [/COMPUTE_CONFIGURATION/,"authoritative optimizer source"],
-  [/MAX_COMPUTE_BARS/,"bounded causal optimization range"],
-  [/function htlCausal/,"incremental causal optimizer"],
-  [/stage="causal-optimization"/,"Compute Configuration error stage"]
-];
-for(const [pattern,label] of [...workerChecks,...engineChecks]){
-  const source=workerChecks.some(item=>item[0]===pattern)?worker:engine;
-  if(!pattern.test(source))throw new Error(`Missing ${label}`);
-}
-for(const forbidden of [/api-fxpractice\.oanda\.com/,/stream-fxpractice\.oanda\.com/,/redirect:\s*"error"/]){
-  if(forbidden.test(worker)||forbidden.test(engine))throw new Error(`Forbidden runtime behavior: ${forbidden}`);
-}
-console.log("Worker execution, reconciliation, caching, ledger, and AI boundaries verified.");
+const readMany=async paths=>(await Promise.all(paths.map(path=>readFile(new URL(path,import.meta.url),"utf8")))).join("\n");
+const worker=await readMany(["../src/worker.js","../src/worker-horizon-base.js","../src/worker-base.js","../src/horizon-candidate-orders.js"]),engine=await readMany(["../src/engine.js","../src/engine-horizon-base.js","../src/engine-base.js","../src/horizon-platform-engine.js"]),contract=await readMany(["../public/htl-horizon-contract.js","../public/horizon-strategy-contract.js"]),runtime=await readMany(["../public/platform-horizon-runtime.js","../public/platform-horizon-qualified-direction.js","../public/platform-horizon-candidate-context.js","../public/platform-horizon-execution-guard.js"]);
+const checks=(source,items)=>{for(const[pattern,label]of items)if(!pattern.test(source))throw new Error(`Missing ${label}`);};
+checks(worker,[[/api-fxtrade\.oanda\.com/,"live OANDA origin"],[/Authorization:\s*`Bearer \$\{token\}`/,"Bearer authentication"],[/redirect:\s*"manual"/,"Cloudflare-compatible redirects"],[/handlePricingStream/,"live pricing stream"],[/candleCache/,"completed-candle cache"],[/oandaWaiters/,"upstream request limiter"],[/OANDA_REQUEST_TIMEOUT_MS/,"upstream timeout boundary"],[/handlePlatformDiagnostic/,"platform diagnostic endpoint"],[/handlePlatformVersion/,"deployment version endpoint"],[/CF_VERSION_METADATA/,"version metadata binding"],[/handleManualOrder/,"strict manual order route"],[/handleOpenTrades/,"open-trade retrieval"],[/handleTradeAction/,"trade modify and close"],[/handleCandidateOrder/,"canonical candidate order"],[/verifyCandidate/,"live crossing and strategy qualification verification"],[/crossing\.index!==candles\.length-1/,"latest completed-candle candidate boundary"],[/\/trades\/\$\{specifier\}/,"live trade revalidation"],[/units:\s*"ALL"/,"full trade close"],[/timeInForce:\s*"GTC"/,"GTC dependent orders"],[/\/orders\/@\$\{encodeURIComponent\(clientId\)\}/,"duplicate candidate lookup"],[/horizon-strategy-contract\.js/,"strategy contract injection"],[/platform-horizon-candidate-context\.js/,"candidate context injection"],[/platform-horizon-execution-guard\.js/,"latest-crossing browser guard injection"]]);
+checks(engine,[[/clientExtensions:\{id:clientId/,"OANDA client order identity"],[/pendingOrders/,"durable pending-order state"],[/ORDER_RECONCILED/,"lost-response reconciliation"],[/ledgerIndex/,"durable ledger index"],[/HORIZON_RETROSPECTIVE_PLATFORM_PARITY/,"Horizon optimizer validation"],[/result\.choices\?\.\[0\]/,"Workers AI compatibility"],[/configurationSource:"OPTIMIZED"/,"optimized runtime default"],[/await this\.reconcile\(requirements/,"position reconciliation"],[/optimizerScore/,"optimizer ledger attribution"],[/uiPreferences/,"preference storage"],[/candlesForRange/,"range computation"],[/MAX_COMPUTE_BARS/,"bounded optimizer"],[/OPTIMIZER_VERSION=5/,"optimizer version 5"],[/horizon-parity-optimization/,"Horizon computation stage"],[/qualificationVersion/,"strategy qualification version"],[/ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK/,"one canonical crossing clock"],[/row=>row\.event\?\.qualified===true&&Boolean\(row\.event\?\.startTime\)/,"qualified execution and reconciliation rows"],[/row\.event\?\.startTime===lastCandle/,"MTF cannot synthesize triggers"],[/crossingTime/,"crossing ledger evidence"],[/qualificationReason/,"qualification evidence"],[/nemotronRecommendedPair/,"Nemotron recommendation evidence"]]);
+checks(contract,[[/CTE_HORIZON_HTL_ASSET_CROSSING@1\.0\.0/,"versioned Horizon contract"],[/function assetCrossings/,"Asset\/Inverse crossings"],[/crossingIdentity/,"crossing identity"],[/CTE_HORIZON_STRATEGY_QUALIFICATION@1\.0\.0/,"strategy qualification contract"],[/function qualificationAt/,"post-cross qualification"],[/function directionAt/,"persistent qualified direction"],[/horizon\.crossings\.map/,"one raw crossing clock for every strategy"]]);
+checks(runtime,[[/chartConfigurationIdentity/,"main chart identity"],[/eventConfigurationIdentity/,"event chart identity"],[/horizonCompoundParity/,"Horizon\/Compound parity disclosure"],[/platformTradeManagement/,"trade controls"],[/FORENSIC_FIELDS/,"forensic CSV"],[/qualificationVersion/,"qualification CSV field"],[/strategies\.directionAt/,"browser qualification direction"],[/configuredStrategy/,"candidate configured strategy"],[/latestCompletedCrossing/,"latest completed-candle browser evidence"],[/latestCrossingEligible/,"candidate latest-crossing state"],[/identity:H\.crossingIdentity/,"guarded candidate crossing identity"]]);
+for(const forbidden of [/api-fxpractice\.oanda\.com/,/stream-fxpractice\.oanda\.com/,/redirect:\s*"error"/])if(forbidden.test(worker)||forbidden.test(engine))throw new Error(`Forbidden runtime behavior: ${forbidden}`);
+console.log("Worker, one Horizon crossing clock, latest-candle execution, strategy qualification, trade management, reconciliation, ledger, and AI boundaries verified.");
