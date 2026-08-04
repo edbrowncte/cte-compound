@@ -12,6 +12,7 @@ const INSTRUMENTS = new Set([
 const GRANULARITIES = new Set(["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]);
 const JSON_HEADERS = {"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
 const candleCache=new Map();
+const OANDA_MAX_CONCURRENCY=4,OANDA_REQUEST_TIMEOUT_MS=15000;
 let oandaActive=0,oandaLastStart=0;
 const oandaWaiters=[];
 
@@ -43,24 +44,31 @@ function assertSameOrigin(request) {
   if(site&&!['same-origin','same-site','none'].includes(site)) throw Object.assign(new Error("Cross-site request rejected."),{status:403});
 }
 
+async function acquireOandaSlot(){if(oandaActive<OANDA_MAX_CONCURRENCY){oandaActive++;return;}await new Promise(resolve=>oandaWaiters.push(resolve));}
+function releaseOandaSlot(){const next=oandaWaiters.shift();if(next)next();else oandaActive=Math.max(0,oandaActive-1);}
+
 async function oandaRequest(path,token,init={}) {
-  if(oandaActive>=6) await new Promise(resolve=>oandaWaiters.push(resolve));
-  oandaActive++;
-  const delay=Math.max(0,25-(Date.now()-oandaLastStart));
+  await acquireOandaSlot();
+  const delay=Math.max(0,35-(Date.now()-oandaLastStart));
   if(delay) await new Promise(resolve=>setTimeout(resolve,delay));
   oandaLastStart=Date.now();
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),OANDA_REQUEST_TIMEOUT_MS);
   try{
     const response=await fetch(LIVE_OANDA_ORIGIN+path,{
       method:init.method||"GET",
       headers:{Authorization:`Bearer ${token}`,Accept:"application/json",...(init.body?{"Content-Type":"application/json"}:{})},
       body:init.body,
       redirect:"manual",
-      cache:"no-store"
+      cache:"no-store",
+      signal:controller.signal
     });
     const payload=await response.json().catch(()=>({}));
     if(!response.ok) throw Object.assign(new Error(payload.errorMessage||payload.errorCode||`OANDA HTTP ${response.status}`),{status:response.status,payload});
     return payload;
-  } finally {oandaActive--;oandaWaiters.shift()?.();}
+  } catch(error){
+    if(controller.signal.aborted)throw Object.assign(new Error("OANDA request timed out."),{status:504});
+    throw error;
+  } finally {clearTimeout(timer);releaseOandaSlot();}
 }
 
 function normalizeCandles(payload) {
@@ -129,14 +137,14 @@ async function handleManualOrder(request,env) {
 async function handleCandles(env,url) {
   const {token}=credentials(env),instrument=(url.searchParams.get("instrument")||"").toUpperCase(),granularity=(url.searchParams.get("granularity")||"").toUpperCase();
   if(!INSTRUMENTS.has(instrument)||!GRANULARITIES.has(granularity)) return json({error:"Invalid instrument or granularity."},400);
-  const count=Math.max(60,Math.min(1200,Math.trunc(Number(url.searchParams.get("count")))||650));
-  const query=new URLSearchParams({price:"M",granularity,count:String(count),smooth:"false"}),key=`${instrument}|${granularity}|${count}`,cached=candleCache.get(key),now=Date.now();
-  if(cached?.expires>now)return json(cached.value);
-  if(cached?.promise)return json(await cached.promise);
-  const ttl={S5:4000,S30:15000,M1:30000,M5:120000,M15:300000,M30:600000,H1:1200000,H4:3600000,D:21600000,W:86400000}[granularity]||30000;
+  const count=Math.max(60,Math.min(1200,Math.trunc(Number(url.searchParams.get("count")))||650)),key=`${instrument}|${granularity}`,cached=candleCache.get(key),now=Date.now();
+  const select=value=>({...value,candles:(value.candles||[]).slice(-count)});
+  if(cached?.value&&cached.expires>now&&cached.count>=count)return json(select(cached.value));
+  if(cached?.promise&&cached.count>=count)return json(select(await cached.promise));
+  const requestCount=Math.max(count,cached?.count||0),query=new URLSearchParams({price:"M",granularity,count:String(requestCount),smooth:"false"}),ttl={S5:4000,S30:15000,M1:30000,M5:120000,M15:300000,M30:600000,H1:1200000,H4:3600000,D:21600000,W:86400000}[granularity]||30000;
   const promise=oandaRequest(`/v3/instruments/${instrument}/candles?${query}`,token).then(payload=>({instrument,granularity,candles:normalizeCandles(payload),completedOnly:true}));
-  candleCache.set(key,{promise,expires:0});
-  try{const value=await promise;candleCache.set(key,{value,expires:Date.now()+ttl});if(candleCache.size>1000)candleCache.delete(candleCache.keys().next().value);return json(value);}catch(error){candleCache.delete(key);throw error;}
+  candleCache.set(key,{promise,count:requestCount,expires:0,value:cached?.value});
+  try{const value=await promise;candleCache.set(key,{value,count:requestCount,expires:Date.now()+ttl});if(candleCache.size>400)candleCache.delete(candleCache.keys().next().value);return json(select(value));}catch(error){if(candleCache.get(key)?.promise===promise)candleCache.delete(key);throw error;}
 }
 
 async function handlePricingStream(env,url) {

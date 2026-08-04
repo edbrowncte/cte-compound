@@ -10,6 +10,8 @@ const workerChecks=[
   [/handlePricingStream/,"live pricing stream"],
   [/candleCache/,"completed-candle cache"],
   [/oandaWaiters/,"upstream request limiter"],
+  [/OANDA_REQUEST_TIMEOUT_MS/,"upstream timeout boundary"],
+  [/requestCount/,"count-aware candle cache"],
   [/handleManualOrder/,"strict manual order route"],
   [/Optimizer records are server-managed/,"server-authoritative optimizer boundary"]
 ];
