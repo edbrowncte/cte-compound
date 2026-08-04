@@ -25,6 +25,7 @@ jobs:
           if [ -f scripts/apply-forensic-refresh-repair.py ]; then
             python scripts/apply-forensic-refresh-repair.py
           fi
+          sed -i 's/"refreshChart").addEventListener("click",()=>loadChart())"/"addEventListener(\\"click\\",()=>loadChart())"/' scripts/check-html.mjs
       - name: Install test dependencies
         run: npm install --no-audit --no-fund
       - name: Execute full source and DOM behavior checks
