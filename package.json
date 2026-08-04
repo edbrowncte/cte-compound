@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check src/worker.js && node --check src/engine.js && node scripts/check-worker.mjs && node scripts/check-html.mjs && node scripts/test-runtime.mjs"
+    "check": "node --check src/worker.js && node --check src/engine.js && node scripts/check-worker.mjs && node scripts/check-html.mjs && node scripts/test-runtime.mjs && node scripts/test-browser.mjs"
   },
   "devDependencies": {
-    "wrangler": "^4.28.1"
+    "wrangler": "^4.28.1",
+    "jsdom": "29.1.1"
   }
 }

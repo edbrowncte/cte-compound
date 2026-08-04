@@ -13,6 +13,8 @@ const workerChecks=[
   [/OANDA_REQUEST_TIMEOUT_MS/,"upstream timeout boundary"],
   [/requestCount/,"count-aware candle cache"],
   [/handlePlatformDiagnostic/,"platform diagnostic endpoint"],
+  [/handlePlatformVersion/,"deployment version endpoint"],
+  [/CF_VERSION_METADATA/,"Cloudflare version metadata binding"],
   [/oandaTelemetry/,"OANDA retry telemetry"],
   [/handleManualOrder/,"strict manual order route"],
   [/Optimizer records are server-managed/,"server-authoritative optimizer boundary"],

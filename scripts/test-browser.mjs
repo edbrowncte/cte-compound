@@ -54,7 +54,7 @@ const dom=new JSDOM(source,{url:origin,runScripts:"dangerously",pretendToBeVisua
   window.requestAnimationFrame=callback=>window.setTimeout(()=>callback(Date.now()),0);window.cancelAnimationFrame=id=>window.clearTimeout(id);
   Object.defineProperty(window.HTMLCanvasElement.prototype,"getContext",{value:()=>canvasContext});
   Object.defineProperty(window.HTMLCanvasElement.prototype,"getBoundingClientRect",{value:()=>({left:0,top:0,right:900,bottom:420,width:900,height:420,x:0,y:0})});
-  Object.defineProperty(window.HTMLElement.prototype,"clientWidth",{get(){return 900;}});Object.defineProperty(window.HTMLElement.prototype,"clientHeight",{get(){return 420;}});
+  Object.defineProperty(window.HTMLElement.prototype,"clientWidth",{get(){return 900;}});Object.defineProperty(window.HTMLElement.prototype,"clientHeight",{get(){return 420;}});Object.defineProperty(window.HTMLElement.prototype,"scrollIntoView",{value:()=>{}});
 }});
 const {window}=dom,document=window.document;
 

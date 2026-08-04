@@ -150,12 +150,15 @@ async function handleCandles(env,url) {
 }
 
 
+function deploymentMetadata(env){const metadata=env.CF_VERSION_METADATA||{};return{worker:"cte-compound",versionId:metadata.id||null,versionTag:metadata.tag||null,versionTimestamp:metadata.timestamp||null};}
+async function handlePlatformVersion(env){return json({deployment:deploymentMetadata(env)});}
+
 async function handlePlatformDiagnostic(env,url){
   const started=Date.now(),instrument=(url.searchParams.get("instrument")||"EUR_USD").toUpperCase(),granularity=(url.searchParams.get("granularity")||"M15").toUpperCase();
   if(!INSTRUMENTS.has(instrument)||!GRANULARITIES.has(granularity))return json({error:"Invalid diagnostic instrument or granularity."},400);
   const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),summaryStart=Date.now();
   const summary=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token),summaryLatencyMs=Date.now()-summaryStart,candleStart=Date.now(),candles=await oandaRequest(`/v3/instruments/${instrument}/candles?price=M&granularity=${granularity}&count=60&smooth=false`,token),candleLatencyMs=Date.now()-candleStart,engineResponse=await env.HTL_ENGINE.getByName("live").fetch("https://engine/status"),engine=await engineResponse.json().catch(()=>({}));
-  return json({time:new Date().toISOString(),totalLatencyMs:Date.now()-started,worker:{oandaActive,oandaQueued:oandaWaiters.length,maxConcurrency:OANDA_MAX_CONCURRENCY,requestTimeoutMs:OANDA_REQUEST_TIMEOUT_MS,candleCacheEntries:candleCache.size,telemetry:oandaTelemetry},oanda:{accountSuffix:String(accountId).slice(-3),summaryLatencyMs,candleLatencyMs,completedCandles:normalizeCandles(candles).length,NAV:summary.account?.NAV||null,marginAvailable:summary.account?.marginAvailable||null},engine:{reachable:engineResponse.ok,armed:engine.armed,running:engine.running,lastRun:engine.lastRun,lastError:engine.lastError,optimizerCoverage:engine.optimizerCoverage,optimizerTotal:engine.optimizerTotal,optimizerLastError:engine.optimizerLastError,mtfCoverage:engine.mtfCoverage,pendingOrders:engine.pendingOrders},cloneAssessment:{structuredCloneCalls:0,applicable:false,verdict:"No structuredClone hot path exists in this repository."}});
+  return json({deployment:deploymentMetadata(env),time:new Date().toISOString(),totalLatencyMs:Date.now()-started,worker:{oandaActive,oandaQueued:oandaWaiters.length,maxConcurrency:OANDA_MAX_CONCURRENCY,requestTimeoutMs:OANDA_REQUEST_TIMEOUT_MS,candleCacheEntries:candleCache.size,telemetry:oandaTelemetry},oanda:{accountSuffix:String(accountId).slice(-3),summaryLatencyMs,candleLatencyMs,completedCandles:normalizeCandles(candles).length,NAV:summary.account?.NAV||null,marginAvailable:summary.account?.marginAvailable||null},engine:{reachable:engineResponse.ok,armed:engine.armed,running:engine.running,lastRun:engine.lastRun,lastError:engine.lastError,optimizerCoverage:engine.optimizerCoverage,optimizerTotal:engine.optimizerTotal,optimizerLastError:engine.optimizerLastError,mtfCoverage:engine.mtfCoverage,pendingOrders:engine.pendingOrders},cloneAssessment:{structuredCloneCalls:0,applicable:false,verdict:"No structuredClone hot path exists in this repository."}});
 }
 
 async function handlePricingStream(env,url) {
@@ -185,6 +188,7 @@ export default {
         assertSameOrigin(request);
         if(url.pathname==="/api/oanda/connect"&&request.method==="GET") return await handleConnect(env);
         if(url.pathname==="/api/oanda/accounts"&&request.method==="GET") return await handleAccountDiagnostic(env);
+        if(url.pathname==="/api/platform/version"&&request.method==="GET") return await handlePlatformVersion(env);
         if(url.pathname==="/api/platform/diagnostic"&&request.method==="GET") return await handlePlatformDiagnostic(env,url);
         if(url.pathname==="/api/platform/preferences"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/preferences");
         if(url.pathname==="/api/platform/preferences"&&request.method==="PUT") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:request.body}));
