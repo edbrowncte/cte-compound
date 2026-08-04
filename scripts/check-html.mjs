@@ -4,7 +4,7 @@ import {spawnSync} from "node:child_process";
 let html;
 try{html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");}
 catch{html=await readFile(new URL("../cte-compound.html",import.meta.url),"utf8");}
-for(const required of ["Timeframe Signal Schedule","Interactive Analytical Chart","HTL Event Forecast","Trading Ledger","htlCausal(data,length)","resolvedConfiguration(","refreshCausalChartAnalysis(","/api/oanda/order",">TEST</button>","MAX_CANDLE_REQUESTS=3","eventLoadedKey","const assetAt="]){
+for(const required of ["Timeframe Signal Schedule","Interactive Analytical Chart","HTL Event Forecast","Trading Ledger","htlCausal(data,length)","resolvedConfiguration(","refreshCausalChartAnalysis(","/api/oanda/order",">TEST</button>","MAX_CANDLE_REQUESTS=3","eventLoadedKey","macroStartDate","microStartDate","Platform Diagnostic Scan","MAX_BACKGROUND_CANDLE_REQUESTS=2","const assetAt=","/api/platform/preferences","const zDefinitions=indicatorSet.z"]){
   if(!html.includes(required))throw new Error(`Missing HTML feature: ${required}`);
 }
 const script=html.match(/<script>([\s\S]*)<\/script>/)?.[1];
