@@ -1,4 +1,4 @@
-name: Finalize authoritative compute configuration
+name: Finalize Compute Configuration CPU repair
 
 on:
   pull_request:
@@ -19,8 +19,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Apply authoritative compute configuration repair
-        run: python scripts/apply-authoritative-compute.py
+      - name: Apply Compute Configuration CPU and error repair
+        run: python scripts/apply-compute-cpu-repair.py
       - name: Execute complete repository checks
         run: npm run check
       - name: Commit verified source
@@ -28,5 +28,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Make Compute Configuration authoritative"
+          git commit -m "Eliminate Compute Configuration HTTP 500"
           git push origin HEAD:repair/performance-diagnostics
