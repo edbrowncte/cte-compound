@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -24,7 +24,7 @@ jobs:
       - name: Verify Worker and standalone HTML
         run: npm run check
 
-  finalize-repair:
+  build-final-repair:
     if: github.event_name == 'pull_request' && github.head_ref == 'repair/asset-optimized-runtime'
     runs-on: ubuntu-latest
     steps:
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Preserve optimized reconciliation context and cancel stale chart work
+      - name: Build audited final source
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -89,42 +89,20 @@ jobs:
               'assert.match(html,/selectChart\\(event\\.target\\.value,state\\.selectedTimeframe\\)/);assert.match(html,/async function causalIndicatorSet/);assert.match(html,/token!==state\\.chartCausalToken/);',
               'causal cancellation test')
           test_path.write_text(test)
-
-          Path('scripts/finalize-repair-trigger').unlink(missing_ok=True)
-          Path('.github/workflows/finalize-intent-repairs.yml').unlink(missing_ok=True)
-          Path('.github/workflows/verify.yml').write_text('''name: Verify analytical compound
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-permissions:
-  contents: read
-
-jobs:
-  verify:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install dependencies
-        run: npm install
-      - name: Verify Worker and standalone HTML
-        run: npm run check
-''')
           PY
       - name: Execute complete repository checks
         run: npm run check
-      - name: Commit final verified corrections
+      - name: Package tested source
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Preserve optimized reconciliation and cancel stale chart work"
-          git push origin HEAD:repair/asset-optimized-runtime
+          mkdir -p final-repair/src final-repair/public final-repair/scripts
+          cp src/engine.js final-repair/src/engine.js
+          cp public/index.html final-repair/public/index.html
+          cp scripts/check-worker.mjs final-repair/scripts/check-worker.mjs
+          cp scripts/test-runtime.mjs final-repair/scripts/test-runtime.mjs
+      - name: Upload tested source
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-repaired-source
+          path: final-repair
+          if-no-files-found: error
+          retention-days: 1
