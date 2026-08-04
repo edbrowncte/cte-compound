@@ -1040,7 +1040,7 @@
   async function loadChart(instrument=state.selectedInstrument,timeframe=state.selectedTimeframe) {
     if(!state.connected)return;
     clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=null;state.chartLoading=true;state.scheduleController?.abort();state.chartController?.abort();await new Promise(resolve=>setTimeout(resolve,0));
-    const controller=new AbortController();state.chartController=controller,count=chartRequestCount(instrument,timeframe);
+    const controller=new AbortController(),count=chartRequestCount(instrument,timeframe);state.chartController=controller;
     el("refreshChart").disabled=true;el("chartMessage").hidden=false;el("chartMessage").textContent=`Loading ${count} completed OANDA candles…`;
     try {
       const payload=await oanda(`/v3/instruments/${encodeURIComponent(instrument)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=${count}`,controller,100),candles=completedCandles(payload,instrument,timeframe),key=scheduleKey(instrument,timeframe);
