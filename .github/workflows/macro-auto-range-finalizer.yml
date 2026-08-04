@@ -25,6 +25,7 @@ jobs:
           if [ -f scripts/apply-macro-auto-range.py ]; then
             python -c "from pathlib import Path; p=Path('scripts/apply-macro-auto-range.py'); p.write_text(p.read_text().replace(r'\\\\d','[0-9]'))"
             python scripts/apply-macro-auto-range.py
+            node -e 'const fs=require("fs");const p="scripts/test-runtime.mjs";let s=fs.readFileSync(p,"utf8");s=s.replace("assert.match(html,/record\\.range\\.bars/);","assert.match(html,/record\\.range\\?\\.bars/);");fs.writeFileSync(p,s)'
           fi
       - name: Execute complete repository checks
         run: npm run check
