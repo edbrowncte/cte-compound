@@ -41,6 +41,7 @@ jobs:
             96: r'''    const payload=await callOanda(\`/v3/accounts/\${accountId}/positions\`,token),positions=payload.positions||[];''',
             108: r'''    const body=existing>0?{longUnits:"ALL"}:{shortUnits:"ALL"},result=await callOanda(\`/v3/accounts/\${accountId}/positions/\${pair}/close\`,token,{method:"PUT",body:JSON.stringify(body)}),fill=result.longOrderFillTransaction||result.shortOrderFillTransaction;''',
             113: r'''    const payload=await callOanda(\`/v3/accounts/\${accountId}/positions\`,token),positions=payload.positions||[];''',
+            196: r'''engine=replaceOnce(engine,`configurationSource=value.configurationSource==="OPTIMIZED"?"OPTIMIZED":"FIXED"`,`configurationSource=value.configurationSource==="FIXED"?"FIXED":"OPTIMIZED"`,"engine optimized fallback");await writeFile("src/engine.js",engine);''',
             208: r'''    const response=await fetch(\`/api/oanda/proxy?path=\${encodeURIComponent(path)}\`,{method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)});''',
             221: r'''html=replaceOnce(html,/  async function connect\(event\) \{[\s\S]*?\n  \}\n\n  function disconnect\(\) \{/ ,'''.replace('/ ,','/,'),
             229: r'''      const payload=await response.json().catch(()=>({error:\`HTTP \${response.status}\`}));''',
