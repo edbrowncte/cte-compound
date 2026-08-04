@@ -1,0 +1,27 @@
+name: Deploy no-data repair
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/deploy-no-data-repair.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event.head_commit.message == 'deploy: publish no-data repair'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run check
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
