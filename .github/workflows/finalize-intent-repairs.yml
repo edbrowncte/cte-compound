@@ -92,3 +92,5 @@ jobs:
           git add -A
           git commit -m "Preserve optimized reconciliation and cancel stale chart work"
           git push origin HEAD:repair/asset-optimized-runtime
+
+# Registered workflow trigger revision.
