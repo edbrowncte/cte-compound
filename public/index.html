@@ -23,7 +23,7 @@
     button:hover:not(:disabled) { border-color:var(--accent); }
     button:disabled { opacity:.45; cursor:not-allowed; }
     input, select { min-height:36px; padding:7px 9px; }
-    .shell { width:min(100%,1920px); margin:0 auto; padding:14px; }
+    .shell { width:100%; max-width:none; margin:0; padding:14px; }
     .topbar { position:sticky; top:0; z-index:30; display:grid; grid-template-columns:minmax(280px,1fr) minmax(560px,1.6fr); gap:14px; padding:14px; border:1px solid var(--line2); background:rgba(15,20,28,.96); box-shadow:var(--shadow); backdrop-filter:blur(10px); }
     .brand { min-width:0; }
     .brand-line { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
@@ -78,6 +78,12 @@
     .decision-card span { display:block; color:var(--muted); font-size:8px; text-transform:uppercase; letter-spacing:.08em; }
     .decision-card strong { display:block; margin-top:3px; font-size:11px; }
     .automation-status { flex-basis:100%; min-height:14px; color:var(--muted); font-size:9px; }
+    .facility-details { border:1px solid var(--line2); background:linear-gradient(180deg,var(--panel),#0d1219); box-shadow:var(--shadow); }
+    .facility-details > summary,.data-details > summary { cursor:pointer; list-style:none; padding:12px 14px; font-size:15px; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
+    .facility-details > summary::-webkit-details-marker,.data-details > summary::-webkit-details-marker { display:none; }
+    .facility-details[open] > summary,.data-details[open] > summary { border-bottom:1px solid var(--line); }
+    .data-details { grid-column:1/-1; border:1px solid var(--line); margin-top:8px; }
+    .data-details .performance-wrap { padding-top:10px; }
     main { display:grid; gap:14px; margin-top:14px; }
     .panel { border:1px solid var(--line2); background:linear-gradient(180deg,var(--panel),#0d1219); box-shadow:var(--shadow); }
     .panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-bottom:1px solid var(--line); }
@@ -261,8 +267,12 @@
       <section class="automation-panel" id="automationPanel" hidden aria-label="Automated trading controls and decisions">
         <div class="automation-controls">
           <label class="field"><span>Trading timeframe</span><select id="engineTimeframe"></select></label>
+          <label class="field"><span>Primary strategy</span><select id="engineStrategy"></select></label>
+          <label class="field"><span>Confirmation strategy</span><select id="engineConfirmationStrategy"></select></label>
           <label class="field"><span>HTL length</span><input id="engineHtlLength" type="number" min="3" max="200" value="10"></label>
+          <label class="field"><span>Filter</span><input id="engineFilter" type="number" min="0" max="10" step="0.1" value="0"></label>
           <label class="field"><span>Decision / execution</span><select id="engineDecisionMode"><option value="EVENT">Event Forecast</option><option value="MTF">MTF Forecast</option><option value="COMBINED">Combined Forecast</option></select></label>
+          <label class="field"><span>Configuration source</span><select id="engineConfigurationSource"><option value="FIXED">Fixed controls</option><option value="OPTIMIZED">Pair × timeframe optimizer</option></select></label>
           <button id="saveEngineConfig" type="button">Save trading controls</button>
           <div class="automation-status" id="automationStatus"></div>
         </div>
@@ -271,6 +281,14 @@
           <div class="decision-card"><span>B · MTF Forecast</span><strong id="decisionB">—</strong></div>
           <div class="decision-card"><span>C · Combined Forecast</span><strong id="decisionC">—</strong></div>
         </div>
+        <details class="data-details" id="tradingLedgerDetails">
+          <summary>Trading Ledger</summary>
+          <div class="performance-wrap"><table class="performance-table"><thead><tr><th>Time</th><th>Type</th><th>Pair</th><th>Strategy</th><th>Side</th><th>Units</th><th>Price</th><th>Realized P/L</th><th>Message</th></tr></thead><tbody id="tradingLedgerBody"><tr><td colspan="9">No engine records loaded.</td></tr></tbody></table></div>
+        </details>
+        <details class="data-details" id="microPerformanceDetails">
+          <summary>Micro: OANDA Account Trading Performance</summary>
+          <div class="performance-wrap"><table class="performance-table"><thead><tr><th>Strategy</th><th>Orders</th><th>Closed</th><th>W/L/Flat</th><th>Realized P/L</th><th>Last side</th><th>Last pair</th><th>Last used</th></tr></thead><tbody id="microPerformanceBody"><tr><td colspan="8">No automatic-trading records loaded.</td></tr></tbody></table></div>
+        </details>
       </section>
     </header>
 
@@ -283,7 +301,9 @@
     <main>
       <div class="tab-panel" id="analysisPanel" role="tabpanel" aria-labelledby="analysisTab">
       <!-- Timeframe signal schedule. -->
-  <section class="panel" aria-labelledby="scheduleTitle">
+  <details class="facility-details" open>
+    <summary>Timeframe Signal Schedule</summary>
+  <section aria-labelledby="scheduleTitle">
         <div class="panel-head">
           <div class="panel-title">
             <h2 id="scheduleTitle">Timeframe Signal Schedule</h2>
@@ -308,7 +328,7 @@
           <div class="legend"><span><b>BUY/SELL</b> = latest active compartment direction</span><span><b>%</b> = normalized signal confidence</span><span><b>—</b> = no result</span></div>
           <div id="scheduleStamp">Not loaded</div>
         </div>
-      </section>
+      </section></details>
 
       <!-- Interactive analytical chart. -->
       <section class="panel chart-panel" id="chartPanel" aria-labelledby="chartTitle">
@@ -345,10 +365,10 @@
         </div>
         <div class="compartments" id="compartments"></div>
       </section>
-      <section class="panel" aria-labelledby="mtfTitle">
+      <details class="facility-details" open><summary>Multi-Timeframe Event Forecast</summary><section aria-labelledby="mtfTitle">
         <div class="panel-head"><div class="panel-title"><h2 id="mtfTitle">Multi-Timeframe Event Forecast</h2><p id="mtfScope">Selected instrument · step-wise HTL and Analytical Compound alignment</p></div></div>
         <div class="mtf-wrap"><table class="mtf-table"><thead><tr><th>Timeframe</th><th>HTL Event</th><th>Analytical Compound</th><th>Agreement</th><th>Confidence</th><th>Step</th></tr></thead><tbody id="mtfBody"><tr><td colspan="6">Load the timeframe schedule.</td></tr></tbody></table></div>
-      </section>
+      </section></details>
       </div>
 
       <!-- HTL Asset event forecast. -->
@@ -359,6 +379,7 @@
             <label class="field"><span>Currency pair</span><select id="eventPair"></select></label>
             <label class="field"><span>Timeframe</span><select id="eventTimeframe"></select></label>
             <label class="field"><span>HTL length</span><input id="eventLength" type="number" min="3" max="200" value="10"></label>
+            <label class="field"><span>Chart indicator</span><select id="eventStrategy"></select></label>
             <button id="loadEvents" type="button" disabled>Forecast events</button>
           </div>
         </div>
@@ -391,7 +412,7 @@
           <button id="eventCrosshairToggle" type="button" aria-pressed="true">Crosshair on</button><button id="eventMaximize" type="button">Maximize</button>
           <span class="event-chart-instrument"><span>Instrument</span><strong id="eventChartInstrument">—</strong></span>
         </div>
-        <div class="indicator-legend" aria-label="HTL geometry legend"><span><i style="background:#6ddcdb"></i>f (HL2)</span><span><i style="background:#e08430"></i>UPR recovered inverse</span><span><i style="background:#d7a85c"></i>HH–LL Asset</span><span><i style="background:#8d72d8"></i>Asset recovered inverse</span><span><i style="background:#48a46b"></i>Asset mean</span></div>
+        <div class="indicator-legend" id="eventIndicatorLegend" aria-label="HTL geometry legend"></div>
         <div class="event-chart-stage"><canvas id="eventChart" aria-label="Completed OANDA candles with original HTL and HTL Asset geometry"></canvas><div class="chart-message" id="eventMessage">No event forecast loaded</div></div>
         <p class="event-note" id="eventMethod">Not loaded</p>
         <details class="event-ledger">
@@ -404,6 +425,7 @@
         <div class="config-grid" id="strategyConfiguration"></div>
         <div class="panel-head"><div class="panel-title"><h2>Macro: HTL Asset / DARE(N) / DARE / COMBO / NAI / APEX Performance</h2><p>Configured signals · next-open entries · opposite-signal exits</p></div></div>
         <div class="performance-wrap"><table class="performance-table"><thead><tr><th>Strategy</th><th>Trades</th><th>W/L/Flat</th><th>Net pips</th><th>Avg</th><th>MFE/MAE</th><th>Max DD</th><th>Profit factor</th><th>Recovery factor</th></tr></thead><tbody id="macroPerformanceBody"><tr><td colspan="9">Load the analytical chart to calculate performance.</td></tr></tbody></table></div>
+        <details class="data-details" id="optimizerRegistryDetails"><summary>Pair × Timeframe Optimizer Registry</summary><div class="performance-wrap"><table class="performance-table"><thead><tr><th>Pair</th><th>Timeframe</th><th>Strategy</th><th>Length</th><th>Filter</th><th>Score</th><th>Completed candle</th></tr></thead><tbody id="optimizerRegistryBody"><tr><td colspan="7">No optimized datasets.</td></tr></tbody></table></div></details>
       </section>
     </main>
 
@@ -430,7 +452,7 @@
     { id:"NAI", label:"NAI" },
     { id:"APEX", label:"APEX" }
   ]);
-  const STRATEGY_CONFIG={ASSET:{length:10,filter:1.05},DARE_N:{length:50,filter:.62},DARE:{length:50,filter:.08},COMBO:{length:50,filter:2},NAI:{length:50,filter:1.25},APEX:{length:20,filter:.02}};
+  const STRATEGY_CONFIG={ASSET:{length:10,filter:0},DARE_N:{length:50,filter:0},DARE:{length:50,filter:0},COMBO:{length:50,filter:2},NAI:{length:50,filter:0},APEX:{length:20,filter:2}};
 
   const state = {
     connected:false,
@@ -443,7 +465,7 @@
     positionTimer:null,
     positionStreamController:null,
     positionStreamSignature:"",
-    engineConfig:{timeframe:"M15",htlLength:10,decisionMode:"EVENT"},
+    engineConfig:{timeframe:"M15",htlLength:10,decisionMode:"EVENT",strategy:"ASSET",confirmationStrategy:"NONE",filter:0,configurationSource:"FIXED"},
     autoConfigurations:new Map(),
     optimizationQueue:[],
     optimizationRunning:false,
@@ -588,11 +610,8 @@
 
   function prepareIndicators(candles,config={length:50}) {
     const closes=candles.map(c=>c.close);
-    const length=clamp(Math.round(config.length||50),3,200),fast=Math.max(3,Math.round(length*.4)),macro=Math.min(400,length*2);
-    const ema20=ema(closes,fast),ema50=ema(closes,length),ema100=ema(closes,macro);
-    const atr14=atr(candles,14),rsi14=rsi(closes,14),z50=rollingZ(closes,length);
-    const logOls=rollingLogOlsResidualZ(closes,length),channel=donchian(candles,length);
-    return {closes,ema20,ema50,ema100,atr14,rsi14,z50,residualZ:logOls.residualZ,donchianHigh:channel.high,donchianLow:channel.low};
+    const length=clamp(Math.round(config.length||50),3,200),htl=htlBuild(candles,length),meanAsset=htlPairAverage(htl.asset,htl.inverse),meanCenter=htlSeriesWma(meanAsset,length),meanInverse=meanAsset.map((value,index)=>Number.isFinite(value)&&Number.isFinite(meanCenter[index])?(2*meanCenter[index])-value:null),assetCenter=htlSeriesWma(htl.asset,length),inverseCenter=htlSeriesWma(htl.inverse,length),naiAsset=htlNorm(htl.asset,assetCenter,htlSeriesStdev(htl.asset,length)),naiInverse=htlNorm(htl.inverse,inverseCenter,htlSeriesStdev(htl.inverse,length)),dareNAsset=htlNorm(meanAsset,htlSeriesWma(meanAsset,length),htlSeriesStdev(meanAsset,length)),dareNInverse=htlNorm(meanInverse,htlSeriesWma(meanInverse,length),htlSeriesStdev(meanInverse,length));
+    return {closes,asset:htl.asset,inverse:htl.inverse,meanAsset,meanInverse,naiAsset,naiInverse,dareNAsset,dareNInverse,zup:htl.series.zup,puz:htl.series.zup.map(value=>Number.isFinite(value)?-value:null),htl};
   }
 
   function output(direction,score,regime,metrics={}) {
@@ -601,41 +620,16 @@
 
   function evaluateSingle(candles,indicators,index,strategy) {
     const config=STRATEGY_CONFIG[strategy];
-    const close=indicators.closes[index],atrValue=Math.max(finite(indicators.atr14[index]),1e-12);
-    const rsiValue=finite(indicators.rsi14[index],50),z=finite(indicators.z50[index]),residualZ=finite(indicators.residualZ[index]);
-    const e20=finite(indicators.ema20[index],close),e50=finite(indicators.ema50[index],close),e100=finite(indicators.ema100[index],close);
-    const prior20=finite(indicators.ema20[Math.max(0,index-5)],e20);
-    const slope=(e20-prior20)/atrValue;
-    const trendGap=(e20-e50)/atrValue;
-    const macroGap=(e50-e100)/atrValue;
+    const relation=(left,right,threshold=0)=>{const spread=finite(left[index])-finite(right[index]);return {direction:spread>threshold?1:spread<-threshold?-1:0,spread};};
+    if(strategy==='ASSET'){const value=relation(indicators.asset,indicators.inverse,0);return output(value.direction,value.spread,"HTL EVENT",{asset:indicators.asset[index],inverse:indicators.inverse[index],spread:value.spread});}
+    if(strategy==='DARE'){const value=relation(indicators.meanAsset,indicators.meanInverse,0);return output(value.direction,value.spread,"MEAN CROSS",{mean:indicators.meanAsset[index],meanInverse:indicators.meanInverse[index],spread:value.spread});}
+    if(strategy==='DARE_N'){const value=relation(indicators.dareNAsset,indicators.dareNInverse,config.filter);return output(value.direction,value.spread,"NORMALIZED MEAN",{dareNMean:indicators.dareNAsset[index],dareNInverse:indicators.dareNInverse[index],spread:value.spread});}
+    if(strategy==='NAI'){const value=relation(indicators.naiAsset,indicators.naiInverse,config.filter);return output(value.direction,value.spread,"NORMALIZED ASSET",{naiAsset:indicators.naiAsset[index],naiInverse:indicators.naiInverse[index],spread:value.spread});}
+    if(strategy==='APEX'){const z=finite(indicators.zup[index]),p=finite(indicators.puz[index]),direction=z<=-config.filter&&p>=config.filter?1:z>=config.filter&&p<=-config.filter?-1:0;return output(direction,z,"APEX",{zup:z,puz:p});}}
 
-    if(strategy==='ASSET'){const assetScore=-(.68*residualZ+.32*z);
-    let assetDirection=0;
-    if (residualZ<=-config.filter && z<=-config.filter*.52) assetDirection=1;else if (residualZ>=config.filter && z>=config.filter*.52) assetDirection=-1;return output(assetDirection,assetScore,Math.abs(macroGap)>.45?"TREND":"REVERSION",{residualZ,z50:z});}
-
-    if(strategy==='DARE_N'){const dareNScore=.72*trendGap+.28*slope;
-    let dareNDirection=0;
-    if (dareNScore>config.filter && rsiValue>49) dareNDirection=1;else if (dareNScore<-config.filter && rsiValue<51) dareNDirection=-1;return output(dareNDirection,dareNScore,Math.abs(trendGap)>.55?"TREND":"TRANSITION",{trendGap,slope,rsi:rsiValue});}
-
-    if(strategy==='DARE'){const dareScore=.55*trendGap+.3*macroGap+.15*slope;
-    let dareDirection=0;
-    if (e20>e50 && e50>e100 && slope>config.filter && rsiValue<76) dareDirection=1;else if (e20<e50 && e50<e100 && slope<-config.filter && rsiValue>24) dareDirection=-1;return output(dareDirection,dareScore,"TREND",{trendGap,macroGap,slope});}
-
-    if(strategy==='NAI'){const naiScore=-z+(50-rsiValue)/22;
-    let naiDirection=0;
-    if (z<=-config.filter && rsiValue<=43) naiDirection=1;else if (z>=config.filter && rsiValue>=57) naiDirection=-1;return output(naiDirection,naiScore,"REVERSION",{z50:z,rsi:rsiValue});}
-
-    if(strategy==='APEX'){const high=finite(indicators.donchianHigh[index],close),low=finite(indicators.donchianLow[index],close);
-    const upperBreak=(close-high)/atrValue,lowerBreak=(low-close)/atrValue;
-    let apexDirection=0,apexScore=0;
-    if (upperBreak>config.filter && slope>.05) { apexDirection=1; apexScore=1+upperBreak+slope*.25; }else if (lowerBreak>config.filter && slope<-.05) { apexDirection=-1; apexScore=-(1+lowerBreak+Math.abs(slope)*.25); }return output(apexDirection,apexScore,"BREAKOUT",{upperBreak,lowerBreak,slope});}}
-
-  function evaluateAt(candles,indicatorSets,index) {const asset=evaluateSingle(candles,indicatorSets.ASSET,index,'ASSET'),dareN=evaluateSingle(candles,indicatorSets.DARE_N,index,'DARE_N'),dare=evaluateSingle(candles,indicatorSets.DARE,index,'DARE'),nai=evaluateSingle(candles,indicatorSets.NAI,index,'NAI'),apex=evaluateSingle(candles,indicatorSets.APEX,index,'APEX');const members=[asset,dareN,dare,nai,apex];
-    const vote=members.reduce((sum,item)=>sum+item.direction,0);
-    const required=clamp(Math.round(STRATEGY_CONFIG.COMBO.filter),1,5),comboDirection=vote>=required?1:vote<=-required?-1:0;
-    const directional=members.filter(item=>item.direction===comboDirection && comboDirection!==0);
-    const comboScore=comboDirection*(Math.abs(vote)+average(directional.map(item=>item.confidence)));
-    const combo=output(comboDirection,comboScore,Math.abs(dare.metrics.macroGap)>.45?"CONSENSUS TREND":"CONSENSUS REVERSION",{vote,buyVotes:members.filter(x=>x.direction>0).length,sellVotes:members.filter(x=>x.direction<0).length});
+  function evaluateAt(candles,indicatorSets,index) {const asset=evaluateSingle(candles,indicatorSets.ASSET,index,'ASSET'),dareN=evaluateSingle(candles,indicatorSets.DARE_N,index,'DARE_N'),dare=evaluateSingle(candles,indicatorSets.DARE,index,'DARE'),nai=evaluateSingle(candles,indicatorSets.NAI,index,'NAI'),apex=evaluateSingle(candles,indicatorSets.APEX,index,'APEX');
+    const comboDirection=dare.direction&&dare.direction===nai.direction?dare.direction:0,comboScore=comboDirection?(Math.abs(dare.score)+Math.abs(nai.score))/2:0;
+    const combo=output(comboDirection,comboScore,"CSF TWO OPINIONS",{dare:dare.direction,nai:nai.direction});
 
     return { ASSET:asset,DARE_N:dareN,DARE:dare,COMBO:combo,NAI:nai,APEX:apex };
   }
@@ -665,8 +659,12 @@
     const strategyOptions=STRATEGIES.map(item=>`<option value="${item.id}">${item.label}</option>`).join("");
     el("scheduleStrategy").innerHTML=strategyOptions;
     el("chartStrategy").innerHTML=strategyOptions;
+    el("eventStrategy").innerHTML=strategyOptions;
+    el("engineStrategy").innerHTML=strategyOptions;
+    el("engineConfirmationStrategy").innerHTML=`<option value="NONE">None</option>${strategyOptions}`;
     el("scheduleStrategy").value=state.selectedScheduleStrategy;
     el("chartStrategy").value=state.selectedStrategy;
+    el("eventStrategy").value="ASSET";
     const pairOptions=INSTRUMENTS.map(item=>`<option value="${item}">${formatPair(item)}</option>`).join("");
     el("chartPair").innerHTML=pairOptions;
     el("tradePair").innerHTML=pairOptions;
@@ -769,11 +767,15 @@
 
   function stopPositionMonitor(){clearInterval(state.positionTimer);state.positionTimer=null;state.positionStreamController?.abort();state.positionStreamController=null;state.positionStreamSignature="";state.openPositions=[];state.positionPrices.clear();renderOpenPositions();}
 
-  function applyEngineConfig(config){state.engineConfig={timeframe:TIMEFRAMES.includes(config?.timeframe)?config.timeframe:"M15",htlLength:clamp(Math.trunc(Number(config?.htlLength))||10,3,200),decisionMode:["EVENT","MTF","COMBINED"].includes(config?.decisionMode)?config.decisionMode:"EVENT"};el("engineTimeframe").value=state.engineConfig.timeframe;el("engineHtlLength").value=state.engineConfig.htlLength;el("engineDecisionMode").value=state.engineConfig.decisionMode;el("automationStatus").textContent=`Active · ${state.engineConfig.timeframe} · HTL ${state.engineConfig.htlLength} · ${state.engineConfig.decisionMode}`;state.mtfEventCache.clear();if(el("mtfBody"))renderMtfForecast();}
+  function applyEngineConfig(config){const ids=new Set(STRATEGIES.map(item=>item.id));state.engineConfig={timeframe:TIMEFRAMES.includes(config?.timeframe)?config.timeframe:"M15",htlLength:clamp(Math.trunc(Number(config?.htlLength))||10,3,200),decisionMode:["EVENT","MTF","COMBINED"].includes(config?.decisionMode)?config.decisionMode:"EVENT",strategy:ids.has(config?.strategy)?config.strategy:"ASSET",confirmationStrategy:config?.confirmationStrategy==="NONE"||ids.has(config?.confirmationStrategy)?config.confirmationStrategy:"NONE",filter:clamp(Number(config?.filter)||0,0,10),configurationSource:config?.configurationSource==="OPTIMIZED"?"OPTIMIZED":"FIXED"};el("engineTimeframe").value=state.engineConfig.timeframe;el("engineStrategy").value=state.engineConfig.strategy;el("engineConfirmationStrategy").value=state.engineConfig.confirmationStrategy;el("engineHtlLength").value=state.engineConfig.htlLength;el("engineFilter").value=state.engineConfig.filter;el("engineDecisionMode").value=state.engineConfig.decisionMode;el("engineConfigurationSource").value=state.engineConfig.configurationSource;const name=STRATEGIES.find(item=>item.id===state.engineConfig.strategy)?.label||state.engineConfig.strategy;el("automationStatus").textContent=`Active · ${state.engineConfig.timeframe} · ${name} · length ${state.engineConfig.htlLength} · filter ${state.engineConfig.filter} · ${state.engineConfig.decisionMode} · ${state.engineConfig.configurationSource}`;state.mtfEventCache.clear();if(el("mtfBody"))renderMtfForecast();}
 
   async function loadEngineConfig(){const response=await fetch("/api/engine/config",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);}
 
-  async function saveEngineConfig(){const button=el("saveEngineConfig");button.disabled=true;el("automationStatus").textContent="Saving…";try{const body={timeframe:el("engineTimeframe").value,htlLength:clamp(Math.trunc(Number(el("engineHtlLength").value)||10),3,200),decisionMode:el("engineDecisionMode").value},response=await fetch("/api/engine/config",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);}catch(error){el("automationStatus").textContent=error.message||"Configuration failed";}finally{button.disabled=false;}}
+  async function saveEngineConfig(){const button=el("saveEngineConfig");button.disabled=true;el("automationStatus").textContent="Saving…";try{const body={timeframe:el("engineTimeframe").value,strategy:el("engineStrategy").value,confirmationStrategy:el("engineConfirmationStrategy").value,htlLength:clamp(Math.trunc(Number(el("engineHtlLength").value)||10),3,200),filter:clamp(Number(el("engineFilter").value)||0,0,10),decisionMode:el("engineDecisionMode").value,configurationSource:el("engineConfigurationSource").value},response=await fetch("/api/engine/config",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);await loadTradingLedger();}catch(error){el("automationStatus").textContent=error.message||"Configuration failed";}finally{button.disabled=false;}}
+
+  function renderTradingLedger(entries){const rows=Array.isArray(entries)?entries:[],fmt=value=>value??"—";el("tradingLedgerBody").innerHTML=rows.map(item=>`<tr><td>${formatTime(item.time)}</td><td>${fmt(item.type)}</td><td>${item.pair?formatPair(item.pair):"—"}</td><td>${fmt(item.strategy)}</td><td class="${item.direction==="BUY"?"positive":item.direction==="SELL"?"negative":""}">${fmt(item.direction)}</td><td>${fmt(item.units)}</td><td>${fmt(item.price)}</td><td>${fmt(item.realizedPL)}</td><td>${fmt(item.message)}</td></tr>`).join("")||`<tr><td colspan="9">No engine records.</td></tr>`;const groups=new Map(STRATEGIES.map(item=>[item.id,{label:item.label,orders:0,closed:0,wins:0,losses:0,flat:0,pl:0,last:null}]));for(const item of [...rows].reverse()){const id=item.strategy||((item.type==="ORDER_FILLED"||item.type==="POSITION_CLOSED")?"ASSET":null),group=groups.get(id);if(!group)continue;if(item.type==="ORDER_FILLED")group.orders++;if(item.type==="POSITION_CLOSED"){group.closed++;const pl=Number(item.realizedPL);if(Number.isFinite(pl)){group.pl+=pl;if(pl>0)group.wins++;else if(pl<0)group.losses++;else group.flat++;}}if(item.pair){group.last=item;}}el("microPerformanceBody").innerHTML=[...groups.entries()].map(([id,g])=>`<tr><td>${g.label}</td><td>${g.orders||"—"}</td><td>${g.closed||"—"}</td><td>${g.closed?`${g.wins}/${g.losses}/${g.flat}`:"—"}</td><td class="${g.pl>0?"positive":g.pl<0?"negative":""}">${g.closed?g.pl.toFixed(2):"—"}</td><td>${g.last?.direction||"—"}</td><td>${g.last?.pair?formatPair(g.last.pair):"—"}</td><td>${g.last?formatTime(g.last.time):"—"}</td></tr>`).join("");}
+  async function loadTradingLedger(){try{const response=await fetch("/api/engine/ledger",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(response.ok)renderTradingLedger(payload.ledger);}catch{}}
+  async function loadOptimizerRecords(){try{const response=await fetch("/api/engine/optimizer",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(!response.ok)return;for(const [key,value] of Object.entries(payload.records||{}))state.autoConfigurations.set(key,value);renderOptimizerRegistry();}catch{}}
 
   function updateDateTime(){el("dateTime").textContent=new Intl.DateTimeFormat(undefined,{weekday:"short",year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",timeZoneName:"short"}).format(new Date());}
 
@@ -844,6 +846,8 @@
       setConnectionStatus("Live OANDA connected · completed midpoint candles only","connected");
       startPositionMonitor();
       void loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";});
+      void loadTradingLedger();
+      void loadOptimizerRecords();
       await Promise.all([loadTradeCapacity(),loadSchedule(),loadChart(),loadEventForecast()]);
     } catch (error) {
       state.connected=false;
@@ -941,7 +945,6 @@
     try {
       const payload=await oanda(`/v3/instruments/${encodeURIComponent(state.selectedInstrument)}/candles?price=M&granularity=${encodeURIComponent(state.selectedTimeframe)}&count=650`,controller);
       const candles=completedCandles(payload);
-      const automatic=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe));if(automatic)setConfiguration(automatic.config);
       state.chartCandles=candles;
       state.chartAnalysis=analyzeCandles(candles,true);
       state.offsetBars=0; state.crosshair=null;
@@ -1023,12 +1026,12 @@
 
   // Indicator series used by each analytical compartment.
   const CHART_INDICATORS={
-    ASSET:{price:[],osc:[['residualZ','Residual Z','#d7a85c'],['z50','Z50','#75a7e8']]},
-    DARE_N:{price:[['ema20','EMA20','#d7a85c'],['ema50','EMA50','#75a7e8']],osc:[['rsi14','RSI14','#b38cff']]},
-    DARE:{price:[['ema20','EMA20','#d7a85c'],['ema50','EMA50','#75a7e8'],['ema100','EMA100','#b38cff']],osc:[]},
-    COMBO:{price:[['ema20','EMA20','#d7a85c'],['ema50','EMA50','#75a7e8'],['ema100','EMA100','#b38cff'],['donchianHigh','Donchian high','#48c78e'],['donchianLow','Donchian low','#ef6b73']],osc:[['residualZ','Residual Z','#f2c66d'],['z50','Z50','#66b4ff'],['rsi14','RSI14','#c490ff']]},
-    NAI:{price:[],osc:[['z50','Z50','#75a7e8'],['rsi14','RSI14','#b38cff']]},
-    APEX:{price:[['donchianHigh','Donchian high','#48c78e'],['donchianLow','Donchian low','#ef6b73'],['ema20','EMA20','#d7a85c']],osc:[]}
+    ASSET:{price:[['asset','HTL Asset','#d7a85c'],['inverse','Asset Inverse','#8d72d8']],osc:[]},
+    DARE_N:{price:[],osc:[['dareNAsset','DARE(N) Mean','#7c3aed'],['dareNInverse','DARE(N) Mean Inverse','#db2777']]},
+    DARE:{price:[['meanAsset','DARE Mean','#7c3aed'],['meanInverse','DARE Mean Inverse','#db2777']],osc:[]},
+    COMBO:{price:[['asset','HTL Asset','#d7a85c'],['inverse','Asset Inverse','#8d72d8'],['meanAsset','DARE Mean','#7c3aed'],['meanInverse','DARE Mean Inverse','#db2777']],osc:[['naiAsset','NAI Asset','#0284c7'],['naiInverse','NAI Inverse','#a21caf']]},
+    NAI:{price:[],osc:[['naiAsset','NAI Asset','#0284c7'],['naiInverse','NAI Inverse','#a21caf']]},
+    APEX:{price:[],osc:[['zup','zup','#dc2626'],['puz','puz','#38bdf8']]}
   };
 
   function drawIndicatorLine(ctx,values,start,end,indexToX,valueToY,color,width=1.5) {
@@ -1099,7 +1102,7 @@
         ctx.fillStyle="#0a1017";ctx.fillRect(oscPlot.x,oscPlot.y,oscPlot.w,oscPlot.h);
         ctx.strokeStyle="#283443";ctx.beginPath();ctx.moveTo(oscPlot.x,oscPlot.y+.5);ctx.lineTo(axisX,oscPlot.y+.5);ctx.stroke();
         for(const [key,,color] of indicatorSet.osc) drawIndicatorLine(ctx,indicators[key],visible.start,visible.end,indexToX,oscToY,color);
-        ctx.fillStyle="#8b98aa";ctx.font="9px ui-monospace,monospace";ctx.fillText(oscHigh.toFixed(2),axisX+6,oscPlot.y+5);ctx.fillText(oscLow.toFixed(2),axisX+6,oscPlot.y+oscPlot.h-5);
+        ctx.fillStyle="#8b98aa";ctx.font="9px ui-monospace,monospace";ctx.fillText(oscHigh.toFixed(2),oscPlot.x+4,oscPlot.y+5);ctx.fillText(oscLow.toFixed(2),oscPlot.x+4,oscPlot.y+oscPlot.h-5);
       }
     }
 
@@ -1228,11 +1231,11 @@
 
   function mtfEventRow(pair,timeframe){const candles=state.scheduleCandles.get(scheduleKey(pair,timeframe));if(!candles?.length)return null;const cacheKey=`${pair}|${timeframe}|${state.engineConfig.htlLength}|${candles.at(-1).time}`;if(!state.mtfEventCache.has(cacheKey))state.mtfEventCache.set(cacheKey,buildEventRow(pair,candles,state.engineConfig.htlLength));return state.mtfEventCache.get(cacheKey);}
 
-  function mtfPairDecision(pair){let score=0,weight=0,matches=0,available=0;for(const timeframe of TIMEFRAMES){const eventRow=mtfEventRow(pair,timeframe),analysis=state.scheduleEvaluations.get(scheduleKey(pair,timeframe))?.latest?.[state.selectedScheduleStrategy];if(!eventRow||!analysis?.direction||eventRow.currentEvent==="—")continue;const eventDirection=eventRow.currentEvent==="BUY"?1:-1,confidence=clamp(Number(analysis.confidence)||0,0,1),agreement=eventDirection===analysis.direction;score+=(agreement?eventDirection:analysis.direction*.25)*(0.5+confidence);weight+=0.5+confidence;matches+=agreement?1:0;available++;}return{pair,direction:score>0?1:score<0?-1:0,confidence:weight?Math.abs(score)/weight:0,matches,available};}
+  function mtfPairDecision(pair,strategy=state.selectedScheduleStrategy){let score=0,weight=0,matches=0,available=0;for(const timeframe of TIMEFRAMES){const eventRow=mtfEventRow(pair,timeframe),analysis=state.scheduleEvaluations.get(scheduleKey(pair,timeframe))?.latest?.[strategy];if(!eventRow||!analysis?.direction||eventRow.currentEvent==="—")continue;const eventDirection=eventRow.currentEvent==="BUY"?1:-1,confidence=clamp(Number(analysis.confidence)||0,0,1),agreement=eventDirection===analysis.direction;score+=(agreement?eventDirection:analysis.direction*.25)*(0.5+confidence);weight+=0.5+confidence;matches+=agreement?1:0;available++;}return{pair,direction:score>0?1:score<0?-1:0,confidence:weight?Math.abs(score)/weight:0,matches,available};}
 
   function renderMtfForecast(){const pair=state.selectedInstrument;el("mtfScope").textContent=`${formatPair(pair)} · HTL ${state.engineConfig.htlLength} · step-wise HTL and ${STRATEGIES.find(item=>item.id===state.selectedScheduleStrategy)?.label||state.selectedScheduleStrategy} alignment`;const rows=TIMEFRAMES.map(timeframe=>{const eventRow=mtfEventRow(pair,timeframe),analysis=state.scheduleEvaluations.get(scheduleKey(pair,timeframe))?.latest?.[state.selectedScheduleStrategy],eventDirection=eventRow?.currentEvent==="BUY"?1:eventRow?.currentEvent==="SELL"?-1:0,analyticalDirection=analysis?.direction||0,agreement=eventDirection&&analyticalDirection&&eventDirection===analyticalDirection,confidence=agreement?clamp(Number(analysis.confidence)||0,0,1):0;return `<tr><td>${timeframe}</td><td class="${directionClass(eventDirection)}">${signalWord(eventDirection)}</td><td class="${directionClass(analyticalDirection)}">${signalWord(analyticalDirection)}</td><td>${agreement?"MATCH":"—"}</td><td>${agreement?formatPct(confidence):"—"}</td><td><div class="mtf-step"><i class="${directionClass(agreement?eventDirection:0)}" style="width:${agreement?Math.max(8,confidence*100):4}%"></i></div></td></tr>`;});el("mtfBody").innerHTML=rows.join("");updateDecisionDisplays();}
 
-  function updateDecisionDisplays(){const eventCandidates=state.eventRows.filter(row=>row.nextEvent!=="—").map(row=>({...row,decisionScore:Math.max(1,row.events)*(1-clamp(Number.isFinite(row.brier)?row.brier:.5,0,1))})).sort((a,b)=>b.decisionScore-a.decisionScore),a=eventCandidates[0],mtfCandidates=INSTRUMENTS.map(mtfPairDecision).filter(item=>item.direction&&item.available>=2).sort((left,right)=>right.confidence-left.confidence||right.matches-left.matches),b=mtfCandidates[0],combined=eventCandidates.map(event=>{const mtf=mtfCandidates.find(item=>item.pair===event.pair),direction=event.nextEvent==="BUY"?1:-1;return mtf&&mtf.direction===direction?{pair:event.pair,direction,score:(event.decisionScore/Math.max(1,event.events)+mtf.confidence)/2}:null;}).filter(Boolean).sort((left,right)=>right.score-left.score)[0];el("decisionA").textContent=a?`${formatPair(a.pair)} · ${a.nextEvent}`:"—";el("decisionB").textContent=b?`${formatPair(b.pair)} · ${signalWord(b.direction)} · ${formatPct(b.confidence)}`:"—";el("decisionC").textContent=combined?`${formatPair(combined.pair)} · ${signalWord(combined.direction)} · ${formatPct(combined.score)}`:"—";}
+  function updateDecisionDisplays(){const strategy=state.engineConfig.strategy,timeframe=state.engineConfig.timeframe,eventCandidates=INSTRUMENTS.map(pair=>{const output=state.scheduleEvaluations.get(scheduleKey(pair,timeframe))?.latest?.[strategy];return output?.direction?{pair,direction:output.direction,confidence:output.confidence}:null;}).filter(Boolean).sort((a,b)=>b.confidence-a.confidence),a=eventCandidates[0],mtfCandidates=INSTRUMENTS.map(pair=>mtfPairDecision(pair,strategy)).filter(item=>item.direction&&item.available>=2).sort((left,right)=>right.confidence-left.confidence||right.matches-left.matches),b=mtfCandidates[0],combined=eventCandidates.map(event=>{const mtf=mtfCandidates.find(item=>item.pair===event.pair&&item.direction===event.direction);return mtf?{pair:event.pair,direction:event.direction,score:(event.confidence+mtf.confidence)/2}:null;}).filter(Boolean).sort((left,right)=>right.score-left.score)[0];el("decisionA").textContent=a?`${formatPair(a.pair)} · ${signalWord(a.direction)} · ${formatPct(a.confidence)}`:"—";el("decisionB").textContent=b?`${formatPair(b.pair)} · ${signalWord(b.direction)} · ${formatPct(b.confidence)}`:"—";el("decisionC").textContent=combined?`${formatPair(combined.pair)} · ${signalWord(combined.direction)} · ${formatPct(combined.score)}`:"—";}
   function renderEventDetail(row){
     if(!row)return;
     state.eventData=row.data;state.eventHtl=row.htl;state.eventEvents=row.eventList;
@@ -1264,6 +1267,10 @@
     visible.forEach((candle,index)=>{const xx=x(index),up=candle.close>=candle.open,color=up?"#48c78e":"#ef6b73";ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(xx,y(candle.high));ctx.lineTo(xx,y(candle.low));ctx.stroke();const top=y(Math.max(candle.open,candle.close)),bottom=y(Math.min(candle.open,candle.close));ctx.fillRect(xx-barWidth/2,top,barWidth,Math.max(1,bottom-top));});
     // Original HTL pair f(HL2)/UPR and original instrument-extrema HTL Asset/recovered inverse.
     [[htl.series?.hl2,"#6ddcdb",1.05],[htl.series?.upr,"#e08430",1.15],[htl.asset,"#d7a85c",2.1],[htl.inverse,"#8d72d8",2.1],[htl.assetMean,"#48a46b",1.05]].forEach(([values,color,lineWidth])=>{if(!values)return;ctx.strokeStyle=color;ctx.lineWidth=lineWidth;ctx.beginPath();let begun=false;for(let index=start;index<end;index++){const value=values[index];if(!Number.isFinite(value)){begun=false;continue;}const xx=x(index-start),yy=y(value);if(!begun){ctx.moveTo(xx,yy);begun=true;}else ctx.lineTo(xx,yy);}ctx.stroke();});
+    const selected=el("eventStrategy").value||"ASSET",config=STRATEGY_CONFIG[selected]||STRATEGY_CONFIG.ASSET,indicators=prepareIndicators(data,config),definition=CHART_INDICATORS[selected]||CHART_INDICATORS.ASSET;
+    for(const [key,,color] of definition.price)drawIndicatorLine(ctx,indicators[key],start,end,x,y,color,1.8);
+    if(definition.osc.length){const osc={x:plot.x,y:plot.y+plot.h*.72,w:plot.w,h:plot.h*.28},values=definition.osc.flatMap(([key])=>(indicators[key]||[]).slice(start,end).filter(Number.isFinite));if(values.length){let lo=Math.min(...values),hi=Math.max(...values);if(lo===hi){lo-=1;hi+=1;}const zy=value=>osc.y+(hi-value)/(hi-lo)*osc.h;ctx.fillStyle="rgba(8,12,18,.9)";ctx.fillRect(osc.x,osc.y,osc.w,osc.h);ctx.strokeStyle="#314052";ctx.strokeRect(osc.x,osc.y,osc.w,osc.h);for(const [key,,color] of definition.osc)drawIndicatorLine(ctx,indicators[key],start,end,x,zy,color,1.8);ctx.fillStyle="#8b98aa";ctx.fillText(hi.toFixed(2),osc.x+4,osc.y+9);ctx.fillText(lo.toFixed(2),osc.x+4,osc.y+osc.h-5);}}
+    el("eventIndicatorLegend").innerHTML=`<span><i style="background:#6ddcdb"></i>f (HL2)</span><span><i style="background:#e08430"></i>UPR</span>`+[...definition.price,...definition.osc].map(([,label,color])=>`<span><i style="background:${color}"></i>${label}</span>`).join("");
     events.forEach(event=>{if(event.startIndex<start||event.startIndex>=end)return;const xx=x(event.startIndex-start);ctx.strokeStyle=event.direction>0?"#48c78e":"#ef6b73";ctx.beginPath();ctx.moveTo(xx,plot.y);ctx.lineTo(xx,plot.y+plot.h);ctx.stroke();});
     if(Number.isFinite(live)){const yy=y(live),label=eventFmt(live,el("eventPair").value.endsWith("JPY")?3:5);ctx.strokeStyle="#7dc4ff";ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(plot.x,yy);ctx.lineTo(plot.x+plot.w,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#7dc4ff";ctx.fillRect(plot.x+plot.w,yy-9,68,18);ctx.fillStyle="#080c12";ctx.fillText(label,plot.x+plot.w+5,yy+4);}
     if(state.eventCrosshairEnabled&&state.eventCrosshair&&state.eventCrosshair.x>=plot.x&&state.eventCrosshair.x<=plot.x+plot.w&&state.eventCrosshair.y>=plot.y&&state.eventCrosshair.y<=plot.y+plot.h){
@@ -1291,9 +1298,11 @@
   function configurationSnapshot(){return Object.fromEntries(Object.entries(STRATEGY_CONFIG).map(([id,value])=>[id,{...value}]));}
   function setConfiguration(config){for(const [id,value] of Object.entries(config||{}))if(STRATEGY_CONFIG[id])Object.assign(STRATEGY_CONFIG[id],value);}
   function analyzeWithConfiguration(candles,config,withSeries){const prior=configurationSnapshot();try{setConfiguration(config);return analyzeCandles(candles,withSeries);}finally{setConfiguration(prior);}}
-  function optimizeDataset(pair,timeframe,candles){const original=configurationSnapshot(),result=configurationSnapshot(),lengths=[10,20,30,50].filter(length=>length*2<candles.length),filters={ASSET:[.7,1.05,1.5],DARE_N:[.3,.62,1],DARE:[.03,.08,.15],NAI:[.7,1.25,1.75],APEX:[0,.02,.08]};try{for(const strategy of STRATEGIES.filter(item=>!['COMBO'].includes(item.id))){let best={...result[strategy.id],score:-Infinity};for(const length of lengths)for(const filter of filters[strategy.id]){STRATEGY_CONFIG[strategy.id].length=length;STRATEGY_CONFIG[strategy.id].filter=filter;try{const analysis=analyzeCandles(candles,true),stats=tradeStats(strategyTrades(candles,analysis,strategy.id,pair)),score=stats.net-.25*stats.maxDrawdown;if(stats.trades>=2&&score>best.score)best={length,filter,score};}catch{}}result[strategy.id]={length:best.length,filter:best.filter};Object.assign(STRATEGY_CONFIG[strategy.id],result[strategy.id]);}result.COMBO={...original.COMBO};return result;}finally{setConfiguration(original);}}
+  function optimizeDataset(pair,timeframe,candles){const original=configurationSnapshot(),result=configurationSnapshot(),lengths=[10,20,30,50].filter(length=>length*2<candles.length),filters={ASSET:[0],DARE_N:[0,.5,1,2],DARE:[0],NAI:[0,.5,1,2],APEX:[0,1,2]};try{for(const strategy of STRATEGIES.filter(item=>item.id!=="COMBO")){let best={...result[strategy.id],score:-Infinity};for(const length of lengths)for(const filter of filters[strategy.id]){STRATEGY_CONFIG[strategy.id].length=length;STRATEGY_CONFIG[strategy.id].filter=filter;try{const analysis=analyzeCandles(candles,true),stats=tradeStats(strategyTrades(candles,analysis,strategy.id,pair)),score=stats.net-.25*stats.maxDrawdown;if(stats.trades>=2&&score>best.score)best={length,filter,score};}catch{}}result[strategy.id]={length:best.length,filter:best.filter,score:best.score};Object.assign(STRATEGY_CONFIG[strategy.id],result[strategy.id]);}result.COMBO={...original.COMBO,score:null};return result;}finally{setConfiguration(original);}}
   function queueAutomaticOptimization(){for(const [key,candles] of state.scheduleCandles){const stamp=candles.at(-1)?.time,cached=state.autoConfigurations.get(key);if(stamp&&cached?.stamp!==stamp&&!state.optimizationQueue.some(item=>item.key===key)){const [pair,timeframe]=key.split('|');state.optimizationQueue.push({key,pair,timeframe,candles,stamp});}}if(!state.optimizationRunning)void runAutomaticOptimization();}
-  async function runAutomaticOptimization(){state.optimizationRunning=true;while(state.optimizationQueue.length&&state.connected){const item=state.optimizationQueue.shift();await new Promise(resolve=>window.requestIdleCallback?window.requestIdleCallback(resolve,{timeout:50}):setTimeout(resolve,20));try{const config=optimizeDataset(item.pair,item.timeframe,item.candles),analysis=analyzeWithConfiguration(item.candles,config,false);state.autoConfigurations.set(item.key,{stamp:item.stamp,config});state.scheduleEvaluations.set(item.key,analysis);renderScheduleCell(item.pair,item.timeframe);if(item.pair===state.selectedInstrument&&item.timeframe===state.selectedTimeframe){setConfiguration(config);renderStrategyConfiguration();}}catch{}el("configurationScope").textContent=`Automatic optimization · ${state.autoConfigurations.size} pair/timeframe datasets`;if(state.autoConfigurations.size%10===0)renderMtfForecast();}state.optimizationRunning=false;renderMtfForecast();}
+  async function persistOptimizerRecord(key,stamp,config){const response=await fetch("/api/engine/optimizer",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({key,stamp,config})});if(!response.ok)throw new Error(`Optimizer persistence HTTP ${response.status}`);}
+  async function runAutomaticOptimization(){state.optimizationRunning=true;while(state.optimizationQueue.length&&state.connected){const item=state.optimizationQueue.shift();await new Promise(resolve=>window.requestIdleCallback?window.requestIdleCallback(resolve,{timeout:50}):setTimeout(resolve,20));try{const config=optimizeDataset(item.pair,item.timeframe,item.candles),analysis=analyzeWithConfiguration(item.candles,config,false);state.autoConfigurations.set(item.key,{stamp:item.stamp,config});state.scheduleEvaluations.set(item.key,analysis);renderScheduleCell(item.pair,item.timeframe);await persistOptimizerRecord(item.key,item.stamp,config);}catch{}el("configurationScope").textContent=`Automatic optimization · ${state.autoConfigurations.size} pair/timeframe datasets`;renderOptimizerRegistry();if(state.autoConfigurations.size%10===0)renderMtfForecast();}state.optimizationRunning=false;renderMtfForecast();}
+  function renderOptimizerRegistry(){const rows=[];for(const [key,value] of state.autoConfigurations){const [pair,timeframe]=key.split("|");for(const strategy of STRATEGIES){const config=value.config?.[strategy.id];if(config)rows.push({pair,timeframe,strategy:strategy.label,...config,stamp:value.stamp});}}el("optimizerRegistryBody").innerHTML=rows.sort((a,b)=>a.pair.localeCompare(b.pair)||TIMEFRAMES.indexOf(a.timeframe)-TIMEFRAMES.indexOf(b.timeframe)||a.strategy.localeCompare(b.strategy)).map(row=>`<tr><td>${formatPair(row.pair)}</td><td>${row.timeframe}</td><td>${row.strategy}</td><td>${row.length}</td><td>${row.filter}</td><td>${Number.isFinite(row.score)?row.score.toFixed(2):"—"}</td><td>${formatTime(row.stamp)}</td></tr>`).join("")||`<tr><td colspan="7">No optimized datasets.</td></tr>`;}
   async function refreshAdaptiveTimeframe(){if(!state.connected||state.adaptiveBusy)return;state.adaptiveBusy=true;const timeframe=TIMEFRAMES[state.adaptiveRotation++%TIMEFRAMES.length];try{await runPool(INSTRUMENTS,4,async pair=>{try{const payload=await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=180`),candles=completedCandles(payload),key=scheduleKey(pair,timeframe);state.scheduleCandles.set(key,candles);const cached=state.autoConfigurations.get(key);state.scheduleEvaluations.set(key,analyzeWithConfiguration(candles,cached?.config||STRATEGY_CONFIG,false));renderScheduleCell(pair,timeframe);}catch{}});el("scheduleStamp").textContent=`Adaptive refresh ${timeframe} · ${new Date().toLocaleTimeString()}`;queueAutomaticOptimization();renderMtfForecast();}finally{state.adaptiveBusy=false;}}
   function startAdaptiveMonitor(){clearInterval(state.adaptiveTimer);state.adaptiveTimer=setInterval(refreshAdaptiveTimeframe,60000);}
   function stopAdaptiveMonitor(){clearInterval(state.adaptiveTimer);state.adaptiveTimer=null;state.adaptiveBusy=false;state.optimizationQueue=[];}
@@ -1307,6 +1316,7 @@
   function bindEvents() {
     el("credentialForm").addEventListener("submit",connect);
     el("saveEngineConfig").addEventListener("click",saveEngineConfig);
+    el("engineStrategy").addEventListener("change",event=>{const defaults={ASSET:0,DARE_N:0,DARE:0,COMBO:0,NAI:0,APEX:2};el("engineFilter").value=defaults[event.target.value]??0;});
     el("collapseHeader").addEventListener("click",event=>{const collapsed=el("accountHeader").classList.toggle("collapsed");event.currentTarget.textContent=collapsed?"Expand":"Collapse";});
     el("maximizeHeader").addEventListener("click",async()=>{try{if(document.fullscreenElement===el("accountHeader"))await document.exitFullscreen();else await el("accountHeader").requestFullscreen();}catch{}});
     el("analysisTab").addEventListener("click",()=>selectFacility("analysis"));
@@ -1342,8 +1352,9 @@
     el("refreshChart").addEventListener("click",loadChart);
     el("scheduleStrategy").addEventListener("change",event=>{ state.selectedScheduleStrategy=event.target.value; renderSchedule();renderMtfForecast(); });
     el("chartPair").addEventListener("change",event=>{ state.selectedInstrument=event.target.value; markSelectedRow();renderMtfForecast();if(state.connected)void startPositionStream(state.openPositions.map(position=>position.instrument)); });
-    el("chartTimeframe").addEventListener("change",event=>{ state.selectedTimeframe=event.target.value;const automatic=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe));if(automatic){setConfiguration(automatic.config);renderStrategyConfiguration();} });
+    el("chartTimeframe").addEventListener("change",event=>{ state.selectedTimeframe=event.target.value;renderStrategyConfiguration(); });
     el("chartStrategy").addEventListener("change",event=>{ state.selectedStrategy=event.target.value; updateChartSummary(); drawChart(); });
+    el("eventStrategy").addEventListener("change",()=>{if(state.eventData)eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
     el("signalMatrix").addEventListener("click",event=>{
       const pairButton=event.target.closest("[data-pair]"); if (pairButton) { selectChart(pairButton.dataset.pair,state.selectedTimeframe); return; }
       const cell=event.target.closest(".signal-cell"); if (cell) selectChart(cell.dataset.instrument,cell.dataset.timeframe);
@@ -1381,7 +1392,7 @@
     window.addEventListener("resize",()=>{drawChart();if(state.eventData&&!el("eventPanel").hidden)eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
   }
 
-  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
+  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(state.connected)void loadTradingLedger();},5000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
   </script>
 </body>
 </html>
