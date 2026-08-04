@@ -1,40 +1,41 @@
-# CRITERION ECHELON · HTL Asset Analytical Compound
+# CTE Compound
 
-Independent Cloudflare Worker application for live, read-only OANDA candle analysis.
+`cte-compound` is a live OANDA Cloudflare Worker application for the Criterion Echelon HTL Asset Analytical Compound.
 
-## Included
+## Runtime
 
-- 28 FX instruments.
-- Six analytical compartments: HTL Asset, DARE(N), DARE, COMBO/CSF, NAI, and APEX.
-- Ten OANDA granularities: W, D, H4, H1, M30, M15, M5, M1, S30, and S5.
-- Completed midpoint candles only.
-- A 28 × 10 BUY/SELL timeframe schedule.
-- Interactive canvas candlestick chart with pair, timeframe, and strategy selectors.
-- Zoom, pan, indentation, maximize, strategy markers, and a y-axis-attached price crosshair.
-- Live OANDA account ID and token inputs held only in page memory.
-- Same-origin Cloudflare Worker relay to the live OANDA API.
+- Live OANDA REST and pricing-stream hosts only.
+- OANDA credentials are Cloudflare secrets: `OANDA_ACCOUNT_ID` and `OANDA_API_KEY`.
+- One Durable Object (`HTL_ENGINE`) runs completed-candle decisions, optimizer rotation, position reconciliation, order execution, and the trading ledger.
+- Workers AI uses `@cf/nvidia/nemotron-3-120b-a12b` only to rank multiple already-eligible deterministic candidates. Its selection and every fallback are recorded.
+- The `OANDA_ENGINE` service binding is currently used only for its health endpoint; it is not the OANDA account-data or trading path.
 
-## Security model
+## Trading behavior
 
-The application does not store credentials in localStorage, sessionStorage, cookies, GitHub, Worker variables, or Cloudflare secrets. The browser sends the credentials to the same-origin Worker only for the active request. The Worker forwards them to `api-fxtrade.oanda.com` and does not persist them.
+- The engine is live and armed.
+- Decisions occur only when a newly completed candle produces an eligible event.
+- Existing same-direction positions are retained; opposite positions are closed before a reversal entry.
+- Entry size uses OANDA's directional `unitsAvailable.default` and requires positive available margin.
+- OANDA client order IDs and durable pending-order state suppress duplicate entry submission after a lost response.
+- Trading records are retained in the Durable Object ledger and exposed for the in-app/export view.
 
-This application is read-only. It does not expose order-creation, order-modification, or position-closing routes.
+## Analytical surfaces
 
-## Local validation
+- 28 currency pairs and ten native OANDA timeframes.
+- HTL Asset, DARE(N), DARE, COMBO/CSF, NAI, and APEX.
+- Completed midpoint candles, timeframe schedule, analytical chart, causal HTL Event Forecast, multi-timeframe forecast, optimizer registry, Macro/Micro performance, positions, and trading ledger.
+- Server optimizer records are the resolved pair × timeframe configuration source when `OPTIMIZED` is selected.
+
+## Security boundary
+
+The repository enforces same-origin browser requests and stores credentials only as Worker secrets. Same-origin enforcement is not user authentication. Protect the production Worker with the personal-access control configured outside this repository.
+
+## Validation and deployment
 
 ```bash
 npm install
 npm run check
-npm run dev
-```
-
-## Cloudflare deployment
-
-Create a new Workers & Pages application from this repository or run:
-
-```bash
-npm install
 npx wrangler deploy
 ```
 
-The Worker name is defined as `cte-compound` in `wrangler.toml`. Static assets are served from `public/`, and all `/api/*` requests run through `src/worker.js`.
+Cloudflare deploys `main` to the Worker named `cte-compound` using `wrangler.toml`.
