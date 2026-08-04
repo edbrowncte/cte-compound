@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   deploy:
-    if: github.event.head_commit.message == 'deploy: publish no-data repair with receipt'
+    if: github.event.head_commit.message == 'deploy: diagnose no-data repair publication'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,16 +21,21 @@ jobs:
       - run: npm install
       - run: npm run check
       - name: Deploy cte-compound
+        id: deploy
+        continue-on-error: true
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
-      - name: Record successful deployment
+      - name: Record deployment outcome
         run: |
-          printf '{"worker":"cte-compound","source":"%s","deployed_at":"%s"}\n' "$(git rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment-receipt.json
+          printf '{"worker":"cte-compound","source":"%s","outcome":"%s","attempted_at":"%s"}\n' "$(git rev-parse HEAD)" "${{ steps.deploy.outcome }}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > deployment-receipt.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add deployment-receipt.json
-          git commit -m "deployment: cte-compound no-data repair published"
+          git commit -m "deployment: cte-compound publication outcome recorded"
           git push origin HEAD:main
+      - name: Fail unsuccessful deployment
+        if: steps.deploy.outcome != 'success'
+        run: exit 1
