@@ -281,6 +281,19 @@
           <div class="decision-card"><span>B · MTF Forecast</span><strong id="decisionB">—</strong></div>
           <div class="decision-card"><span>C · Combined Forecast</span><strong id="decisionC">—</strong></div>
         </div>
+        <details class="data-details" id="nemotronDetails">
+          <summary>Nemotron Decision Orchestration</summary>
+          <div class="decision-strip">
+            <div class="decision-card"><span>Model</span><strong id="nemotronModel">Nemotron 3 Super</strong></div>
+            <div class="decision-card"><span>Status</span><strong id="nemotronStatus">Awaiting multi-candidate decision</strong></div>
+            <div class="decision-card"><span>Last selection</span><strong id="nemotronSelection">—</strong></div>
+            <div class="decision-card"><span>Latency</span><strong id="nemotronLatency">—</strong></div>
+            <div class="decision-card"><span>Today</span><strong id="nemotronDaily">0 invocations</strong></div>
+            <div class="decision-card"><span>Total</span><strong id="nemotronTotal">0 invocations</strong></div>
+          </div>
+          <div class="automation-status" id="nemotronReason">Nemotron runs only when multiple eligible trade candidates require adjudication.</div>
+        </details>
+
         <details class="data-details" id="tradingLedgerDetails">
           <summary>Trading Ledger</summary>
           <div class="head-controls"><button id="downloadTradingLedger" type="button" disabled>Download CSV</button></div>
@@ -778,7 +791,8 @@
   function downloadTradingLedger(){const rows=state.tradingLedger||[];if(!rows.length)return;const fields=[["Time","time"],["Type","type"],["Pair","pair"],["Strategy","strategy"],["Side","direction"],["Units","units"],["Price","price"],["Realized P/L","realizedPL"],["Message","message"]],csv=[fields.map(([label])=>label),...rows.map(item=>fields.map(([,key])=>item[key]??""))].map(row=>row.map(value=>`"${String(value).replaceAll('"','""')}"`).join(",")).join("\r\n"),url=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"})),link=document.createElement("a");link.href=url;link.download=`cte-compound-trading-ledger-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
   async function loadTradingLedger(){try{const response=await fetch("/api/engine/ledger",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(response.ok)renderTradingLedger(payload.ledger);}catch{}}
   async function loadOptimizerRecords(){try{const response=await fetch("/api/engine/optimizer",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(!response.ok)return;state.autoConfigurations.clear();for(const [key,value] of Object.entries(payload.records||{}))state.autoConfigurations.set(key,value);renderOptimizerRegistry();}catch{}}
-  async function loadEngineStatus(){try{const response=await fetch("/api/engine/status",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),status=await response.json();if(!response.ok)return;el("optimizerServerStatus").textContent=`${status.optimizerCoverage||0} / ${status.optimizerTotal||280} datasets${status.optimizerLastDataset?` · last ${status.optimizerLastDataset.replace("_","/")}`:""}${status.optimizerLastError?` · ${status.optimizerLastError}`:""}`;}catch{}}
+  function renderNemotronStatus(ai={}){const last=ai.last||{},daily=ai.daily||{};el("nemotronModel").textContent=(ai.model||"Nemotron 3 Super").replace("@cf/nvidia/","");el("nemotronStatus").textContent=last.status||`${ai.binding?"Ready":"AI binding unavailable"}`;el("nemotronSelection").textContent=last.selectedPair?formatPair(last.selectedPair):"—";el("nemotronLatency").textContent=Number.isFinite(last.latencyMs)?`${last.latencyMs} ms`:"—";el("nemotronDaily").textContent=`${daily.invocations||0} invocations · ${daily.selections||0} selected · ${daily.fallbacks||0} fallback`;el("nemotronTotal").textContent=`${ai.totalInvocations||0} invocations · ${ai.totalSelections||0} selected · ${ai.totalFallbacks||0} fallback`;el("nemotronReason").textContent=last.time?`${formatTime(last.time)} · ${(last.candidates||[]).map(formatPair).join(", ")} · ${last.reason||"No reason returned"}`:"Nemotron runs only when multiple eligible trade candidates require adjudication.";}
+  async function loadEngineStatus(){try{const response=await fetch("/api/engine/status",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),status=await response.json();if(!response.ok)return;el("optimizerServerStatus").textContent=`${status.optimizerCoverage||0} / ${status.optimizerTotal||280} datasets${status.optimizerLastDataset?` · last ${status.optimizerLastDataset.replace("_","/")}`:""}${status.optimizerLastError?` · ${status.optimizerLastError}`:""}`;renderNemotronStatus(status.ai);}catch{}}
 
   function updateDateTime(){el("dateTime").textContent=new Intl.DateTimeFormat(undefined,{weekday:"short",year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",timeZoneName:"short"}).format(new Date());}
 
