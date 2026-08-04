@@ -50,3 +50,5 @@ jobs:
       - name: Enforce successful publication
         if: always() && (steps.install.outcome != 'success' || steps.check.outcome != 'success' || steps.deploy.outcome != 'success')
         run: exit 1
+
+# Registered workflow revision.
