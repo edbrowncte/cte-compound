@@ -705,7 +705,8 @@
   }
 
   async function oanda(path,controller) {
-    const response=await fetch(`/api/oanda/proxy?path=${encodeURIComponent(path)}`,{method:"GET",headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store",signal:controller?.signal});
+    const candle=String(path).match(/^\/v3\/instruments\/([A-Z]{3}_[A-Z]{3})\/candles\?(.*)$/),params=candle?new URLSearchParams(candle[2]):null,url=candle?`/api/oanda/candles?instrument=${encodeURIComponent(candle[1])}&granularity=${encodeURIComponent(params.get("granularity")||"")}&count=${encodeURIComponent(params.get("count")||650)}`:`/api/oanda/proxy?path=${encodeURIComponent(path)}`;
+    const response=await fetch(url,{method:"GET",headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store",signal:controller?.signal});
     const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
     if (!response.ok) {
       const message=payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`;
@@ -787,7 +788,7 @@
   async function saveEngineConfig(){const button=el("saveEngineConfig");button.disabled=true;el("automationStatus").textContent="Saving…";try{const body={timeframe:el("engineTimeframe").value,strategy:el("engineStrategy").value,confirmationStrategy:el("engineConfirmationStrategy").value,htlLength:clamp(Math.trunc(Number(el("engineHtlLength").value)||10),3,200),filter:clamp(Number(el("engineFilter").value)||0,0,10),decisionMode:el("engineDecisionMode").value,configurationSource:el("engineConfigurationSource").value},response=await fetch("/api/engine/config",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);await loadTradingLedger();}catch(error){el("automationStatus").textContent=error.message||"Configuration failed";}finally{button.disabled=false;}}
 
   function renderTradingLedger(entries){const rows=Array.isArray(entries)?entries:[];state.tradingLedger=rows;el("downloadTradingLedger").disabled=!rows.length;const fmt=value=>value??"—";el("tradingLedgerBody").innerHTML=rows.map(item=>`<tr><td>${formatTime(item.time)}</td><td>${fmt(item.type)}</td><td>${item.pair?formatPair(item.pair):"—"}</td><td>${fmt(item.strategy)}</td><td class="${item.direction==="BUY"?"positive":item.direction==="SELL"?"negative":""}">${fmt(item.direction)}</td><td>${fmt(item.units)}</td><td>${fmt(item.price)}</td><td>${fmt(item.realizedPL)}</td><td>${fmt(item.message)}</td></tr>`).join("")||`<tr><td colspan="9">No engine records.</td></tr>`;const groups=new Map(STRATEGIES.map(item=>[item.id,{label:item.label,orders:0,closed:0,wins:0,losses:0,flat:0,pl:0,last:null}]));for(const item of [...rows].reverse()){const id=item.strategy||((item.type==="ORDER_FILLED"||item.type==="POSITION_CLOSED")?"ASSET":null),group=groups.get(id);if(!group)continue;if(item.type==="ORDER_FILLED")group.orders++;if(item.type==="POSITION_CLOSED"){group.closed++;const pl=Number(item.realizedPL);if(Number.isFinite(pl)){group.pl+=pl;if(pl>0)group.wins++;else if(pl<0)group.losses++;else group.flat++;}}if(item.pair){group.last=item;}}el("microPerformanceBody").innerHTML=[...groups.entries()].map(([id,g])=>`<tr><td>${g.label}</td><td>${g.orders||"—"}</td><td>${g.closed||"—"}</td><td>${g.closed?`${g.wins}/${g.losses}/${g.flat}`:"—"}</td><td class="${g.pl>0?"positive":g.pl<0?"negative":""}">${g.closed?g.pl.toFixed(2):"—"}</td><td>${g.last?.direction||"—"}</td><td>${g.last?.pair?formatPair(g.last.pair):"—"}</td><td>${g.last?formatTime(g.last.time):"—"}</td></tr>`).join("");}
-  function downloadTradingLedger(){const rows=state.tradingLedger||[];if(!rows.length)return;const fields=[["Time","time"],["Type","type"],["Pair","pair"],["Strategy","strategy"],["Side","direction"],["Units","units"],["Price","price"],["Realized P/L","realizedPL"],["Financing","financing"],["Commission","commission"],["Account Balance","accountBalance"],["Transaction ID","transaction"],["Event ID","event"],["Decision Mode","decisionMode"],["Timeframe","timeframe"],["HTL Length","htlLength"],["Filter","filter"],["Configuration Source","configurationSource"],["Message","message"]],csv=[fields.map(([label])=>label),...rows.map(item=>fields.map(([,key])=>item[key]??""))].map(row=>row.map(value=>`"${String(value).replaceAll('"','""')}"`).join(",")).join("\r\n"),url=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"})),link=document.createElement("a");link.href=url;link.download=`cte-compound-trading-ledger-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
+  function downloadTradingLedger(){const rows=state.tradingLedger||[];if(!rows.length)return;const fields=[["Ledger ID","ledgerId"],["Time","time"],["Type","type"],["OANDA Type","transactionType"],["Pair","pair"],["Strategy","strategy"],["Side","direction"],["Units","units"],["Price","price"],["Realized P/L","realizedPL"],["Financing","financing"],["Commission","commission"],["Account Balance","accountBalance"],["Transaction ID","transaction"],["Client Order ID","clientOrderId"],["Event ID","event"],["Decision Mode","decisionMode"],["Timeframe","timeframe"],["HTL Length","htlLength"],["Filter","filter"],["Configuration Source","configurationSource"],["Reason","reason"],["Message","message"]],csv=[fields.map(([label])=>label),...rows.map(item=>fields.map(([,key])=>item[key]??""))].map(row=>row.map(value=>`"${String(value).replaceAll('"','""')}"`).join(",")).join("\r\n"),url=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"})),link=document.createElement("a");link.href=url;link.download=`cte-compound-trading-ledger-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
   async function loadTradingLedger(){try{const response=await fetch("/api/engine/ledger",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(response.ok)renderTradingLedger(payload.ledger);}catch{}}
   async function loadOptimizerRecords(){try{const response=await fetch("/api/engine/optimizer",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(!response.ok)return;state.autoConfigurations.clear();for(const [key,value] of Object.entries(payload.records||{}))state.autoConfigurations.set(key,value);renderOptimizerRegistry();}catch{}}
   function renderNemotronStatus(ai={}){const last=ai.last||{},daily=ai.daily||{};el("nemotronModel").textContent=(ai.model||"Nemotron 3 Super").replace("@cf/nvidia/","");el("nemotronStatus").textContent=last.status||`${ai.binding?"Ready":"AI binding unavailable"}`;el("nemotronSelection").textContent=last.selectedPair?formatPair(last.selectedPair):"—";el("nemotronLatency").textContent=Number.isFinite(last.latencyMs)?`${last.latencyMs} ms`:"—";el("nemotronDaily").textContent=`${daily.invocations||0} invocations · ${daily.selections||0} selected · ${daily.fallbacks||0} fallback`;el("nemotronTotal").textContent=`${ai.totalInvocations||0} invocations · ${ai.totalSelections||0} selected · ${ai.totalFallbacks||0} fallback`;el("nemotronReason").textContent=last.time?`${formatTime(last.time)} · ${(last.candidates||[]).map(formatPair).join(", ")} · ${last.reason||"No reason returned"}`:"Nemotron runs only when multiple eligible trade candidates require adjudication.";}
@@ -861,9 +862,8 @@
       el("oandaApiState").textContent="Connected through Worker";
       setConnectionStatus("Live OANDA connected · completed midpoint candles only","connected");
       startPositionMonitor();
-      void loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";});
+      await Promise.all([loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";}),loadOptimizerRecords()]);
       void loadTradingLedger();
-      void loadOptimizerRecords();
       void loadEngineStatus();
       await Promise.all([loadTradeCapacity(),loadSchedule(),loadChart(),loadEventForecast()]);
     } catch (error) {
@@ -893,6 +893,7 @@
   }
 
   function scheduleKey(instrument,timeframe) { return `${instrument}|${timeframe}`; }
+  function resolvedConfiguration(instrument,timeframe){return state.autoConfigurations.get(scheduleKey(instrument,timeframe))?.config||STRATEGY_CONFIG;}
 
   function renderScheduleCell(instrument,timeframe) {
     const key=scheduleKey(instrument,timeframe);
@@ -937,7 +938,8 @@
               const candles=completedCandles(payload);
               const key=scheduleKey(instrument,timeframe);
               state.scheduleCandles.set(key,candles);
-              state.scheduleEvaluations.set(key,analyzeCandles(candles,false));
+              const optimized=state.autoConfigurations.get(key)?.config;
+              state.scheduleEvaluations.set(key,optimized?analyzeWithConfiguration(candles,optimized,false):analyzeCandles(candles,false));
               renderScheduleCell(instrument,timeframe);
             } catch (error) { if (error.name!=="AbortError") errors++; }
           });
@@ -963,7 +965,8 @@
       const payload=await oanda(`/v3/instruments/${encodeURIComponent(state.selectedInstrument)}/candles?price=M&granularity=${encodeURIComponent(state.selectedTimeframe)}&count=650`,controller);
       const candles=completedCandles(payload);
       state.chartCandles=candles;
-      state.chartAnalysis=analyzeCandles(candles,true);
+      const resolved=resolvedConfiguration(state.selectedInstrument,state.selectedTimeframe);
+      state.chartAnalysis=analyzeWithConfiguration(candles,resolved,true);
       state.offsetBars=0; state.crosshair=null;
       el("chartMessage").hidden=true;
       updateChartSummary(); updateCompartments(); markSelectedRow(); drawChart(); renderStrategyConfiguration(); renderMacroPerformance();
@@ -1102,7 +1105,7 @@
       ctx.fillRect(x-bodyWidth/2,bodyTop,bodyWidth,bodyHeight);
     });
 
-    const dualFans=buildDualFans(state.chartCandles,STRATEGY_CONFIG.ASSET.length),ratios=[0,.25,.382,.5,.618,.75,1];
+    const dualFans=buildDualFans(state.chartCandles,resolvedConfiguration(state.selectedInstrument,state.selectedTimeframe).ASSET.length),ratios=[0,.25,.382,.5,.618,.75,1];
     const drawFan=(fan,ratio,end,color,alpha,width=1)=>{if(!fan||end<visible.start||fan.anchorIndex>=visible.end)return;ctx.strokeStyle=color;ctx.globalAlpha=alpha;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(indexToX(fan.anchorIndex-visible.start),priceToY(fan.anchorPrice));ctx.lineTo(indexToX(end-visible.start),priceToY(fanPrice(fan,end,ratio)));ctx.stroke();ctx.globalAlpha=1;};
     dualFans.fans.slice(0,-1).forEach(fan=>{drawFan(fan,0,fan.endIndex,fan.direction>0?'#48c78e':'#ef6b73',.25);drawFan(fan,1,fan.endIndex,fan.direction>0?'#48c78e':'#ef6b73',.42);});
     ratios.forEach((ratio,index)=>drawFan(dualFans.activeFan,ratio,visible.end-1,dualFans.activeFan?.direction>0?'#48c78e':'#ef6b73',.24+.5*(index+1)/ratios.length,index===ratios.length-1?1.6:1));
@@ -1218,8 +1221,8 @@
     return new Date(time).toLocaleString(undefined,{year:"2-digit",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
   }
   function buildEventRow(pair,data,length){
-    // Use the original reconstructed compound geometry; do not replace it with successive provisional endpoint snapshots.
-    const htl=htlBuild(data,length),events=eventFeatures(data,htl),forecast=eventForecast(events),current=forecast.current,latest=data.at(-1),average=eventMean(data.map(c=>c.close));
+    // Build every historical point only from candles that existed at that point.
+    const htl=htlCausal(data,length),events=eventFeatures(data,htl),forecast=eventForecast(events),current=forecast.current,latest=data.at(-1),average=eventMean(data.map(c=>c.close));
     const envelopeHigh=Number.isFinite(forecast.up)?latest.close*(1+forecast.up/10000):null,envelopeLow=Number.isFinite(forecast.down)?latest.close*(1+forecast.down/10000):null;
     return {pair,price:latest.close,currentEvent:current?(current.direction>0?"BUY":"SELL"):"—",eventOpen:current?.openPrice??null,location:latest.close>average?"AA":"BA",p5:forecast.prob5,p10:forecast.prob10,events:forecast.completed.length,durationMae:forecast.validationN?forecast.durationMae:null,envelopeMae:forecast.validationN?forecast.envelopeMae:null,brier:forecast.validationN?forecast.brier:null,historicalBrier:forecast.completed.length>5?forecast.historicalBrier:null,nextEvent:current?(forecast.nextDirection>0?"BUY":"SELL"):"—",envelopeLow,envelopeHigh,data,htl,eventList:events,forecast,length};
   }
@@ -1284,7 +1287,7 @@
     visible.forEach((candle,index)=>{const xx=x(index),up=candle.close>=candle.open,color=up?"#48c78e":"#ef6b73";ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(xx,y(candle.high));ctx.lineTo(xx,y(candle.low));ctx.stroke();const top=y(Math.max(candle.open,candle.close)),bottom=y(Math.min(candle.open,candle.close));ctx.fillRect(xx-barWidth/2,top,barWidth,Math.max(1,bottom-top));});
     // Original HTL pair f(HL2)/UPR and original instrument-extrema HTL Asset/recovered inverse.
     [[htl.series?.hl2,"#6ddcdb",1.05],[htl.series?.upr,"#e08430",1.15],[htl.asset,"#d7a85c",2.1],[htl.inverse,"#8d72d8",2.1],[htl.assetMean,"#48a46b",1.05]].forEach(([values,color,lineWidth])=>{if(!values)return;ctx.strokeStyle=color;ctx.lineWidth=lineWidth;ctx.beginPath();let begun=false;for(let index=start;index<end;index++){const value=values[index];if(!Number.isFinite(value)){begun=false;continue;}const xx=x(index-start),yy=y(value);if(!begun){ctx.moveTo(xx,yy);begun=true;}else ctx.lineTo(xx,yy);}ctx.stroke();});
-    const selected=el("eventStrategy").value||"ASSET",config=STRATEGY_CONFIG[selected]||STRATEGY_CONFIG.ASSET,indicators=prepareIndicators(data,config),definition=CHART_INDICATORS[selected]||CHART_INDICATORS.ASSET;
+    const selected=el("eventStrategy").value||"ASSET",resolved=resolvedConfiguration(el("eventPair").value,el("eventTimeframe").value),config=resolved[selected]||resolved.ASSET||STRATEGY_CONFIG.ASSET,indicators=prepareIndicators(data,config),definition=CHART_INDICATORS[selected]||CHART_INDICATORS.ASSET;
     for(const [key,,color] of definition.price)drawIndicatorLine(ctx,indicators[key],start,end,x,y,color,1.8);
     if(definition.osc.length){const osc={x:plot.x,y:plot.y+plot.h*.72,w:plot.w,h:plot.h*.28},values=definition.osc.flatMap(([key])=>(indicators[key]||[]).slice(start,end).filter(Number.isFinite));if(values.length){let lo=Math.min(...values),hi=Math.max(...values);if(lo===hi){lo-=1;hi+=1;}const zy=value=>osc.y+(hi-value)/(hi-lo)*osc.h;ctx.fillStyle="rgba(8,12,18,.9)";ctx.fillRect(osc.x,osc.y,osc.w,osc.h);ctx.strokeStyle="#314052";ctx.strokeRect(osc.x,osc.y,osc.w,osc.h);for(const [key,,color] of definition.osc)drawIndicatorLine(ctx,indicators[key],start,end,x,zy,color,1.8);ctx.fillStyle="#8b98aa";ctx.fillText(hi.toFixed(2),osc.x+4,osc.y+9);ctx.fillText(lo.toFixed(2),osc.x+4,osc.y+osc.h-5);}}
     el("eventIndicatorLegend").innerHTML=`<span><i style="background:#6ddcdb"></i>f (HL2)</span><span><i style="background:#e08430"></i>UPR</span>`+[...definition.price,...definition.osc].map(([,label,color])=>`<span><i style="background:${color}"></i>${label}</span>`).join("");
