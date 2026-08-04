@@ -1,0 +1,31 @@
+name: Finalize platform Horizon migration
+on:
+  push:
+    branches: [feature/platform-horizon-crossing]
+    paths:
+      - scripts/apply-platform-horizon.mjs
+      - public/htl-horizon-contract.js
+      - .github/workflows/finalize-platform-horizon.yml
+jobs:
+  migrate-and-verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/platform-horizon-crossing
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply-platform-horizon.mjs
+      - run: npm run check
+      - name: Commit verified migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/index.html public/htl-horizon-contract.js src/engine.js src/worker.js package.json package-lock.json scripts/test-horizon-contract.mjs
+          git diff --cached --quiet || git commit -m "Implement platform-wide Horizon crossing contract"
+          git push origin HEAD:feature/platform-horizon-crossing
