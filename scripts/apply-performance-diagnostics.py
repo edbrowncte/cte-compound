@@ -1,2 +1,233 @@
-import base64,gzip
-exec(compile(gzip.decompress(base64.b64decode("H4sIABIQcmoC/+1963rbRpLofz0FgsnKRAyCpGQnDmhQR5ZlR7O6rSRPdtfxJ0JES0IMAlwAtKyh+H3zEOcZ9hXO//Mo8yRb1Tc0gAZF2splE2d3LKKv1d3Vdevq6rXLNBkbEz+/jsILIxxPkjQ3juFzbW0tIJdGSiaRPyLnSTwirZx8zF0jy1PbSKKA/4rJDf8V+Rckor8toz3Av+6aAf+NkmmcG56B1R360YLqFs0LL3n2V57RY8Xxv9QPM2Kc3mY5Ge9+DPPWpTmjzc9dg3yckFFOAqNnJKPRNE0JwGYbl9BMYMxoa3OTtZ6SfJrGrGM+EuyaAm0bPQsG+Rej3W4bPybpe5K6xoU/ep9cXtpQJSJjkqe3tuFDs0HoX8VJlocjg8TBJAnj3MGKaze04jlOIIwQJ65lZumow9KdnzOAhP2GbKUwgOMH5whYC6CQJUrTTYfAsmz6+9EoibPcONo+fLl9frD97+c7R4c7b05Odg93/sN7YrP0k91/e7N7enZ+tnewe/Tm7Pzg1Os97Xa7/Z/iiORGAsPxt0d5+IF4XZt+7ftZfpr7ae5hIdYHzfjRD3OSZt7bd/1HHIJHC2HYbIbhGYBgF7Ve756db5+d7R4cn516m/21JUBb00PGk2He8sskHdPSJNjOvZd+Tpw4uWlZtsg8gBUNR5k3S8l/TUmWZ27XzqajEckygr8v/TCapvRnHo5JMqUlUmhoPxxDjwF+YRu0yAggichJ0RRL2PFH1+SHUEk5hj0G+FxKo6UOQt5xBOPcTdMkdeNpFNFPGEg+zYpv3s92rhRhoIukjNbYwQ2QubP5vA+rxZbN5Agmsdqgk+ZDQdNeAwSETXFOJxZwEGr52W08Mi6nMSxGErMp5/23EHvtPHlPYjuMw9ybzS1jBr34N7Amhj/6r2mYkiOscRolgN39NYP1ZgQk8m+9A8T+sf+x1bU3n7ZbxSq1yytu0ZrhZYtWs3j7sHENPp0tWKgkAlwZZCQ/Y8sl0mxWiTZRQaSiwwIy+DdPkygiqYcdbF8AFdyRaYBAiA2pp/TTsrxBUcvxsQaUa0J/2hfM+4wTROwUQJ3AD+KxkV2SfHTd2t/72+45a+XoZO/13uFjOt8zThlh8a6TwMWJd9jvuzsT9pJp8wLXQFZgY7iz7SnkpuHffVxBd/iC+CkgwNczunLzob0NqDPJXdOfTKJwREt1fs6S2LQdx2nRDi6S4HZrZuJEkDhvn91OiKmpMAdcs+YCAKzkyuoiNSUBYMUI+hv78dSPJLwj3AauGSftLE9SItOz8Cr2I1eZYpZCs+d0OsU8TvzbKPEDPo1iVh2ErWU5AClMKy5XC8DkFQGrvpIFk/eWkV+nyY1xdPEzwOj4GfbVQkyge7LFe3AIfh3AjvOvyN1dKXUnCSBpSFfO+OHs7BimWvbANuZ8aNkz9tOtZNm8LTEwzrd4KqbNDTYQ2pk1E6OozQ/DRBJYi0dkMkA5GTQQvQMD8NoxCxifdp8IeFhjtG8GzGUIfUW3wG4jQCyxKegusfopUBk/K9GA+dp8DejKGkCg0hm2gFlEyMQbh1EEuxqSgswbLLvP1Vq4upJmIZm+fYlUoOXnIEVMckq5b7cvgXEcZF7XmvFZlgRJzbdZahi3niDjgn++2fjmG4V28UbbPct6TJMvowQmlv5MYYTJuGV9A4zXwsGvfQpBZZPDdrmn2fEAxzYDIvN4Kc+jWVt6Puv2cPGQ00p24yHjwFTgji3M4cPyen3+67mn9CMSHz/mKLiI6DeS/e/uJ/sK4WddUBzhKazAQrL+6xJ2w6gIGI6QLx4/7lezSrycQoWgA6XKk73To1MoFF+JQeCKlLGWIbF/ERHv0o8ywven4Cyfw1sEd7Hl92/OTJrYyQKG0sxS7mEqBVv5JMbCpS+vQtlFizosYBKexwtWS6jS3Fv28c47nI4vAG+XKXt317Ue90T/VY43U2ZSwS9ll/KuZCWODM4VyVvmCVZq01qmZWFX3/RQxyi3StG0TJrW11t8ojzvycb3d3fsa+CBimIV1QFctZhV21+FSA5bTFb7Rdh4jXsLbl3sxRJrKdBo3rD4UuVoIA9Srm8mD7pqZYqulyMAqLogcY8oUeBKtVehJKlrUEDymcJHMb1uGYeUCSZAApUepYRSRsEXSQISSdySBbccmQnI26qiKEd9pTiDyiqjaWnn1Ouo2dCL+slXgktRywtRfKkEa1Y48/p6MaJZnRtRlRVWSWWm90hIwIgRJcJ4SnjPFynx31P5b62OCkJ1bkBptj7K7IzF/qtgA7ZDAsfsL6CYjesDu7mxFtXAKH2Q9e7uGpFSgAGLzSRXvYmGW2cMqT9T05L4KdRu0TQq3shyzRVMPjVl/JqaD4DjIrV/Ke1SLRJ/UOVGxpttn5XbC+beCHgmsN4QxAZa2C7zt5JManY+bHZ43cxk0qklGsu87TT1b50wo38lXRXZ1lY1xUU7jSRHlIHOAMzL8ApQJjidXl6GH10JqpOBTEBa7U3okQseJNgWTYk2gU1NWvwDeXDGWuEUkmc4IYrLpqU0mcHGQvOhWxSBnS87t3P/Snbi4Mfd3dt3yOBDlFwCCcnfwixE2iThyZIxKQDSt27NBUJ9Wd4/7vKuadf0mJMm3aKioE/iqzAmlH/b7PcJAVG2kPV5apnNo+jP9azkBv4AjR7zJYfWnR/O9s93D0HW30XB7cXtoQ+jMKPwA4FZY2qBeZ3nk8ztdFjzHUZLgfJxgFhjRet1ARhhEcULmJUayfs+CqClFEsdDfu9xYQwEMB26beQwJR6QhijLKkkyZSaq/IY3h6rbUxj/wPQd4QSGM1cbirYPsgnvbegtShWWueDH8G2aVnvbKpb/I1+ery0cxlGwDBb+HnrDeifLVbFciKAClQsWu0Y0Atwd3G9CbN5iJq1bUWpRgbAxWjjdpvkQ1thJK6Q36YTlC0OMldRvmtmc6EtUXrhznxqjncV07yN6ACduKohXgwUJBLQ8PihzK2rPSWwOY/lAg/A06RcY3OvSS5kHFdv1kAds8L254V5Ua6iO+MT76pLmwHxsdn6usri2hO2WK66ckwK4m3zPX+CdqgpVYtntGzgCmmTl6D9rK+rXw75OAHtNRsUC2HZPA0WVS26JcpuyaXWtVRZfnoewAGtbEuViPDfa0z1VdiSEFzEtKrnX4yYpezc4DOlmB36L+VX9jSN6gxOw9ZCJAXTMaR5LajjZCA7j66P/dQfc+W0KGFajD3kyZvJhKQ7IFDD3rhKfZgfPw3z26YmlCLaNvjRxFd7h6dnJ28Odg/PTp1rP2sVXUOtr16fbB++2d8+2Tvb22X5SruWVd7ZlGa55l4M2BgGRtGSkaSGUs8x52iOLJ1eIEuSqvu33cJ42dvo8i9oLB61uOSsHzRtB9R5AP1bNFza78mtN/x6VoAyv/t6poAyHzLKFnjqlsK2oKZlA2JrT1sYi/borkPWDvuX/uYnY5nbop+cBFMGLTk8hdGaiwVg3XNyu77OPuX2gn5lGq048Fh9deIZNLwlTrerzXOqvHRjjGXywoKkKzPAKeBOeeFoc7bok36hZcWGssAhcP+/Odk/VZatNZsAtSOueWCqSG3TqkJUUvsC8WicJPm1a1KBAjRpO88jb3b61KVm7tPNrksPi+2DnrvZpT+euohENOkpS4OfUO5b9vOHHs+Hn0/cTZ760t3o8Z8/us++fUJ/zt8qQL67u6ON9e8Xhr9Qic+jElWduHxuzWw3XyjJp1GSmX5ypQ8AzO79xGa+ArVp6FBxMdB32UCS5o34oTgoqCjyhXTpSJcQmNjU4UEKzuRqMpJi+8ZdhYaiGLQ1NEt2/EnYofJ2obWjxY9Oj1M2X0qCwVZ8kT1BevX8Bl3/FN/XqUDLTiF8rtZzg8Ldr6yZItumoI8Qumqqq9YNLDphvlosufAbY3qlawDJz0K0ZV8Tg3wEpclIUNkC5SLFPITCh1U3bsIYlFnmOsaE77rrGEtnrmPsN2QrhUuuY7JAHblYFl/hlIySNPBmHxBQUFaOjkHN2vvP3ZPzv+2enO4dHeL51XgC+288meaLdcssmaa4dU93T6CyaTNTz1xi0y/ZVwYVI0K1VTfwc/9t990WPYa4u2M+UDR/Nw5oruPnrXbPEiVYt6zICz/NWBmho5dHYRYLyCrwtaPYoa6Ggh0sucCOF2lyk6FbYR0FMlvBu4w5GaJNDbqDlfTDlOHIdT6OyhgymV4A/+pAI+Sjg9mAJfgHCsjCZedCnltHEMzgg33eyfLbiAxMKYkZhqNA3YbfYRLMgjCDVm7dy4h87F/5E7fXnXzs41f7JoVP/Kc/8QOqO2Oe0XsCBS4AH0javkjyPBm7PUgGrRnElw9+2mq3I5y0PrpeXqXoxOn+pXvR6/W+R96kAcLIJn5ch+Q76Adkoqu4DesxztwLEMGw5f4oiUBkYl2NEd+s/mUS521U/d0eANPHmWrnQOAz7MqdogQ3gur9iOQ5wA0djnBATvc7Mm6EKk+T+Gqm9obtljrbgM4qbXarvcdJTGgfBX608ySJLvy0PGh1sCMQqUjKVmSjviJjPwXMlPMP61LtgVnGZhVY61Onr4eHw1F+fVsa/cX01pprygYEeGlAglLhK/QI1pUewfYKR35UKg0rG9VAuUrDAkHxo4//tNF2BIyAgMAXTccx+l5NCNCFJzaIteyou3eZgiiEk/esPjMjPw1mDIGXwVy/1+19J7fA9zCJ0E37moRX17n77RN9+2WUvoiS0ft70La7KtpWcOBpEyAMi5tB0eJ0AqT+MkpuGMr58e3NNUmJvoOxH0UrD5UDnycT98lK/RX4w2kQ6yu9uvBbG5vf273ud3av99R2nj4tox+tLFFVUxkq9b59Zn+/0VBXbIl61e827N730PUTqPrkaQ2Po+RqpoyXjl/Fp+Vx8Vl31Ntoml1K+jo9gMCYhu1xAr0DvhD79NUB/G6fkCsUd+0dkPqTyM9sWaJ/cw1Eh2IXcScpoYvQsCSwcB8F8oNUrSyd60/zBIf+f8YEBt/CgjdhAAL+910oZ81qW3vhbt6o7Oa5tumn367SNDQEzQjWWMj6isBIs7icvwSfpXwV/4NGCTVxDLih+jn/NkYw15ln4uyMqV9UG0gDiUwjDNTUY5Z4HQYBAak3Df02vR/hmdusDAkMIA2INMIJLmM3GcgoRKksMweq4eWzwJrUBO1m8I41JmU8zzAH0oPkeUByPwR4eacopbV5WlOHL3l20QoCPx3DRrodyD6L8sYp9AnD5SXUWkH4QfZcY8Hm4PnFFChoTOFIp3FdyTCN/HZCPJOVMwcn07g62Ocdljl4joRf0xs/g2sYLHNoMAeHSS7OgmAo0NLgOShLH5YYDSJ8U+uvMU9to7EVpHMmG8MA6ETMcEWAwlhJBUiWVgezlgCERdMj0MYmsPcha3A0AXRDJQx7NHz0ZEH055AZeYIWM7w+BG2HaDUDZRKPe/gFIO6pAX1n2TQlNrOX0GND+Cg0ghFSMf+KMLkd9B1sSnjAOM870ICCzh2Ou3JT/a42v8nVehVHWa8rU7Vltu44HKXJcSE+L9y4B1jY5avCDQnGGR+Z0si9G1mV15FBAdbmeBqmy6cZWAA9HuFPij8HoJHCvF7dPu/AByYcIRfO5OdOlGSI4fzzx85+5xXgqEw4AXEAHR2M486+TET3ZSMLA1JOQf2vnDKVbXcQno6ADZ1itdP6AjJMDnwASBDhnvTMZ0g0DIFJo7bAEqayZ0wFDQCD80B2hX3gX5yW6s4tcLvOTP53YAPT3gQVo4YFA+AkBqdfJTChJC1hDv75j/+rUDNO8PDfXdxmC+pD/oLaJ3wdGipTS6g56NYqLyL7X3D/V8N9BorG3PNptFRZQyTIbRw4DKyWnoc5XbXrjcGBT/fID2f7xnaWkdzoGC+3T3Zbhxb/BX92jg5eHMHfw+09+Hf7ePffy7sHmnk+QYbOHbi433xm/P//Z8SocybIZbk3BSYmk0mSUZ2AFjTIxzAH7JjwGavO2+fhpp7Q/Lmmajmi5X8m0fKXJFo7CdpHUejg52xNzSxJvh4KQVjXD7AbR/wgg7pCdVkWSzvF0wioKFLJB1jr4oIRu5dbxdjm5l5I7X2ZzjI8bZtG5JW4tYxW9AN/Ity/mDlavUdMkws5D12WsGF3tfvQmsvK+4A88ej2IOOeRwI0dza3R9dorIcfdHLwYjKDA+sV4rsC4OJJNC+YVb2kU6GAvtqqSh+Di2kYBYjCACWeTGct5mAAcER4kl1kmJYTgiqR/nB2sO+dnp1sn+2+xiN79FTNOIv0BsPnUD4cFSiqNMGEHiWhjddLWE0nDOZImOg1G/i7OVDyWOwDoDebZZXxwg+uiNiabCuJBoII/pcz2hQQSq3g83lAd7rfxhN5cyQzeRtBQCudkCtYbk2FlGaUC58C+9SVzTC9XPQ4DVEu4+ejmjosQ6nUwWF0+IwOhpbzcxLGLdO02D2ENWUhgYQXSijD+vLO+7Lkf7QlV0g7PT1kDhXCHxpSigtULEt4RjDvFSfMXuHdQtLCsuhugj6pLcuizpZ7cR45WBcTX2E3eQsoM7kEohrYs1vip64ZT8cEwUfzKDonZNcJcFo78G9dc6MdhFchfF0n01T5HIfxNCdFwtxyLlnzCIblmjAVzC1ZxW1F7mDctDVJAZaPeJia5jaJA+Y8gTebAY2HX89Y/lwRAWAy0X7PL2F61emjLVl9TW0QAO6pC/1ra1KeX6nLfYekm4iTJ/vJyMdzXX69rTT4gtDv+GnQohuD+ezaTAL3TNPOgGtQXy1AFHGze7jAboUX+3iVuRCkvp6JTVeyYH09o53Npdjy9Yz1uzV8To8zZAIWoQlD1zTnTKwZNg3mlHffEggrmCa9EUoUI7Ujcu7uBD+tl6HJtABzUuAlylx2y2GZWw516aDFuZs/K67KDOxyZr0JVgbrUq9+Vohb2Uhwd0chcZRbVtyjQaZwl0lTnM2Y2A5HCjFUeaEMEWTQvbvj+TywDndC12cKWYXlit7EYY7JiYDJT2gqWy3FWyCpxndE3KfRTYqlBvYA4QRW1uPlS0tCc/ga0Ay6DDjdxOPAFwtDjY8iWXHKopkPhSxU2KoXoMn3ogcbToEPxS7Uobk9JuMkvVVJh8OStoBqsMgJKPu26gUcNAL89fQH4k9Ow7+TTq/75NnT77615qCV3Vf150xUozeGlboHL2Cfvikug5h9KQQ0Gt0th9ITvEfjDWsWe5WqDPv3NKSSxGFRsexDOketEWhqlVSzqZc3QdhVRuZCY0HXCwZC7fuqXPOWa14VOmsW0pRpVzb5lonBBEzXPHr1an/vcNe0meRUFr/KY6y3ITagW1ACy24A5pTf66KSA7BD04YpY2zz2A/TFmtc3P7aKzxs+QSW85GlX6awhvMhtsMhw03BnY25V9DcGFWV26HdWHq1Ee1gA9zpx2Qb1UmncQxkDaY3ocYp060Q0y3zFb2ZCj3sQc+inkJsYThFmtTLtpQ9osm2HpvGmBooTORcogk5+O18q4qBtRIguBwmynyBFADk+9pE397qIOTsuJVxSyLtyrlsRglO6CgqVNmHVGORCSCZ2HjWHeoKqnxmzu/9MpSplpRDY0UnaUJ7CIb2ojbVMS0E0vM8gFHFoQW4w06vuLspPcQyFURWDAxzg13hUncBy/83rCXxnLYRDKuN7MWXEZ7e04tScyOD1aJLy8wF9UarFoy5UXgkyJ1T636w0S0tffPAS+d0xbj5xBbc1GGjZiulzkC9pCJKzA3+MdQ3WkEq/tnU8L2YpZTlV/RZUf4h8UoPrJR6grpcbTOVTz4bJlUJu8EhRaNhhClZw5SpstjcEF84DUgOYC6UssVl/bs7qgTNdVNQAUI3DWqnKrG5fxp+LPlxUwlMnYuRch9UrJUf3JZWlZXhFwg5qWAfw1pL3DLMSilmYt1MVm4WsDrXdOabeh48XXJb7X6gJ9igvY9gDdQRU0FQR02HtULN+M7yJZGPBHMzQ+RhxSrX21kS/iNxNF8Cnakd8th+h5/aizE0FjxLcj+6uwNqDKKUXc3dV3gtx2FdkZdMTtmSgUfNc9M2O/SiEMftxpZLOLtg1Wh9U7Qj5/eE/YC6J4idskBUhRxqaGRLpTS0pEyBloHfv6e4G7TB5HGTqwG2iSLaKMdjk50oiYlxneQ0PIZrxPgLMADtZ7bJg7m+KxmC5J1thCfz3lZEDKkfKUkMu4rvCuVRr8TWE+qLZJfUH5r0Tlzq5neArUVyODqslJUANhYhTPIvNDW2+E12m7p9W96A3qWCn497cwdWkGfPpbHsp59ik8ljnPfJm7y0VWBzGZrIaXwf4+KWusxwu7rwhbHxRhkfvCmivlTu52n9n1olZZg5Onk4BXpvKavPioD2maESFniAFkQkqtNjos8WIvY///HfZn9pLU3jV7WKZgZqUIRKAx4V16aIUlzmBUSKEAOEAigjsy0IydZ808WeFdHXmqKrgXpf3Ht0zQxG207SEOAw7WoUtHk1IMiieGbsluGwKY4lxtGsBhRjoXUagm0BvWmMidnX2VOE8QS7kS2x2xV1Q4RXLtG/z4IjIimVwkdooZgtEWlB2f4ubUsJO/Gy7PYnowrNm2HUWpc4wCJeVHXDsEiAuh2j8T1k5q7lj050522iohI9mMriLKqn2Po07gOIlfu7IrbDqbdp8xQlNPRGl4eOK+z60/Fkp9ASgKLcXMPMterqzXNNJ+vrTXqGpVGAMgzw2PLtC8D8C2eShgkaYdq+/Hl35zsZP3ptX8ifNDwWjPLn5MLTtHodXmLMLsBfKIBZIwJkJNhyWpY1w6SUYHQ0Ghbt5dHB7kfc4zD2lrnNwq4B46O/KGaZpWhc9Wl4/LhPCQqbtL8mF9grYOo1iVusMxYutejYcjg20S2vURzb7X5tGfpz+H8NH9D0PdPEGa0GGe3KIKMbamTRBw7dWUM4q38PVR4qlx651WdLuVCO8t4oCcibkz08RATRJc7pLCv3uufr6v3xxhq5sENBBXZ601iU31ce2jMeBJpFgX1YLmE3hcj8TdmHPlZj8SkJ7gIuUwmFWI6CWOBpYxTErQI2Hh6S64i1MIZM5VFMk1XUgNzS2gN4jHP0F0YEnBeR/zzP61qrBUTfZKGIF0XA2ykPqAiBV8RuXprKY+qL7Z1/fX1y9ObwZa3AhoYNbC7BBtit6QfiBSLU+AOyhFL8WCqha3gDLHKwh3mIGd4AcUE0PPCedcWxm96g9nzxzFpKwFfa//OuJeM2FqA1MK0JDY1A69k96233ndLaw7OxEkSFmdBTJ+T5s25fy+4AoqKKtWjGiuCkvwCLXB6MJn66JiLFLslXFd1KjQBexaKtDbfX18f6rkf7LhjxomDfDx5Uu86ZmTMDiLTqOR4L+lE/w6Tzooba5lAq0bAXxsP+wuZ/cTavBnQux59WrDfeL8j2mUbWEJtbfdZgXkQJb0A0NWpzU5nSoVodidscvRfWVzarLn5zQwRnNfDybyvE3DuRSqjghXGnm+orUafvn0f5S6CLnMWFslbB9wQV7Km0cUXh6zsqfK0VMcE/SQyjPAIlMZ2PK3VvNaQmzuIQ858mmlLTD3iGzc6c/ZiYS/rKsnlAexm/J/bKH1G/SHb7jNseqD0NHdvRKMCup2lKVG+wVYo8+gW6bLqa+snQoYffjf6u3CrTmZFZxR1ChUQ7bGoWXTRqWaBxJLQEsIDJMW/iIIlD4AiUvSaT7cCfoKiipNYNQ62qkYsTkuKWpcBY2yRM6OvPH/2aw793zX//E2UCHETFMllaqb8S0v3KiPNo1a5/i0VbMNlBmPGJXmmW9UjNfY/4iZTwGaJ8Rwq2IncXD5fp6KolFE0N373TemmUa9ADr316re1f0dXaLC3L7wtWvdLkdStdirsu945Ua8+nQlVVZvB+o1swEv2QO6vXrzMNAlIbu2hPGGAq2iLKiMInSt5o0HjocodYJo9U1lsKY1tCS1vlOaV+U2uKSFociXIHMenGZVWOAINkRIVNh0YRZA6ASbodQVUuKrbRGmFS9/ldUHFa+AmaJvzLzv/2wyx3/CBoSZcDqzQeKb1m3tsGB0GMLo0K6quT7YPdU3G+i1GXvAH++5XnNdS03ilRSGsdFB6K2IMaIfT+LhTvxnd2js4KngIiM299ozZZBBNnoealJ5vXtfkBuoLQuH0oSU6TK/QHOiMf86q7KvdPNLrUj4LCMBeumdmw9ioVVyan8XGSRK1i2u2ezZBYJnkDUUqZPHuTF1PU80Gh+ZQUfv3rTVTLB43/w2ZHabejVcNVNUcaBmi4Su/gfn2/ruv30POw2AD2RtcSAUo9uRIiyK04o6QhU8VGApqmQGUXXfSVYeNOH5X8UWtW9WHJQVPc1qyqehU1T1Xx1P70nCJjMVvFAMUpmXCfEO7zyMTFtVnOQUS0V4wfihkLmI3oxAcacPt38mOYX5caa/Hebdnt3R2/vfUfGIr+1d5rm7I7y+InsYII7QDtWGqqFUxs3p7r6wVeN9KJ9fWvGj2KLTTz3FJPYe5PpAWumG0JZNlIAAAzaRQjbAI9KdlkmSEH1enKS0qK7MqVUkRNLoia7CSQW1aFLi2QCxpTScirkNJpGi7JobGY0ONdlu5QAoJPiM3/Zbg07VEamOvI0Nd8YFtD7oVGv+bcZYhe0RlKTV+xVtGN1Pwa1jLgkUCA0xa9rgwgS5NLMucAY/diT5xiQMta/75yl0h4YUNLJQ8Gdt8KcVA4MlA/+TpxSOLodsg3yUF++Yq7CAKvp8aFbRFOgXvgse1HBYE0r0vc8/LDV4tn+h4Zgcmrc2kVQYPHFwnpi4T0GRKSLfEfOG5GV/CU4EmFUAE8ecW+9MJpoUs03sbyZtw908WVE+ccixyLJCzN6ohGB+FsgmkgpWeSOcnyWjxWlLhigmdbqgVVyoalyaAXAPrqwARImnJtGQurWktOZLnECrxCdrIa0xB3Ow1dUw3UuQSjINKlxCozUSccN9QRvp+ENEjPtumTcIyQWYVAy6ovJ/8pU6usvgeVF5yG/X5FYzohW5tP3aVk5PLx0q8n+/7ZJF+J8gHB2aOwlub+9y0MryIKi0e3qdy7lBRc0AO+NDMtUMJFu7ZlmbwtDqekTF2TqCmxQk5NZ1+QOvaK5xZ7kJf5/Eu6LqQt/kS1qGE9uHa+odHOOfXTrxDHwOUk7vX1Esm16mf7MJST5Ia92ybLykfb7mUNYu7oCTJvS96L41Z3wRT++Y//HvZXO/zDNybUo/DybMseYbKBYBUTBx/KgSvmFYetNsoQVu2d4XsUlwb69aoq24gpLKEql1641K2VFyj/1IsITBVaVSrQ9XLvm+nyxKFZnDBBZviX5WxcVJHTDemzRQaWpSMGfwhND8ms9lhHhHi0HIyNZn1IwqDpHkkZv6XW2IiVD6pOLj5kF7POztmLL1NZDvbcb4bveFDzPTt8b9ZMKWdTeWmjPlTQ4ybNSuq2Rl25NeraLeO2n6na6ttapNjSEde0WhpKAHO4A5DusL6SX7r0IOxDBYqrvi5Z6XKOURa6fz+S8bdPy5IxkKwHtxqXJC36GmZVhF1S0hVyxKfIZ3N2D8fg8pmhPEnfKKetrz+cxCnvG7D3x2pzgsL5vTNqCafd6lQtV7uvvP4lvJOXnkysZn3uphmeXic3dNPQ9po0papAfDmNIsl4lGd1qTJM3Tw+E66aBC6DZhQvxdcVBuXMGVO3UVnKwkw9/+XFp5kf7cUBelLiKZi+wClhzwK/608nGKKLAnHKYgwD3eOJpXhy/SD1bxhBt4RQPxdCvbG84bNGIXVWz9+EsSxjNH0QtnIfV7EXmd9Y/KOVbW/arVa2tpVsPc1uy78rbvdnZna/ponowRjrqhy15gmbeeUxV60Pyzgrf5IapnVS/vV4utbIsgwz+SIMLC0M6HXXh+H7urb/9zD6h9NUG/j/stp14zVza2lNl04PU3P5T7ZuqsPa8s7klTCL/PWGfRJc0TgsNACOkMjx3rm3nab+rRNm9K8sscV/uHL9c7UlD6sqzo4P36utkEtqe8Rq9YNJhz4FBITu6OTl7sn5q739/d2X5t1dKe/46HTvbO/o8Hxn/+gUstkFqhJFpiZJjATCmpakl7UDpS0leq0AoxLkljop16PIsjcLTNaniD0in312HNp8ZrETRk0h/2O1UBVuTsTuXaji9QR8T5EtFRqyV4rrrRF/d5VYES1rtlRIDhbVocPjhfwCwTj4lSTtLava7WguWeOWl3FoTmn0mcZgkuz1RF3sI2a5rBYoYh6p5sxqKTWw0VAJ4rWgXC3+ETNv6uuw6ELDIq6ctoAwkDIUOSTjBOPy8gXmtfzQ4pe8Z/P5WjkQ+B8ZRzThUfhtty/Ysxr2PASP1YSYKS1N4d5Vix2zW8QTmmZl20pfxWiQFACcWMQfUrnyZxNOdFUvzgEaNX8h70ovfKDaGmtA5V2HwhqwkiGg0opqXq5DwVRsnT8TjUhFi0qtARaURRVnDMsbRf540qJcDpqJRyJEtay5T8uJaiD290Bt3bTxvM/G+cOrCENVQ7z7esbPFYe2UFpQpyyAwS/RoFQj6nYafCUJHaaUNhqcpLCkN8B/0UlKKW+9K8zxcrGzmnlCmVN2xvqObxxavnCm68shLBD4K/lar058j0ceojD38rqjlohwvJwz+xLk/wum/5ExfaGJkEVA/+Xd8+Z/wv3GICjdbaJTu+J92Uqsts/2ZmfhTkdan/ZHv1HPWotVYfuQgGmmlKPcypPa5LW/MtrUPPE1GLSUN74e1WtrogN8sQvrPZ6r3Etf65PCs37PE6PBCeHYshJSiHnVsJeCqOiJV5VTlhft3oZX8jRaZHxeAcKHEPAXbMowDrPrT3yUjHvh+OWHLeVLMezJysUOpaqhuZG7NtnPkb1hixgzBbsSnqn0kY/Lce61+Ps7+IBR5m1Y3qD6pBKTFLa4JMG+YK1ehR9J0GL1xFNHuApjX/OI51Kvb83kEVyOO5qC/VZ5YusdBRrNTrCZRQR+LOywNJBmuvZNGGce+15frw6FlYYiJ/g+k/qUAqvxTbkAcv6Eub3R7DY2buNEghZ9WwZh7H98mfo3QXITy7liOTHJrU5jWVeNDzPkb53qng/Dx0xpDoNFBJ+uZeATLAjnvAOSG4V+3ukO3XJp8ZZS8TaCBHXgdbf4Lf8PxHTNmFz59OfchD4AZYqyds/S9I9F6hPAl6gCB3ssTLZQtK5MUamXenmxHKIQPvg67M+V18bEW3BTNPkr20t3Gt/w0NzvexsDRcbYZfRlMK9+tvK2+26L2nVlyd040JRz/LzV7lmsbJON2ac2ZgFF5iMlpx3f3ZXgqBSBHu/uZBL6QBblIa9S+oWfykerdP7jXP36Qr++0K8v9EtPv4o3cz/xDEaouDgElMNKZ23QtR8w0QwvHhLYGwBjFI7em7a2Qj2QzEO1+1MsfVH1YembW9RWUFtcJFHWW82Tqyt8xIgGmVxSJpVhTaXz1UI/6nkR60YJc8Nk1ouQPheyygrT91PFbVM8AzeqVp2C7Mlz/mqOsrK19hYeVNIzRvpP11rMbkolPwdGE+loSB+xLz0nzbaJYmg/x/crnJsUqO45aof0HB3y1v5itNtt44w+moSvBeDywRIAcx+9zxzMXKO/z2UrsAzH8AevAKThJM86NL+N+c74ZzxyLypA2UptB9+lYSBUCtbXtsjmK2JqY/pimKpSmB1IYKzLx+fTQSkzH93XwH1hgZfowzYFihtKeH18GgKyKIqob57b9WfQ7eZHF8Ry49qXlDm2TnSdqxOtLHaRBUvOPtjrjYsWlL/vqC4pS5KLqrShWVZZuGlhWQG52d52eJgj+jJrB+cX/rb9Gz8l5XeP3tmPPqkWEsK3nWuaWCdHUFc+RqISoziYAOfKZX3qxXiOCPN69+x8++xs9+D47BRqhwEZTxI0unBPR3bT4gIFGj+9lQ2IXg7oA8MZ1ATyiDKqkQOpwWeHb4shmnwaFy766lNNqfRPP9EgtWFKmEulbQbAivERe3lJk6oC8SiMQsqi6QkB3kh69+ghG+MTo0jfUF0ekJYoG7XS0ieUK9VA6m6sBGvIq0izCDuU5OJEw4Q27COWCTspB7TT7yDMafNV5TsIk6CcrFPaMTyzvnyYwWe6cuDPtyc79+dPYfDz/8bIwbtvTs7fnL4secIe9J4KZ9euia+GfJCnQWyjLAq720fql+YOLLwftUoVhJ8naGvOOIRP2+w5PXPZKiOQlYkNNQpJ6087AcsPXMc7LHvmOA4My/7hbP989/D13uGuOwMV/sUtPkPkspjJtDWXhQSwmCPXCe+29dfTo0NQclHeDi9vW7Oa+4Xbs8seFy46XEDHzEnA3ejCF/zfvDL4StxjemzXr4auWGH+a5W4U8MJAQ6AtIjdT72vkvrgMWo+r5HBs/i69mYhsQqqrTALUF5zQjctJSbLbGsOy5ie5lBZp6MVUjrFRlihSkPRRaKOvlaTbKMvXRV3Gkr5y5TS6g7FbOieAWKtyHeAllkGxLoEAzQnVy18nYiuLF1Ou8K2bMnQUpu+TBhnKDAzXmYb3Be1iIbKXuGKkzb6HxlJCkyEGhMEB0wxnKyBTyxfhiye8qN7YcrsEn+7AVUJb2qrUoLNxI8OWqSSy8v6KJizrAjN/8lQmnR2ASjQ5+Vs1zgnJgLHpFzy/PwyjMj5ueVM4yiM37fGYZYBbTlP3ntnuD/X/geHrJxT/cUAAA==")),__file__,"exec"))
+from pathlib import Path
+import re
+
+
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{label}: expected 1 occurrence, found {count}")
+    return text.replace(old, new, 1)
+
+
+def regex_once(text: str, pattern: str, replacement: str, label: str) -> str:
+    result, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+    if count != 1:
+        raise SystemExit(f"{label}: expected 1 regex replacement, found {count}")
+    return result
+
+
+worker_path = Path("src/worker.js")
+worker = worker_path.read_text()
+worker = replace_once(
+    worker,
+    'const OANDA_MAX_CONCURRENCY=4,OANDA_REQUEST_TIMEOUT_MS=15000;\nlet oandaActive=0,oandaLastStart=0;\nconst oandaWaiters=[];',
+    'const OANDA_MAX_CONCURRENCY=3,OANDA_REQUEST_TIMEOUT_MS=15000;\nlet oandaActive=0,oandaLastStart=0;\nconst oandaWaiters=[];\nconst oandaTelemetry={requests:0,retries:0,timeouts:0,failures:0,statuses:{}};',
+    "Worker concurrency and telemetry",
+)
+worker = regex_once(
+    worker,
+    r'async function oandaRequest\(path,token,init=\{\}\) \{.*?\n\}\n\nfunction normalizeCandles',
+    '''async function oandaRequest(path,token,init={}) {
+  await acquireOandaSlot();
+  try{
+    let lastError=null;
+    for(let attempt=0;attempt<3;attempt++){
+      const delay=Math.max(0,45-(Date.now()-oandaLastStart));
+      if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+      oandaLastStart=Date.now();oandaTelemetry.requests++;
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),OANDA_REQUEST_TIMEOUT_MS);
+      try{
+        const response=await fetch(LIVE_OANDA_ORIGIN+path,{method:init.method||"GET",headers:{Authorization:`Bearer ${token}`,Accept:"application/json",...(init.body?{"Content-Type":"application/json"}:{})},body:init.body,redirect:"manual",cache:"no-store",signal:controller.signal});
+        const payload=await response.json().catch(()=>({}));
+        if(!response.ok){const error=Object.assign(new Error(payload.errorMessage||payload.errorCode||`OANDA HTTP ${response.status}`),{status:response.status,payload});oandaTelemetry.statuses[response.status]=Number(oandaTelemetry.statuses[response.status]||0)+1;throw error;}
+        return payload;
+      }catch(error){
+        const timedOut=controller.signal.aborted;if(timedOut){oandaTelemetry.timeouts++;lastError=Object.assign(new Error("OANDA request timed out."),{status:504});}else lastError=error;
+        const status=Number(lastError?.status)||0,retryable=timedOut||status===429||status>=500;
+        if(!retryable||attempt===2){oandaTelemetry.failures++;throw lastError;}
+        oandaTelemetry.retries++;await new Promise(resolve=>setTimeout(resolve,500*(2**attempt)+Math.floor(Math.random()*250)));
+      }finally{clearTimeout(timer);}
+    }
+    throw lastError||new Error("OANDA request failed.");
+  }finally{releaseOandaSlot();}
+}
+
+function normalizeCandles''',
+    "Worker OANDA retry/backoff",
+)
+diagnostic_handler = '''
+async function handlePlatformDiagnostic(env,url){
+  const started=Date.now(),instrument=(url.searchParams.get("instrument")||"EUR_USD").toUpperCase(),granularity=(url.searchParams.get("granularity")||"M15").toUpperCase();
+  if(!INSTRUMENTS.has(instrument)||!GRANULARITIES.has(granularity))return json({error:"Invalid diagnostic instrument or granularity."},400);
+  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),summaryStart=Date.now();
+  const summary=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token),summaryLatencyMs=Date.now()-summaryStart,candleStart=Date.now(),candles=await oandaRequest(`/v3/instruments/${instrument}/candles?price=M&granularity=${granularity}&count=60&smooth=false`,token),candleLatencyMs=Date.now()-candleStart,engineResponse=await env.HTL_ENGINE.getByName("live").fetch("https://engine/status"),engine=await engineResponse.json().catch(()=>({}));
+  return json({time:new Date().toISOString(),totalLatencyMs:Date.now()-started,worker:{oandaActive,oandaQueued:oandaWaiters.length,maxConcurrency:OANDA_MAX_CONCURRENCY,requestTimeoutMs:OANDA_REQUEST_TIMEOUT_MS,candleCacheEntries:candleCache.size,telemetry:oandaTelemetry},oanda:{accountSuffix:String(accountId).slice(-3),summaryLatencyMs,candleLatencyMs,completedCandles:normalizeCandles(candles).length,NAV:summary.account?.NAV||null,marginAvailable:summary.account?.marginAvailable||null},engine:{reachable:engineResponse.ok,armed:engine.armed,running:engine.running,lastRun:engine.lastRun,lastError:engine.lastError,optimizerCoverage:engine.optimizerCoverage,optimizerTotal:engine.optimizerTotal,optimizerLastError:engine.optimizerLastError,mtfCoverage:engine.mtfCoverage,pendingOrders:engine.pendingOrders},cloneAssessment:{structuredCloneCalls:0,applicable:false,verdict:"No structuredClone hot path exists in this repository."}});
+}
+'''
+worker = replace_once(worker, 'async function handlePricingStream(env,url) {', diagnostic_handler + '\nasync function handlePricingStream(env,url) {', "Platform diagnostic handler")
+worker = replace_once(
+    worker,
+    '        if(url.pathname==="/api/engine/status"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/status");',
+    '        if(url.pathname==="/api/platform/diagnostic"&&request.method==="GET") return await handlePlatformDiagnostic(env,url);\n        if(url.pathname==="/api/engine/status"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/status");',
+    "Platform diagnostic route",
+)
+worker_path.write_text(worker)
+
+html_path = Path("public/index.html")
+html = html_path.read_text()
+html = replace_once(
+    html,
+    '    .performance-table th:first-child,.performance-table td:first-child { text-align:left; }',
+    '''    .performance-table th:first-child,.performance-table td:first-child { text-align:left; }
+    .date-range-controls { display:flex; flex-wrap:wrap; gap:7px; align-items:end; padding:9px 12px; }
+    .date-range-controls .field { min-width:145px; }
+    .date-range-scope { color:var(--muted); font-size:9px; align-self:center; }
+    .diagnostic-grid { display:grid; grid-template-columns:repeat(4,minmax(135px,1fr)); gap:7px; padding:10px 12px; }
+    .diagnostic-card { border:1px solid var(--line); background:#0b1118; padding:8px; min-width:0; }
+    .diagnostic-card span { display:block; color:var(--muted); font-size:8px; text-transform:uppercase; letter-spacing:.07em; }
+    .diagnostic-card strong { display:block; margin-top:3px; overflow-wrap:anywhere; font-size:10px; }
+    .diagnostic-card.good strong { color:var(--buy); }.diagnostic-card.bad strong { color:var(--sell); }
+    @media(max-width:900px) { .diagnostic-grid { grid-template-columns:1fr 1fr; } }''',
+    "Date and diagnostic CSS",
+)
+html = replace_once(
+    html,
+    '      </form>\n      <section class="positions-panel"',
+    '''      </form>
+      <details class="data-details" id="platformDiagnosticDetails">
+        <summary>Platform Diagnostic Scan</summary>
+        <div class="date-range-controls"><button id="runPlatformDiagnostic" type="button">Run diagnostic scan</button><span class="date-range-scope" id="platformDiagnosticStatus">Not scanned</span></div>
+        <div class="diagnostic-grid" id="platformDiagnosticGrid"><div class="diagnostic-card"><span>Status</span><strong>Awaiting scan</strong></div></div>
+      </details>
+      <section class="positions-panel"''',
+    "Account-panel diagnostic UI",
+)
+html = replace_once(
+    html,
+    '        <details class="data-details" id="microPerformanceDetails">\n          <summary>Micro: OANDA Account Trading Performance</summary>\n          <div class="performance-wrap">',
+    '''        <details class="data-details" id="microPerformanceDetails">
+          <summary>Micro: OANDA Account Trading Performance</summary>
+          <div class="date-range-controls"><label class="field"><span>Start date</span><input id="microStartDate" type="date"></label><label class="field"><span>End date</span><input id="microEndDate" type="date"></label><button id="microClearDates" type="button">Clear dates</button><span class="date-range-scope" id="microPerformanceScope">All retained engine records</span></div>
+          <div class="performance-wrap">''',
+    "Micro performance date controls",
+)
+html = replace_once(
+    html,
+    '        <div class="panel-head"><div class="panel-title"><h2>Macro: HTL Asset / DARE(N) / DARE / COMBO / NAI / APEX Performance</h2><p>Configured signals · next-open entries · opposite-signal exits</p></div></div>\n        <div class="performance-wrap">',
+    '''        <div class="panel-head"><div class="panel-title"><h2>Macro: HTL Asset / DARE(N) / DARE / COMBO / NAI / APEX Performance</h2><p>Configured signals · next-open entries · opposite-signal exits</p></div></div>
+        <div class="date-range-controls"><label class="field"><span>Start date</span><input id="macroStartDate" type="date"></label><label class="field"><span>End date</span><input id="macroEndDate" type="date"></label><button id="macroClearDates" type="button">Clear dates</button><span class="date-range-scope" id="macroPerformanceScope">All loaded completed candles</span></div>
+        <div class="performance-wrap">''',
+    "Macro performance date controls",
+)
+html = replace_once(
+    html,
+    '<p>Drag to pan · wheel or controls to zoom · crosshair price is attached to the right y-axis.</p>',
+    '<p>Drag to pan · wheel or controls to zoom · price uses the right y-axis · normalized NAI uses the left z-axis.</p>',
+    "Chart axis description",
+)
+html = replace_once(
+    html,
+    '    candleSequence:0,\n    eventController:null,',
+    '    candleSequence:0,\n    candleStats:{requested:0,succeeded:0,failed:0,retries:0,timeouts:0,statuses:{}},\n    scheduleFailures:new Map(),\n    ledgerLimit:500,\n    diagnosticLast:null,\n    eventController:null,',
+    "Browser diagnostic state",
+)
+queue_pattern = r'  const MAX_CANDLE_REQUESTS=3,CANDLE_TIMEOUT_MS=20000;\n  function pumpCandleQueue\(\)\{.*?\n  function queueCandleRequest'
+queue_replacement = '''  const MAX_CANDLE_REQUESTS=3,MAX_BACKGROUND_CANDLE_REQUESTS=2,CANDLE_TIMEOUT_MS=20000;
+  function pumpCandleQueue(){while(state.candleQueue.length){state.candleQueue.sort((a,b)=>b.priority-a.priority||a.sequence-b.sequence);const next=state.candleQueue[0],limit=next.priority>=80?MAX_CANDLE_REQUESTS:MAX_BACKGROUND_CANDLE_REQUESTS;if(state.candleActive>=limit)break;const job=state.candleQueue.shift();if(job.cancelled?.()){job.reject(new DOMException("Aborted","AbortError"));continue;}state.candleActive++;fetchCandleJob(job).then(job.resolve,job.reject).finally(()=>{state.candleActive--;pumpCandleQueue();});}}
+  async function fetchCandleJob(job){let lastError=null;for(let attempt=0;attempt<3;attempt++){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),CANDLE_TIMEOUT_MS);state.candleStats.requested++;try{const response=await fetch(`/api/oanda/candles?instrument=${encodeURIComponent(job.instrument)}&granularity=${encodeURIComponent(job.timeframe)}&count=${encodeURIComponent(job.count)}`,{method:"GET",headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store",signal:controller.signal}),payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));if(!response.ok){const error=new Error(payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`);error.status=response.status;state.candleStats.statuses[response.status]=Number(state.candleStats.statuses[response.status]||0)+1;throw error;}state.candleStats.succeeded++;return payload;}catch(error){const timedOut=controller.signal.aborted;if(timedOut){state.candleStats.timeouts++;lastError=new Error(`OANDA candle request timed out · ${formatPair(job.instrument)} ${job.timeframe}`);lastError.status=504;}else lastError=error;const status=Number(lastError?.status)||0,retryable=timedOut||status===429||status>=500;if(!retryable||attempt===2){state.candleStats.failed++;throw lastError;}state.candleStats.retries++;await new Promise(resolve=>setTimeout(resolve,700*(2**attempt)+Math.floor(Math.random()*300)));}finally{clearTimeout(timer);}}throw lastError||new Error("Candle request failed.");}
+  function queueCandleRequest'''
+html = regex_once(html, queue_pattern, queue_replacement, "Reserved chart lane and browser backoff")
+load_schedule = '''  async function loadScheduleDataset(instrument,timeframe,controller,priority=20){const payload=await oanda(`/v3/instruments/${encodeURIComponent(instrument)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=180`,controller,priority),candles=completedCandles(payload),key=scheduleKey(instrument,timeframe);if(!candles.length)throw new Error(`No completed candles · ${formatPair(instrument)} ${timeframe}`);state.scheduleCandles.set(key,candles);const optimized=state.autoConfigurations.get(key)?.config;state.scheduleEvaluations.set(key,analyzeWithConfiguration(candles,optimized||STRATEGY_CONFIG,false));renderScheduleCell(instrument,timeframe);if(instrument===state.selectedInstrument&&timeframe===state.selectedTimeframe&&!state.chartCandles.length)applyChartDataset(instrument,timeframe,candles);return key;}
+
+  async function loadSchedule() {
+    if(!state.connected)return;
+    state.scheduleController?.abort();const controller=new AbortController();state.scheduleController=controller;el("refreshSchedule").disabled=true;document.querySelectorAll(".signal-cell").forEach(cell=>cell.classList.add("loading"));
+    const timeframes=[state.selectedTimeframe,...TIMEFRAMES.filter(item=>item!==state.selectedTimeframe)],instruments=[state.selectedInstrument,...INSTRUMENTS.filter(item=>item!==state.selectedInstrument)],jobs=timeframes.flatMap(timeframe=>instruments.map(instrument=>({instrument,timeframe}))),total=jobs.length,resolved=new Set();state.scheduleFailures.clear();let attempted=0,lastError="";
+    const runJobs=async(items,priority)=>runPool(items,4,async job=>{const key=scheduleKey(job.instrument,job.timeframe);try{await loadScheduleDataset(job.instrument,job.timeframe,controller,priority);resolved.add(key);state.scheduleFailures.delete(key);}catch(error){if(error.name!=="AbortError"){lastError=error.message||"Candle load failed";state.scheduleFailures.set(key,{...job,error:lastError});}}finally{attempted++;el("progressFill").style.width=`${resolved.size/total*100}%`;el("progressText").textContent=`Loading ${resolved.size} / ${total} datasets · ${state.scheduleFailures.size} unresolved`;}});
+    try{
+      await runJobs(jobs,20);
+      for(let round=1;round<=2&&!controller.signal.aborted&&state.scheduleFailures.size;round++){const retry=[...state.scheduleFailures.values()].map(({instrument,timeframe})=>({instrument,timeframe}));el("progressText").textContent=`Retry ${round} / 2 · ${retry.length} unresolved datasets`;await new Promise(resolve=>setTimeout(resolve,1200*round));attempted=0;await runJobs(retry,35+round);}
+      if(!controller.signal.aborted){const failures=state.scheduleFailures.size;el("progressFill").style.width=`${resolved.size/total*100}%`;el("progressText").textContent=`Loaded ${resolved.size} / ${total} datasets${failures?` · ${failures} errors · ${lastError}`:""}`;el("scheduleStamp").textContent=`Last schedule refresh ${new Date().toLocaleTimeString()} · completed candles only`;renderMtfForecast();queueAutomaticOptimization();startAdaptiveMonitor();void runPlatformDiagnostic(false);}
+    }finally{if(!controller.signal.aborted)el("refreshSchedule").disabled=false;}
+  }
+'''
+html = regex_once(html, r'  async function loadSchedule\(\) \{.*?\n  \}\n\n  function applyChartDataset', load_schedule + '\n  function applyChartDataset', "Schedule retry and recovery")
+date_helpers = '''  function dateRange(prefix){const start=el(`${prefix}StartDate`)?.value||"",end=el(`${prefix}EndDate`)?.value||"",startMs=start?Date.parse(`${start}T00:00:00`):-Infinity,endMs=end?Date.parse(`${end}T23:59:59.999`):Infinity;return{start,end,startMs,endMs,valid:startMs<=endMs};}
+  function filterByDateRange(rows,prefix,timeKey="time"){const range=dateRange(prefix);return{range,rows:range.valid?rows.filter(row=>{const value=Date.parse(row?.[timeKey]||0);return Number.isFinite(value)&&value>=range.startMs&&value<=range.endMs;}):[]};}
+  function rangeLabel(range,fallback){if(!range.valid)return"Invalid date range";return range.start||range.end?`${range.start||"earliest"} — ${range.end||"latest"}`:fallback;}
+'''
+html = replace_once(html, '  function renderTradingLedger(entries){', date_helpers + '\n  function renderTradingLedger(entries){', "Date range helpers")
+new_render_ledger = '''  function renderTradingLedger(entries){const rows=Array.isArray(entries)?entries:[];state.tradingLedger=rows;el("downloadTradingLedger").disabled=!rows.length;const fmt=value=>value??"—";el("tradingLedgerBody").innerHTML=rows.map(item=>`<tr><td>${formatTime(item.time)}</td><td>${fmt(item.type)}</td><td>${item.pair?formatPair(item.pair):"—"}</td><td>${fmt(item.strategy)}</td><td class="${item.direction==="BUY"?"positive":item.direction==="SELL"?"negative":""}">${fmt(item.direction)}</td><td>${fmt(item.units)}</td><td>${fmt(item.price)}</td><td>${fmt(item.realizedPL)}</td><td>${fmt(item.message)}</td></tr>`).join("")||`<tr><td colspan="9">No engine records.</td></tr>`;const filtered=filterByDateRange(rows,"micro"),groups=new Map(STRATEGIES.map(item=>[item.id,{label:item.label,orders:0,closed:0,wins:0,losses:0,flat:0,pl:0,last:null}]));for(const item of [...filtered.rows].reverse()){const id=item.strategy||((item.type==="ORDER_FILLED"||item.type==="POSITION_CLOSED")?"ASSET":null),group=groups.get(id);if(!group)continue;if(item.type==="ORDER_FILLED")group.orders++;if(item.type==="POSITION_CLOSED"){group.closed++;const pl=Number(item.realizedPL);if(Number.isFinite(pl)){group.pl+=pl;if(pl>0)group.wins++;else if(pl<0)group.losses++;else group.flat++;}}if(item.pair)group.last=item;}el("microPerformanceScope").textContent=`${rangeLabel(filtered.range,"All retained engine records")} · ${filtered.rows.length} records`;el("microPerformanceBody").innerHTML=[...groups.values()].map(g=>`<tr><td>${g.label}</td><td>${g.orders||"—"}</td><td>${g.closed||"—"}</td><td>${g.closed?`${g.wins}/${g.losses}/${g.flat}`:"—"}</td><td class="${g.pl>0?"positive":g.pl<0?"negative":""}">${g.closed?g.pl.toFixed(2):"—"}</td><td>${g.last?.direction||"—"}</td><td>${g.last?.pair?formatPair(g.last.pair):"—"}</td><td>${g.last?formatTime(g.last.time):"—"}</td></tr>`).join("");}
+'''
+html = regex_once(html, r'  function renderTradingLedger\(entries\)\{.*?\}\n  function downloadTradingLedger', new_render_ledger + '  function downloadTradingLedger', "Micro date-filtered performance")
+html = replace_once(
+    html,
+    '  async function loadTradingLedger(){try{const response=await fetch("/api/engine/ledger",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(response.ok)renderTradingLedger(payload.ledger);}catch{}}',
+    '  async function loadTradingLedger(limit=state.ledgerLimit){state.ledgerLimit=limit;try{const response=await fetch(`/api/engine/ledger?limit=${encodeURIComponent(limit)}`,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(response.ok)renderTradingLedger(payload.ledger);}catch{}}',
+    "Ledger date range depth",
+)
+new_macro = '''  function renderMacroPerformance(){const fmt=(value,digits=2)=>Number.isFinite(value)?Number(value).toFixed(digits):"—",filtered=filterByDateRange(state.chartCandles,"macro"),minimum=Math.max(...Object.values(resolvedConfiguration(state.selectedInstrument,state.selectedTimeframe)).filter(value=>value&&typeof value==="object").map(value=>Number(value.length)||3),3)*2;el("macroPerformanceScope").textContent=`${rangeLabel(filtered.range,"All loaded completed candles")} · ${filtered.rows.length} candles`;if(filtered.rows.length<minimum){el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">Insufficient completed candles for this date range: ${filtered.rows.length} / ${minimum}</td></tr>`;el("computeConfiguration").disabled=false;return;}try{const analysis=analyzeWithConfiguration(filtered.rows,resolvedConfiguration(state.selectedInstrument,state.selectedTimeframe),true);el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const stats=tradeStats(strategyTrades(filtered.rows,analysis,strategy.id,state.selectedInstrument));return `<tr><td>${strategy.label}</td><td>${stats.trades||"—"}</td><td>${stats.trades?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${stats.net>=0?"positive":"negative"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;}).join("");}catch(error){el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">${error.message||"Performance calculation failed"}</td></tr>`;}el("computeConfiguration").disabled=false;}
+'''
+html = regex_once(html, r'  function renderMacroPerformance\(\)\{.*?\}\n  function applyConfiguration', new_macro + '  function applyConfiguration', "Macro date-filtered performance")
+diagnostic_functions = '''  function diagnosticCards(entries){el("platformDiagnosticGrid").innerHTML=entries.map(item=>`<div class="diagnostic-card ${item.good===true?"good":item.good===false?"bad":""}"><span>${item.label}</span><strong>${item.value}</strong></div>`).join("");}
+  async function runPlatformDiagnostic(open=true){if(open)el("platformDiagnosticDetails").open=true;el("platformDiagnosticStatus").textContent="Scanning…";const started=performance.now();try{const response=await fetch(`/api/platform/diagnostic?instrument=${encodeURIComponent(state.selectedInstrument)}&granularity=${encodeURIComponent(state.selectedTimeframe)}`,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),server=await response.json().catch(()=>({}));if(!response.ok)throw new Error(server.error||`HTTP ${response.status}`);const browserLatency=Math.round(performance.now()-started),failures=state.scheduleFailures.size,telemetry=server.worker?.telemetry||{},entries=[{label:"Browser → Worker",value:`${browserLatency} ms`,good:browserLatency<5000},{label:"Selected chart lane",value:`${state.candleActive} active · ${state.candleQueue.length} queued`,good:state.candleQueue.filter(job=>job.priority>=80).length===0},{label:"Schedule datasets",value:`${state.scheduleEvaluations.size} / 280 · ${failures} unresolved`,good:failures===0},{label:"Browser candle retries",value:`${state.candleStats.retries} retries · ${state.candleStats.timeouts} timeouts`,good:state.candleStats.timeouts===0},{label:"Worker OANDA queue",value:`${server.worker?.oandaActive??"—"} active · ${server.worker?.oandaQueued??"—"} queued`,good:Number(server.worker?.oandaQueued||0)<4},{label:"OANDA summary",value:`${server.oanda?.summaryLatencyMs??"—"} ms`,good:Number(server.oanda?.summaryLatencyMs)<5000},{label:"OANDA candles",value:`${server.oanda?.completedCandles??0} candles · ${server.oanda?.candleLatencyMs??"—"} ms`,good:Number(server.oanda?.completedCandles)>0},{label:"Engine",value:server.engine?.reachable?`Armed · ${server.engine.lastError||"no error"}`:"Unreachable",good:Boolean(server.engine?.reachable)&&!server.engine?.lastError},{label:"Optimizer",value:`${server.engine?.optimizerCoverage??0} / ${server.engine?.optimizerTotal??280} · ${server.engine?.optimizerLastError||"no error"}`,good:!server.engine?.optimizerLastError},{label:"Worker failures",value:`${telemetry.failures||0} failures · ${telemetry.timeouts||0} timeouts`,good:Number(telemetry.timeouts||0)===0},{label:"Cross-device state",value:state.preferenceSyncStatus||"Pending",good:/Synchronized/.test(state.preferenceSyncStatus||"")},{label:"Jules clone proposal",value:server.cloneAssessment?.verdict||"structuredClone hot path absent",good:true}];state.diagnosticLast={server,entries,time:new Date().toISOString()};diagnosticCards(entries);el("platformDiagnosticStatus").textContent=`Completed ${new Date().toLocaleTimeString()} · ${failures?`${failures} unresolved datasets`:"all current checks reported"}`;}catch(error){diagnosticCards([{label:"Diagnostic failure",value:error.message||"Scan failed",good:false}]);el("platformDiagnosticStatus").textContent=error.message||"Diagnostic scan failed";}}
+'''
+html = replace_once(html, '  function updateDateTime(){', diagnostic_functions + '\n  function updateDateTime(){', "Platform diagnostic browser scan")
+html = replace_once(
+    html,
+    '      await loadTradeCapacity();void loadChart();void loadSchedule();',
+    '      await loadTradeCapacity();void loadChart();void loadSchedule();void runPlatformDiagnostic(false);',
+    "Automatic post-connect diagnostic",
+)
+html = replace_once(
+    html,
+    '    el("downloadTradingLedger").addEventListener("click",downloadTradingLedger);',
+    '''    el("downloadTradingLedger").addEventListener("click",downloadTradingLedger);
+    el("runPlatformDiagnostic").addEventListener("click",()=>runPlatformDiagnostic(true));
+    for(const id of ["microStartDate","microEndDate"]){el(id).addEventListener("change",()=>{const ranged=Boolean(el("microStartDate").value||el("microEndDate").value);void loadTradingLedger(ranged?5000:500);});}
+    el("microClearDates").addEventListener("click",()=>{el("microStartDate").value="";el("microEndDate").value="";void loadTradingLedger(500);queuePlatformPreferenceSave?.();});
+    for(const id of ["macroStartDate","macroEndDate"]){el(id).addEventListener("change",()=>{renderMacroPerformance();queuePlatformPreferenceSave?.();});}
+    el("macroClearDates").addEventListener("click",()=>{el("macroStartDate").value="";el("macroEndDate").value="";renderMacroPerformance();queuePlatformPreferenceSave?.();});''',
+    "Date and diagnostic event handlers",
+)
+html = replace_once(
+    html,
+    'setInterval(()=>{if(state.connected)void loadTradingLedger();},5000);',
+    'setInterval(()=>{if(state.connected)void loadTradingLedger(state.ledgerLimit);},5000);',
+    "Preserve ledger date-range depth",
+)
+html_path.write_text(html)
+
+check_worker_path = Path("scripts/check-worker.mjs")
+check_worker = check_worker_path.read_text()
+check_worker = replace_once(
+    check_worker,
+    '  [/requestCount/,"count-aware candle cache"],',
+    '  [/requestCount/,"count-aware candle cache"],\n  [/handlePlatformDiagnostic/,"platform diagnostic endpoint"],\n  [/oandaTelemetry/,"OANDA retry telemetry"],',
+    "Worker diagnostic checks",
+)
+check_worker_path.write_text(check_worker)
+
+check_html_path = Path("scripts/check-html.mjs")
+check_html = check_html_path.read_text()
+check_html = replace_once(
+    check_html,
+    '"MAX_CANDLE_REQUESTS=3","eventLoadedKey"',
+    '"MAX_CANDLE_REQUESTS=3","eventLoadedKey","macroStartDate","microStartDate","Platform Diagnostic Scan","MAX_BACKGROUND_CANDLE_REQUESTS=2"',
+    "HTML performance and diagnostic checks",
+)
+check_html_path.write_text(check_html)
+
+test_path = Path("scripts/test-runtime.mjs")
+test = test_path.read_text()
+test = replace_once(
+    test,
+    'assert.doesNotMatch(html,/Fixed controls/);',
+    'assert.doesNotMatch(html,/Fixed controls/);assert.match(html,/macroStartDate/);assert.match(html,/microStartDate/);assert.match(html,/runPlatformDiagnostic/);assert.match(html,/MAX_BACKGROUND_CANDLE_REQUESTS=2/);assert.doesNotMatch(html,/structuredClone\\s*\\(/);',
+    "Performance diagnostics runtime assertions",
+)
+test_path.write_text(test)
+
+Path("scripts/performance-diagnostics-trigger").unlink(missing_ok=True)
+Path("scripts/performance-diagnostics-trigger-2").unlink(missing_ok=True)
+Path(__file__).unlink(missing_ok=True)
