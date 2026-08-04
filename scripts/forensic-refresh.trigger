@@ -1,1 +1,1 @@
-Rerun after correcting the static assertion quoting; require the full DOM suite to pass.
+Rerun with the missing jsdom scrollIntoView browser shim; preserve all behavior assertions.
