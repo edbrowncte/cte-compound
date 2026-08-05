@@ -9,51 +9,66 @@ const sha256=value=>createHash("sha256").update(value).digest("hex");
 const fixtureUrl=name=>new URL(`./fixtures/${name}`,import.meta.url);
 
 const manifest=JSON.parse(await readFile(fixtureUrl("registered-horizon-clean-manifest.json"),"utf8"));
+const pairIndex=JSON.parse(await readFile(fixtureUrl("registered-horizon-clean-pairs.json"),"utf8"));
 const expectedPerformanceBuffer=await readFile(fixtureUrl("registered-horizon-clean-performance.json"));
 const expectedRows=JSON.parse(expectedPerformanceBuffer.toString("utf8"));
 const contamination=JSON.parse(await readFile(fixtureUrl("legacy-horizon-contamination-evidence.json"),"utf8"));
-const candleGzip=await readFile(fixtureUrl("registered-horizon-clean-candles.json.gz"));
-const candleRaw=gunzipSync(candleGzip);
-const snapshot=JSON.parse(candleRaw.toString("utf8"));
-
 const settings=manifest.settings;
 
-function compareRows(actual,expected){
-  assert.equal(actual.length,168,"clean performance must contain 28 pairs × 6 strategies");
-  assert.equal(expected.length,168,"frozen clean baseline must contain 168 rows");
-  assert.deepEqual(actual,expected,"every clean registered-Horizon performance field must reproduce exactly");
+function expectedPairRows(pair){
+  const label=pair.replace("_"," / ");
+  return expectedRows.filter(row=>row.Pair===label);
 }
 
-test("clean candle snapshot is immutable and internally authenticated",()=>{
+async function loadPair(entry){
+  const gzip=await readFile(fixtureUrl(`registered-horizon-clean-candles/${entry.file}`));
+  assert.equal(sha256(gzip),entry.gzipSha256,`${entry.pair} gzip hash must match pair index`);
+  const raw=gunzipSync(gzip);
+  const candles=JSON.parse(raw.toString("utf8"));
+  assert.equal(candles.length,manifest.barsPerPair,`${entry.pair} must contain exactly 3000 completed candles`);
+  assert.equal(sha256(JSON.stringify(candles)),entry.candleSha256,`${entry.pair} candle hash must match pair index`);
+  assert.equal(entry.candleSha256,manifest.pairHashes[entry.pair],`${entry.pair} candle hash must match aggregate manifest`);
+  assert.ok(candles.every(candle=>candle.complete===true),`${entry.pair} snapshot must contain completed candles only`);
+  assert.equal(candles[0]?.time,entry.firstCandle,`${entry.pair} first candle must match pair index`);
+  assert.equal(candles.at(-1)?.time,entry.lastCandle,`${entry.pair} last candle must match pair index`);
+  return candles;
+}
+
+test("clean pair-scoped evidence is immutable and internally authenticated",async()=>{
   assert.equal(manifest.format,"registered-horizon-clean-certification-manifest-v1");
   assert.equal(manifest.sourceVersion,"horizon-strategy-v1");
   assert.equal(manifest.performanceVersion,"registered-horizon-performance-v1");
   assert.equal(manifest.pairs,28);
   assert.equal(manifest.rows,168);
   assert.equal(manifest.barsPerPair,3000);
-  assert.equal(sha256(candleGzip),manifest.candleSnapshotGzipSha256);
-  assert.equal(sha256(candleRaw),manifest.candleSnapshotSha256);
+  assert.equal(pairIndex.format,"registered-horizon-clean-pair-index-v1");
+  assert.equal(pairIndex.aggregateSnapshotSha256,manifest.candleSnapshotSha256);
+  assert.equal(pairIndex.aggregateSnapshotGzipSha256,manifest.candleSnapshotGzipSha256);
+  assert.equal(pairIndex.barsPerPair,manifest.barsPerPair);
+  assert.equal(pairIndex.pairs.length,28);
   assert.equal(sha256(expectedPerformanceBuffer),manifest.cleanPerformanceSha256);
-  assert.equal(snapshot.pairs.length,28);
-  for(const pair of snapshot.pairs){
-    const candles=snapshot.candlesByPair[pair];
-    assert.equal(candles.length,3000,`${pair} must contain exactly 3000 completed candles`);
-    assert.equal(sha256(JSON.stringify(candles)),manifest.pairHashes[pair],`${pair} candle hash must match manifest`);
-    assert.ok(candles.every(candle=>candle.complete===true),`${pair} snapshot must contain completed candles only`);
+  assert.equal(expectedRows.length,168);
+  for(const entry of pairIndex.pairs){
+    await loadPair(entry);
   }
 });
 
-test("registered six-strategy engine reproduces all 168 clean rows exactly",()=>{
-  const actual=[];
-  for(const pair of snapshot.pairs){
-    const rows=registeredExportRows(
-      evaluateRegisteredPerformance(snapshot.candlesByPair[pair],pair,settings),
-      pair,
+test("registered six-strategy engine reproduces all 168 clean rows exactly",async()=>{
+  let certifiedRows=0;
+  for(const entry of pairIndex.pairs){
+    const candles=await loadPair(entry);
+    const actual=registeredExportRows(
+      evaluateRegisteredPerformance(candles,entry.pair,settings),
+      entry.pair,
       "M1",
     );
-    actual.push(...rows);
+    const expected=expectedPairRows(entry.pair);
+    assert.equal(actual.length,6,`${entry.pair} must produce six registered strategy rows`);
+    assert.equal(expected.length,6,`${entry.pair} clean baseline must contain six strategy rows`);
+    assert.deepEqual(actual,expected,`${entry.pair} six-strategy performance must reproduce exactly`);
+    certifiedRows+=actual.length;
   }
-  compareRows(actual,expectedRows);
+  assert.equal(certifiedRows,168,"all 168 clean registered-Horizon rows must be certified");
 });
 
 test("legacy benchmark is rejected rather than emulated",()=>{
