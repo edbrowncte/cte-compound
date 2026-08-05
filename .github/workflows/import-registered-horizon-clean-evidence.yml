@@ -1,4 +1,5 @@
 name: Import registered Horizon clean evidence
+# Pair-scoped evidence import v2: bounded-memory six-strategy certification.
 
 on:
   pull_request:
