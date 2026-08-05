@@ -1,0 +1,38 @@
+{
+  "source": {
+    "terminalSha256": "add9ec0632d18a6c8967a8577ea3424489ffe6456bed5c8988a4a68385309fb8",
+    "description": "Deterministic candle fixtures consumed by exact hardened-terminal functions extracted from public/index.html and the server strategy port."
+  },
+  "cases": [
+    {
+      "name": "EUR_USD-M1-default",
+      "instrument": "EUR_USD",
+      "timeframe": "M1",
+      "prefixes": [300, 420, 600],
+      "settings": {},
+      "generator": { "count": 600, "base": 1.08, "intervalSeconds": 60, "start": "2026-01-05T00:00:00.000Z" }
+    },
+    {
+      "name": "USD_JPY-M5-custom",
+      "instrument": "USD_JPY",
+      "timeframe": "M5",
+      "prefixes": [300, 420, 600],
+      "settings": {
+        "assetLength": 34,
+        "naiLength": 21,
+        "naiFilter": 0.4,
+        "dareNLength": 29,
+        "dareNFilter": 0.3,
+        "apexLength": 18,
+        "apexFilter": 1.5,
+        "csf": {
+          "selected": ["ASSET", "DARE", "NAI"],
+          "method": "CONFLICT_CONSENSUS",
+          "regime": "DARE",
+          "trigger": "NAI"
+        }
+      },
+      "generator": { "count": 600, "base": 158.2, "intervalSeconds": 300, "start": "2026-02-02T00:00:00.000Z" }
+    }
+  ]
+}
