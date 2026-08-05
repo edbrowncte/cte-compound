@@ -124,9 +124,7 @@ export class HtlEngine{
     try{
       const config=normalizeConfig(state.config),fingerprint=configFingerprint(config);state.config=config;if(state.mtfFingerprint!==fingerprint){state.mtf={};state.mtfRotation=0;state.mtfFingerprint=fingerprint;}let optimizer=currentOptimizer(await this.ctx.storage.get("optimizer"));const{token,configured}=secrets(this.env),accountId=await liveAccount(token,configured);try{await this.syncTransactions(state,token,accountId);}catch(error){state.transactionSyncError=error.message||"Transaction synchronization failed";}try{optimizer=(await this.optimizeNext(state,token)).records;}catch(error){state.optimizerLastError=error.message||"Optimizer failure";}const rotationIndex=Number(state.mtfRotation||0)%MTF_TIMEFRAMES.length,rotationTimeframe=MTF_TIMEFRAMES[rotationIndex],rotationRows=await this.scan(token,config,rotationTimeframe,optimizer);state.mtf=state.mtf||{};state.mtf[rotationTimeframe]={fingerprint,directions:Object.fromEntries(rotationRows.map(row=>[row.pair,row.event.direction])),updated:new Date().toISOString()};state.mtfRotation=(rotationIndex+1)%MTF_TIMEFRAMES.length;const probe=await candles("EUR_USD",token,config.timeframe,2),lastCandle=probe.at(-1)?.time;
       if(!lastCandle)return;
-      if(lastCandle===state.lastCandle){
-        if(!state.requirements){const rows=rotationTimeframe===config.timeframe?rotationRows:await this.scan(token,config,config.timeframe,optimizer);state.directions=Object.fromEntries(rows.map(row=>[row.pair,row.event.direction]));state.requirements=Object.fromEntries(rows.map(row=>[row.pair,row]));state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.initialized=true;}
-        await this.reconcile(state.requirements,token,accountId,state,config);
+      if(lastCandle===state.lastCandle && state.initialized){
         state.lastRun=new Date().toISOString();state.lastError=null;return;
       }
       const rows=rotationTimeframe===config.timeframe?rotationRows:await this.scan(token,config,config.timeframe,optimizer);
@@ -136,8 +134,31 @@ export class HtlEngine{
       if(!state.initialized){state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));state.mtfDecisionDirections=Object.fromEntries(mtfNow.map(row=>[row.pair,row.event.direction]));state.initialized=true;await this.write({type:"INITIALIZED",message:`${rows.length} HTL events registered`});}
       else{
         const eventCandidates=rows.filter(row=>state.events[row.pair]!==row.event.id&&row.event.startTime===lastCandle).sort((a,b)=>b.event.bars-a.event.bars),priorMtf=state.mtfDecisionDirections||{},mtfCandidates=mtfNow.filter(row=>Number(priorMtf[row.pair]||0)!==row.event.direction),combined=eventCandidates.map(event=>{const mtf=mtfNow.find(item=>item.pair===event.pair&&item.event.direction===event.event.direction);return mtf?{...event,confidence:mtf.confidence,count:mtf.count}:null;}).filter(Boolean).sort((left,right)=>right.confidence-left.confidence),decisionCandidates=config.decisionMode==="EVENT"?eventCandidates:config.decisionMode==="MTF"?mtfCandidates:combined;
-        let candidate=null;if(decisionCandidates.length)candidate=await this.choose(decisionCandidates);
+
+        const accountPayload=await callOanda(`/v3/accounts/${accountId}`,token),account=accountPayload.account||{},positions=account.positions||[];
+        const positionMap=new Map(positions.map(pos=>{
+          const longUnits=Number(pos.long?.units||0),shortUnits=Math.abs(Number(pos.short?.units||0));
+          return [pos.instrument, longUnits > 0 ? 1 : shortUnits > 0 ? -1 : 0];
+        }));
+
+        const reversals=[];
+        const newEntries=[];
+        for(const candidate of decisionCandidates){
+          const existing=positionMap.get(candidate.pair)||0;
+          if(existing!==0&&existing!==candidate.event.direction){
+            reversals.push(candidate);
+          }else if(existing===0){
+            newEntries.push(candidate);
+          }
+        }
+
+        for(const rev of reversals){
+          await this.execute(rev,token,accountId,state);
+        }
+
+        let candidate=null;if(newEntries.length)candidate=await this.choose(newEntries);
         if(candidate)await this.execute(candidate,token,accountId,state);
+
         for(const row of rows)state.events[row.pair]=row.event.id;
         state.mtfDecisionDirections=Object.fromEntries(mtfNow.map(row=>[row.pair,row.event.direction]));
       }
