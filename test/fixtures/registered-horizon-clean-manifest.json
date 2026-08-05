@@ -1,0 +1,68 @@
+{
+  "format": "registered-horizon-clean-certification-manifest-v1",
+  "createdAt": "2026-08-05T00:40:16.505Z",
+  "workerOrigin": "https://cte-compound.thetestamony.workers.dev",
+  "auditTo": "2026-07-28T03:52:00.000Z",
+  "settings": {
+    "assetLength": 50,
+    "dareNLength": 40,
+    "dareNFilter": 1.5,
+    "naiLength": 50,
+    "naiFilter": 1.5,
+    "apexLength": 50,
+    "apexFilter": 7,
+    "csf": {
+      "selected": [
+        "DARE_N",
+        "NAI"
+      ],
+      "method": "REGIME_TRIGGER",
+      "regime": "NAI",
+      "trigger": "DARE_N"
+    }
+  },
+  "sourceVersion": "horizon-strategy-v1",
+  "performanceVersion": "registered-horizon-performance-v1",
+  "pairs": 28,
+  "rows": 168,
+  "barsPerPair": 3000,
+  "candleSnapshotSha256": "60f2a9e36d3b1fcf8297e90522e84ae867c8511ff78fe2f8c733658f1cfab7bd",
+  "candleSnapshotGzipSha256": "e4144e49aee515c8daa449aa407b77c93deb157dbc446a121c02910a5216294d",
+  "cleanPerformanceSha256": "8a294dbf39fa5df3ab110e246a3fdbc8a9bf96b4abb5876aac2de5d6c7be5615",
+  "pairHashes": {
+    "EUR_AUD": "43e20f7ef5fd1c31a67f399efc33492b853903d4de3b44468b3a4db0a5428f49",
+    "EUR_CAD": "a2e74fe1a5cb9e1c59a5c025e768ff0bf299353a9526c11cb20c03807f47fecc",
+    "EUR_JPY": "12fe5a34d388d7934a6369551beff355dbf0f2a0183693e13aa1b6c0bc91c2ba",
+    "GBP_USD": "dea8f4dd56b938c4331a8e48535a4debbfd3ea0192e2d28130c6f672fe7aef99",
+    "GBP_AUD": "a4fd5606a71af7ab37507f77c475e330d94f35965bab18b9f1d0db36ac6bc74c",
+    "AUD_CHF": "df04d0e804f4b73676f33009c166c7b47b020fee4194ca3c9d8a63e7274b9bc7",
+    "AUD_JPY": "8d7e70ee1566e14901339ae17d3aa4ba4aca5cd65da1cafd3a80ad3af5533e39",
+    "AUD_NZD": "9afc44f39428993f1102d1a26456dff0fe171848431593361e27e2a434bbf599",
+    "EUR_USD": "69ac42700e552283499879238c610dea60dc62724b947d17d4c9f684172cd215",
+    "EUR_NZD": "bb4e1e7a3ba6ee719dfa95ef3976e82de565e7cb322f7a262cd6add73448cbd9",
+    "USD_JPY": "06da6365989f2909f7f5ec1a8aadbf9218e4f04339304702c596fa790c4b3a7e",
+    "GBP_JPY": "cfeb3ac2388d1b20601370b86849cb569d5679fed002bb20ea7c8a03ec8a4e75",
+    "CHF_JPY": "083255cc7cead653b8413b0444a095310e55a3bd8017a380fca253e56f06f5f7",
+    "NZD_USD": "d7addfd0e9044e161a81b74bd902f0bf6b7ab9952ffacb4b6ced72e165bf4548",
+    "NZD_CAD": "c2b87984e3312d248c5fb745a86e307272ccfcac589eaf3d3bb026c1dd11dd4d",
+    "NZD_CHF": "c4478bbc004f262682ad18b9c0726043206fc529c2a2c96e53c9f75346e2dd6b",
+    "EUR_GBP": "a4d9396539d111c5d62a4500341222f29e7ac2be7e97c955012dbce4792d9aae",
+    "USD_CAD": "0890c129ebabe97946cd1d1b509a0734d6e3fca29c7bef4b9010d8c6bff5a825",
+    "GBP_NZD": "d935b45c05da142baeacdb73d5be4a3929a0e1ae4ed9ca614feacb9f5b3193a6",
+    "NZD_JPY": "746f7e98f0b1585a01e5f9b5b1f129da2f73d14ce2122f6930c77f3285b72989",
+    "CAD_JPY": "dda0f5121820a6ef69fdfb881dca0ece68b396ad7690cbdf1ef0816577aca20f",
+    "AUD_USD": "4b0525f7d36b590fa91302bc72d9e9fbc8aef83d8aee92e97c6aaffbfa4cce63",
+    "AUD_CAD": "273088fb831cb49be9ff73aa44bd93aa05aae25ef7460a22f2df9bb0cc081e7a",
+    "EUR_CHF": "d4dac05f1082d19239e96ea45478f2f53e9cd6e1063f0d5cee46296863941b1a",
+    "GBP_CHF": "52c64b643117d38d5af4fb677169147672dd7e280be28715c7317627ead885ee",
+    "USD_CHF": "03f869129ac09ed37a60e817a9448d13db570d9784b060360e28c63f6f08a74b",
+    "GBP_CAD": "058916575a589527a562d5fe32d0ac3839fa19592fe332135b85a60c5e94e044",
+    "CAD_CHF": "1d9071b87d4b6445ec262d339a99041132f24e3b924ff732ddfd91c68437693b"
+  },
+  "legacyBenchmark": {
+    "status": "REJECTED_DATA_CONTAMINATION",
+    "exactRows": 11,
+    "mismatchedRows": 157,
+    "reason": "The uploaded legacy benchmark contains cross-instrument NZD_USD/NZD_CAD contamination and does not match the current OANDA historical archive."
+  }
+}

@@ -1,0 +1,261 @@
+{
+  "format": "registered-horizon-clean-pair-index-v1",
+  "aggregateSnapshotSha256": "60f2a9e36d3b1fcf8297e90522e84ae867c8511ff78fe2f8c733658f1cfab7bd",
+  "aggregateSnapshotGzipSha256": "e4144e49aee515c8daa449aa407b77c93deb157dbc446a121c02910a5216294d",
+  "auditTo": "2026-07-28T03:52:00.000Z",
+  "barsPerPair": 3000,
+  "pairs": [
+    {
+      "pair": "EUR_AUD",
+      "file": "EUR_AUD.json.gz",
+      "bars": 3000,
+      "candleSha256": "43e20f7ef5fd1c31a67f399efc33492b853903d4de3b44468b3a4db0a5428f49",
+      "gzipSha256": "7c2b7f35d7d730150841f68fd625241ca316f36b15f5ac6b50314bd500f8b4aa",
+      "firstCandle": "2026-07-24T01:42:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "EUR_CAD",
+      "file": "EUR_CAD.json.gz",
+      "bars": 3000,
+      "candleSha256": "a2e74fe1a5cb9e1c59a5c025e768ff0bf299353a9526c11cb20c03807f47fecc",
+      "gzipSha256": "859b3f29a4f42141a3f336c046d5c4f329887294f4327acf6cb2bc19a50fba96",
+      "firstCandle": "2026-07-24T01:39:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "EUR_JPY",
+      "file": "EUR_JPY.json.gz",
+      "bars": 3000,
+      "candleSha256": "12fe5a34d388d7934a6369551beff355dbf0f2a0183693e13aa1b6c0bc91c2ba",
+      "gzipSha256": "7576b43f972e1e223b03689a2c579f4ad0b1e75f4fd239c0e52645f2603c7fb3",
+      "firstCandle": "2026-07-24T01:26:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "GBP_USD",
+      "file": "GBP_USD.json.gz",
+      "bars": 3000,
+      "candleSha256": "dea8f4dd56b938c4331a8e48535a4debbfd3ea0192e2d28130c6f672fe7aef99",
+      "gzipSha256": "913641d6beb3d26c775c8ba9c25dc7b70c63ac7ae8d698b8719ee69fc5722ea7",
+      "firstCandle": "2026-07-24T01:28:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "GBP_AUD",
+      "file": "GBP_AUD.json.gz",
+      "bars": 3000,
+      "candleSha256": "a4fd5606a71af7ab37507f77c475e330d94f35965bab18b9f1d0db36ac6bc74c",
+      "gzipSha256": "a0c75f86ef935c3e962f6fda0720109ce8ef8488e199c0b929fe0076a4e2d50e",
+      "firstCandle": "2026-07-24T01:36:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "AUD_CHF",
+      "file": "AUD_CHF.json.gz",
+      "bars": 3000,
+      "candleSha256": "df04d0e804f4b73676f33009c166c7b47b020fee4194ca3c9d8a63e7274b9bc7",
+      "gzipSha256": "599cd28ab49f35b9005d4e5d3fe5836496611e8f0855124a37aa5128d82f5dc5",
+      "firstCandle": "2026-07-24T00:14:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "AUD_JPY",
+      "file": "AUD_JPY.json.gz",
+      "bars": 3000,
+      "candleSha256": "8d7e70ee1566e14901339ae17d3aa4ba4aca5cd65da1cafd3a80ad3af5533e39",
+      "gzipSha256": "ef04ac195b72c7511ac5bc9f464e924669b821615670da5756e1691c048e60cc",
+      "firstCandle": "2026-07-24T01:08:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "AUD_NZD",
+      "file": "AUD_NZD.json.gz",
+      "bars": 3000,
+      "candleSha256": "9afc44f39428993f1102d1a26456dff0fe171848431593361e27e2a434bbf599",
+      "gzipSha256": "2ec51d93c44e832a2950bb8a09d2da920f46f943fcd5869f27fa3f1e6382f39d",
+      "firstCandle": "2026-07-24T01:38:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "EUR_USD",
+      "file": "EUR_USD.json.gz",
+      "bars": 3000,
+      "candleSha256": "69ac42700e552283499879238c610dea60dc62724b947d17d4c9f684172cd215",
+      "gzipSha256": "3042dffaed2561b99c17fbbe18b1162940126f856a9b9e3961e47d5589dde2bb",
+      "firstCandle": "2026-07-24T01:32:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "EUR_NZD",
+      "file": "EUR_NZD.json.gz",
+      "bars": 3000,
+      "candleSha256": "bb4e1e7a3ba6ee719dfa95ef3976e82de565e7cb322f7a262cd6add73448cbd9",
+      "gzipSha256": "ff5ce260461cc02af12461fbcd135975751dbf0f16b68f9d9ddc679d17db2233",
+      "firstCandle": "2026-07-24T01:24:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "USD_JPY",
+      "file": "USD_JPY.json.gz",
+      "bars": 3000,
+      "candleSha256": "06da6365989f2909f7f5ec1a8aadbf9218e4f04339304702c596fa790c4b3a7e",
+      "gzipSha256": "24e91194ad0d1b8cad827186e2b5dd34501b197512d8ae5ebc1c37d819e069ab",
+      "firstCandle": "2026-07-24T01:37:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "GBP_JPY",
+      "file": "GBP_JPY.json.gz",
+      "bars": 3000,
+      "candleSha256": "cfeb3ac2388d1b20601370b86849cb569d5679fed002bb20ea7c8a03ec8a4e75",
+      "gzipSha256": "511ec0ad143ddad75a86644dc25bdf1be93ca41db0fd7076a4cfa283b55e9cc6",
+      "firstCandle": "2026-07-24T01:25:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "CHF_JPY",
+      "file": "CHF_JPY.json.gz",
+      "bars": 3000,
+      "candleSha256": "083255cc7cead653b8413b0444a095310e55a3bd8017a380fca253e56f06f5f7",
+      "gzipSha256": "25cca8644ab97c59777c57a06c9e1039cdcad36b0a91b5b2ba9ff0a05ce349c3",
+      "firstCandle": "2026-07-24T01:26:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "NZD_USD",
+      "file": "NZD_USD.json.gz",
+      "bars": 3000,
+      "candleSha256": "d7addfd0e9044e161a81b74bd902f0bf6b7ab9952ffacb4b6ced72e165bf4548",
+      "gzipSha256": "9d6c3f2fd799f68e94ac7821c4afd00d95d2b7f3d349a3b565037d7320bc4619",
+      "firstCandle": "2026-07-24T01:16:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "NZD_CAD",
+      "file": "NZD_CAD.json.gz",
+      "bars": 3000,
+      "candleSha256": "c2b87984e3312d248c5fb745a86e307272ccfcac589eaf3d3bb026c1dd11dd4d",
+      "gzipSha256": "13bb72701865331fb6ec3deaa33208e07ab348ca10d0fd5c411aff97284be06c",
+      "firstCandle": "2026-07-24T00:38:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "NZD_CHF",
+      "file": "NZD_CHF.json.gz",
+      "bars": 3000,
+      "candleSha256": "c4478bbc004f262682ad18b9c0726043206fc529c2a2c96e53c9f75346e2dd6b",
+      "gzipSha256": "b0b8f7b2180de7395478bbc6cdbebcaf8fbefd9a366466a103d65a9ab76b28eb",
+      "firstCandle": "2026-07-24T00:27:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "EUR_GBP",
+      "file": "EUR_GBP.json.gz",
+      "bars": 3000,
+      "candleSha256": "a4d9396539d111c5d62a4500341222f29e7ac2be7e97c955012dbce4792d9aae",
+      "gzipSha256": "ff5a8708e8c75a46375e137af618685264643e2b789a92e2c656d0ab083a000d",
+      "firstCandle": "2026-07-24T01:21:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "USD_CAD",
+      "file": "USD_CAD.json.gz",
+      "bars": 3000,
+      "candleSha256": "0890c129ebabe97946cd1d1b509a0734d6e3fca29c7bef4b9010d8c6bff5a825",
+      "gzipSha256": "d57086368158d249452175e1c63da0062bf7e5b5c80bed69acd32a03ea157068",
+      "firstCandle": "2026-07-24T01:24:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "GBP_NZD",
+      "file": "GBP_NZD.json.gz",
+      "bars": 3000,
+      "candleSha256": "d935b45c05da142baeacdb73d5be4a3929a0e1ae4ed9ca614feacb9f5b3193a6",
+      "gzipSha256": "63126d9ea1ac2ab60f64fa8ee2e91b5e30d8cb3371159d195fd18437cf6dba25",
+      "firstCandle": "2026-07-24T01:10:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "NZD_JPY",
+      "file": "NZD_JPY.json.gz",
+      "bars": 3000,
+      "candleSha256": "746f7e98f0b1585a01e5f9b5b1f129da2f73d14ce2122f6930c77f3285b72989",
+      "gzipSha256": "9ee1f2da9ffce9994ec19c37f5ac3f5945969ce5ff47666aeccf241a2e935629",
+      "firstCandle": "2026-07-24T01:22:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "CAD_JPY",
+      "file": "CAD_JPY.json.gz",
+      "bars": 3000,
+      "candleSha256": "dda0f5121820a6ef69fdfb881dca0ece68b396ad7690cbdf1ef0816577aca20f",
+      "gzipSha256": "74a9dec8db5bb8111c95e7168e573ddcde758ca70c75e7a8f0e59f4f6d800a7b",
+      "firstCandle": "2026-07-24T00:37:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "AUD_USD",
+      "file": "AUD_USD.json.gz",
+      "bars": 3000,
+      "candleSha256": "4b0525f7d36b590fa91302bc72d9e9fbc8aef83d8aee92e97c6aaffbfa4cce63",
+      "gzipSha256": "c5e1bb296ee36a338db36c56e6fb83a382090650200f72e926fe20517a28bb72",
+      "firstCandle": "2026-07-24T01:06:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "AUD_CAD",
+      "file": "AUD_CAD.json.gz",
+      "bars": 3000,
+      "candleSha256": "273088fb831cb49be9ff73aa44bd93aa05aae25ef7460a22f2df9bb0cc081e7a",
+      "gzipSha256": "8fb135d2ed7b1024e96f001781d305aa183df2feadc00badcd1fb0a242961236",
+      "firstCandle": "2026-07-24T00:05:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "EUR_CHF",
+      "file": "EUR_CHF.json.gz",
+      "bars": 3000,
+      "candleSha256": "d4dac05f1082d19239e96ea45478f2f53e9cd6e1063f0d5cee46296863941b1a",
+      "gzipSha256": "ba983a07a686dae47e6267ec57545a9b0bf5fe12b63dddca8ea0da6d73cef3ba",
+      "firstCandle": "2026-07-24T01:09:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "GBP_CHF",
+      "file": "GBP_CHF.json.gz",
+      "bars": 3000,
+      "candleSha256": "52c64b643117d38d5af4fb677169147672dd7e280be28715c7317627ead885ee",
+      "gzipSha256": "ee8a4e26fac95449bd766a943d589f7bbb7cda81dd3dc6c4e97d975d492c5fb4",
+      "firstCandle": "2026-07-24T01:21:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "USD_CHF",
+      "file": "USD_CHF.json.gz",
+      "bars": 3000,
+      "candleSha256": "03f869129ac09ed37a60e817a9448d13db570d9784b060360e28c63f6f08a74b",
+      "gzipSha256": "0336d44678d26f4a02ded31f29a14de07705129facdbf7da510346e3e1b50ac7",
+      "firstCandle": "2026-07-24T01:03:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "GBP_CAD",
+      "file": "GBP_CAD.json.gz",
+      "bars": 3000,
+      "candleSha256": "058916575a589527a562d5fe32d0ac3839fa19592fe332135b85a60c5e94e044",
+      "gzipSha256": "af7997d33a7f84992932267876ae3ce0f660d68f4a28799d75022b17eb108f91",
+      "firstCandle": "2026-07-24T01:30:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    },
+    {
+      "pair": "CAD_CHF",
+      "file": "CAD_CHF.json.gz",
+      "bars": 3000,
+      "candleSha256": "1d9071b87d4b6445ec262d339a99041132f24e3b924ff732ddfd91c68437693b",
+      "gzipSha256": "927a5b9edfcf77b8f322735abce5c45f7f69d3174afd7a18a2345219979b6282",
+      "firstCandle": "2026-07-23T19:42:00.000000000Z",
+      "lastCandle": "2026-07-28T03:51:00.000000000Z"
+    }
+  ]
+}
