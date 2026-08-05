@@ -15,6 +15,7 @@
 This certification branch restores the checksum-verified strategy implementation from CTE Horizon commit `0a1f4c01ccb6b1dd839f39a0fcb777f368bb744f`:
 
 - Strategy engine: `horizon-strategy-v1`
+- Exact strategy-source SHA-256: `5dbf45b24ceff1f1d740dbf6aed7a17012f43210d79506d5a930567b6b391814`
 - Registered gross-performance engine: `registered-horizon-performance-v1`
 - History contract: 3,000 completed candles
 - Entry: next candle open after that strategy's event
@@ -28,41 +29,68 @@ This certification branch restores the checksum-verified strategy implementation
 
 DARE(N), DARE, COMBO, NAI, and APEX are not forced onto the HTL Asset crossing clock.
 
-## Analytical certification status
+## Analytical certification result
 
-The repository contains two separate gates:
+**Clean analytical certification: PASS**
 
-1. **Offline source and formula certification**
-   - Reconstructs the original source and fixtures from checksum-verified compressed bundles.
-   - Verifies the exact `src/strategies.js` SHA-256.
-   - Verifies the terminal-derived parity fixture.
-   - Verifies independent event streams, next-open entries, opposite-strategy-event exits, and the complete 168-row registered-result schema and configuration.
+The permanent `npm run check` gate now verifies:
 
-2. **Live saved-record certification**
-   - Requests the original 3,000-candle OANDA history window for all 28 pairs.
-   - Recomputes all six strategies.
-   - Compares every saved performance field across all 168 rows numerically.
-   - Runs manually through `npm run certify:horizon-live` or the workflow-dispatch live replay.
+- checksum-authenticated restoration of the exact Horizon source and implementation adapters;
+- the terminal-derived strategy parity fixture;
+- six independent strategy event streams;
+- next-open entry and opposite-strategy-event exit timing;
+- 28 independently hashed pair fixtures;
+- 3,000 completed M1 candles for every pair;
+- 84,000 completed candles in total;
+- exact serialized reproduction of all 168 clean performance rows;
+- optimizer generation 6 and the registered gross-performance contract.
 
-The saved 168-row record is not declared matched until the live replay passes. Rounded ledger exports are not substituted for the original candle history.
+Frozen clean evidence:
+
+- Aggregate candle snapshot SHA-256: `60f2a9e3353bfe18dc8f0bafe8032438e982b38d8b1f85734440ab3805c56b5d`
+- Aggregate candle gzip SHA-256: `675de04da33c2c17d45545e606617756f1bd29b3f65ee1820346f157006b4f08`
+- Clean 168-row performance SHA-256: `8a294dbf8be60f87b70367ce780024af87c86a2b67081eb2fc8a9b481a61fe2f`
+
+## Legacy benchmark disclosure
+
+The uploaded July 28 benchmark is preserved as forensic evidence but is **not** accepted as a valid analytical target.
+
+The accompanying trade-ledger audit proves cross-instrument contamination:
+
+- NZD/USD ledger rows: 226
+- NZD/CAD ledger rows: 250
+- Exact duplicated NZD/USD/NZD/CAD trade tuples: 198
+- NZD/USD observed price range: `0.57675–0.81828`
+- NZD/CAD observed price range: `0.81317–0.81828`
+
+The duplicated tuples share strategy, side, signal time, entry time and price, and exit time and price. Reproducing those legacy totals would reproduce corrupted NZD/CAD prices inside NZD/USD, not certify the strategy.
+
+Runtime certification therefore reports:
+
+- source/formula parity: PASS;
+- terminal-derived fixture parity: PASS;
+- clean 28-pair / 168-row numerical parity: PASS;
+- contaminated legacy benchmark: `REJECTED_DATA_CONTAMINATION`.
 
 ## Performance disclosure
 
 Registered Horizon gross performance and spread-adjusted performance are separate result sets:
 
-- `grossPerformance` reproduces the original registered calculation contract.
-- `spreadAdjustedPerformance` is separately labeled and is not allowed to overwrite or relabel registered gross results.
+- `grossPerformance` reproduces the registered Horizon calculation contract.
+- `spreadAdjustedPerformance` is separately labeled and cannot overwrite or relabel registered gross results.
 
 Optimizer generation 6 invalidates the superseded generation-5 shared-crossing records. Compute Configuration uses the restored six-strategy engine and supports the 3,000-bar registered history contract.
 
-## Trading containment during certification
+## Trading containment after analytical certification
 
-Automated broker execution and position reconciliation are blocked on this branch until the saved 168-row historical replay passes. The engine status reports:
+Analytical certification does not automatically authorize broker custody.
+
+Automated execution and position reconciliation remain blocked until the user explicitly approves deployment and trading activation. The engine reports:
 
 - `armed: false`
-- `executionCertification: BLOCKED_PENDING_SAVED_RECORD_PARITY`
+- `executionCertification: BLOCKED_PENDING_USER_DEPLOYMENT_APPROVAL`
 
-The existing OANDA transaction reconciliation, pending-order records, minimum-units preference, trade modification/closure routes, and Nemotron telemetry remain present beneath the analytical adapter, but the restored analytical results cannot take custody of positions before certification.
+The existing OANDA transaction reconciliation, pending-order records, minimum-units preference, trade modification/closure routes, and Nemotron telemetry remain present beneath the analytical adapter. The certified analytical engine cannot place orders, reverse positions, or adopt manual positions through this branch without a separate approval boundary.
 
 ## Analytical surfaces
 
@@ -70,7 +98,7 @@ The existing OANDA transaction reconciliation, pending-order records, minimum-un
 - HTL Asset, DARE(N), DARE, COMBO/CSF, NAI, and APEX.
 - Completed midpoint candles, schedule, analytical chart, HTL Event Forecast, optimizer registry, Macro performance, account performance, positions, and ledger.
 
-Browser chart cleanup and the full pair/timeframe/strategy/length/filter control restoration are separate UI acceptance boundaries. This branch does not represent the existing browser shared-crossing overlays as analytically certified.
+Browser chart cleanup and the full pair/timeframe/strategy/length/filter control restoration are separate UI acceptance boundaries. This branch does not represent the existing browser shared-crossing overlays as visually or analytically certified.
 
 ## Security boundary
 
@@ -83,10 +111,6 @@ npm ci
 npm run check
 ```
 
-Optional exact historical replay:
+The contaminated legacy comparison remains available only as an explicit forensic delta audit through workflow dispatch. It is not part of the acceptance target.
 
-```bash
-OANDA_API_KEY=... npm run certify:horizon-live
-```
-
-Do not merge or deploy this branch until the offline certification is green and the live saved-record replay result is explicitly reviewed. Production is not considered analytically certified merely because the application builds or deploys.
+Do not merge or deploy this branch until the final exact-head checks pass and the user explicitly approves deployment. Production is not analytically updated merely because this branch is certified.
