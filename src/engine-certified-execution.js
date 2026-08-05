@@ -1,5 +1,10 @@
 import { HtlEngine as CertifiedAnalyticsEngine } from "./engine.js";
 import { PAIRS, TIMEFRAMES, OPTIMIZER_VERSION, currentOptimizer, candles } from "./horizon-platform-engine.js";
+import {
+  optimizedOptimizeNext,
+  optimizedComputeConfiguration,
+  optimizedScan
+} from "./optimized-optimizer.js";
 
 const API="https://api-fxtrade.oanda.com";
 const EXECUTION_POLICY_VERSION="CERTIFIED_MULTI_REVERSAL@1.0.0";
@@ -83,6 +88,18 @@ export const __executionTest=Object.freeze({
 });
 
 export class HtlEngine extends CertifiedAnalyticsEngine{
+  async computeConfiguration(value) {
+    return optimizedComputeConfiguration(this, value);
+  }
+
+  async optimizeNext(state, token) {
+    return optimizedOptimizeNext(this, state, token);
+  }
+
+  async scan(token, config, timeframe = config.timeframe, optimizer = {}) {
+    return optimizedScan(this, token, config, timeframe, optimizer);
+  }
+
   async status(){
     const status=await super.status();
     const state=(await this.ctx.storage.get("state"))||{};
