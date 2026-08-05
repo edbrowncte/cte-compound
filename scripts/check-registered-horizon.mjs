@@ -3,6 +3,7 @@ import {readFile} from "node:fs/promises";
 const readMany=async paths=>(await Promise.all(paths.map(path=>readFile(new URL(path,import.meta.url),"utf8")))).join("\n");
 const worker=await readMany(["../src/worker.js","../src/worker-horizon-base.js","../src/worker-base.js","../src/horizon-candidate-orders.js"]);
 const engine=await readMany(["../src/engine.js","../src/engine-nemotron-base.js","../src/engine-horizon-base.js","../src/engine-base.js","../src/horizon-platform-engine.js","../src/horizon-registered-performance.js","../src/horizon-strategy-v1.js"]);
+const registeredEngine=await readFile(new URL("../src/engine.js",import.meta.url),"utf8");
 const checks=(source,items)=>{for(const[pattern,label]of items)if(!pattern.test(source))throw new Error(`Missing ${label}`);};
 
 checks(worker,[
@@ -23,17 +24,16 @@ checks(engine,[
   [/spreadAdjustedPerformance:\{status:"SEPARATE_NOT_COMPUTED"/,"gross/spread separation"],
   [/armed:true/,"armed private runtime"],
   [/executionCertification:"ARMED_PRIVATE_USER"/,"private execution certification"],
+  [/async reconcile\(/,"active inherited reconciliation"],
+  [/async execute\(/,"active inherited automated execution"],
   [/NEMOTRON_CANDIDATE_TOOL@2\.0\.0/,"Nemotron structured integration"],
   [/transactions\/sinceid/,"lost-response transaction synchronization"],
   [/pendingOrders/,"durable pending-order state"],
   [/clientExtensions:\{id:clientId/,"idempotent order identity"]
 ]);
 
-const inherited=await readFile(new URL("../src/engine-nemotron-base.js",import.meta.url),"utf8");
-checks(inherited,[[/async reconcile\(/,"inherited reconciliation"],[/async execute\(/,"inherited automated execution"]]);
-const registeredLayer=engine.replace(inherited,"");
-for(const forbidden of [/ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK/,/POST_CROSS_STRATEGY_QUALIFICATION/,/BLOCKED_PENDING_/,/ANALYTICAL_CERTIFICATION_BLOCK/,/PENDING_USER_DEPLOYMENT_APPROVAL/]){
-  if(forbidden.test(registeredLayer))throw new Error(`Forbidden registered analytical contract: ${forbidden}`);
+for(const forbidden of [/async reconcile\(/,/async execute\(/,/ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK/,/POST_CROSS_STRATEGY_QUALIFICATION/,/BLOCKED_PENDING_/,/ANALYTICAL_CERTIFICATION_BLOCK/,/PENDING_USER_DEPLOYMENT_APPROVAL/]){
+  if(forbidden.test(registeredEngine))throw new Error(`Forbidden registered analytical override: ${forbidden}`);
 }
 
 console.log("Registered six-strategy Horizon analytical, performance, armed private execution, OANDA, ledger, and Nemotron boundaries verified.");
