@@ -11,8 +11,8 @@ on:
       - ready_for_review
   workflow_dispatch:
     inputs:
-      run_live_replay:
-        description: Replay the saved 168-row record through the deployed read-only Worker proxy
+      rerun_legacy_delta_audit:
+        description: Re-run the rejected legacy 168-row comparison through the deployed GET-only Worker proxy
         required: false
         type: boolean
         default: false
@@ -36,11 +36,11 @@ jobs:
           cache: npm
       - name: Install locked dependencies and hydrate checksum-verified source
         run: npm ci
-      - name: Run complete repository and registered-Horizon certification
+      - name: Run complete repository and clean 168-row Horizon certification
         run: npm run check
 
-  live-saved-record-replay:
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_live_replay)
+  legacy-forensic-delta-audit:
+    if: github.event_name == 'workflow_dispatch' && inputs.rerun_legacy_delta_audit
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -53,12 +53,12 @@ jobs:
           cache: npm
       - name: Install and hydrate checksum-verified source
         run: npm ci
-      - name: Replay legacy record and create clean certification snapshot
+      - name: Re-run contaminated legacy benchmark delta audit
         run: node scripts/replay-registered-horizon-via-worker.mjs
-      - name: Preserve replay audit, clean candles, performance and manifest
+      - name: Preserve forensic delta evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: registered-horizon-certification-evidence
+          name: registered-horizon-legacy-delta-audit
           path: artifacts/
           if-no-files-found: error
