@@ -21,7 +21,7 @@ checks(engine,[
   [/OPTIMIZER_VERSION\s*=\s*6/,"optimizer generation 6"],
   [/OPPOSITE STRATEGY EVENT · NEXT OPEN/,"registered trade timing"],
   [/spreadAdjustedPerformance:\{status:"SEPARATE_NOT_COMPUTED"/,"gross/spread separation"],
-  [/BLOCKED_PENDING_SAVED_RECORD_PARITY/,"execution certification block"],
+  [/BLOCKED_PENDING_USER_DEPLOYMENT_APPROVAL/,"execution certification block"],
   [/async reconcile\(/,"reconciliation override"],
   [/async execute\(/,"execution override"],
   [/NEMOTRON_CANDIDATE_TOOL@2\.0\.0/,"Nemotron structured integration"],
@@ -36,4 +36,4 @@ for(const forbidden of [/ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK/,/POST_C
   if(forbidden.test(registeredLayer))throw new Error(`Forbidden registered analytical contract: ${forbidden}`);
 }
 
-console.log("Registered six-strategy Horizon analytical, performance, execution-block, OANDA, ledger, and Nemotron boundaries verified.");
+console.log("Registered six-strategy Horizon analytical, performance, deployment-block, OANDA, ledger, and Nemotron boundaries verified.");
