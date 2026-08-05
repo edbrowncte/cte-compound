@@ -9,7 +9,8 @@ const sha256=value=>createHash("sha256").update(value).digest("hex");
 const fixtureUrl=name=>new URL(`./fixtures/${name}`,import.meta.url);
 
 const manifest=JSON.parse(await readFile(fixtureUrl("registered-horizon-clean-manifest.json"),"utf8"));
-const expectedRows=JSON.parse(await readFile(fixtureUrl("registered-horizon-clean-performance.json"),"utf8"));
+const expectedPerformanceBuffer=await readFile(fixtureUrl("registered-horizon-clean-performance.json"));
+const expectedRows=JSON.parse(expectedPerformanceBuffer.toString("utf8"));
 const contamination=JSON.parse(await readFile(fixtureUrl("legacy-horizon-contamination-evidence.json"),"utf8"));
 const candleGzip=await readFile(fixtureUrl("registered-horizon-clean-candles.json.gz"));
 const candleRaw=gunzipSync(candleGzip);
@@ -32,7 +33,7 @@ test("clean candle snapshot is immutable and internally authenticated",()=>{
   assert.equal(manifest.barsPerPair,3000);
   assert.equal(sha256(candleGzip),manifest.candleSnapshotGzipSha256);
   assert.equal(sha256(candleRaw),manifest.candleSnapshotSha256);
-  assert.equal(sha256(await readFile(fixtureUrl("registered-horizon-clean-performance.json"))),manifest.cleanPerformanceSha256);
+  assert.equal(sha256(expectedPerformanceBuffer),manifest.cleanPerformanceSha256);
   assert.equal(snapshot.pairs.length,28);
   for(const pair of snapshot.pairs){
     const candles=snapshot.candlesByPair[pair];
