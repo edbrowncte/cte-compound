@@ -1,6 +1,11 @@
 name: Certify registered Horizon analytics
 
 on:
+  push:
+    branches:
+      - repair/registered-horizon-analytical-certification
+    paths:
+      - .github/workflows/certify-registered-horizon.yml
   pull_request:
     branches:
       - main
@@ -40,20 +45,22 @@ jobs:
         run: npm run check
 
   live-saved-record-replay:
-    if: github.event_name == 'workflow_dispatch' && inputs.run_live_replay
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_live_replay)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: repair/registered-horizon-analytical-certification
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Require live OANDA credential
-        run: test -n "$OANDA_API_KEY" || { echo "OANDA_API_KEY is required for the saved-record replay"; exit 1; }
-      - name: Install and hydrate
+      - name: Require read-only OANDA credential
+        run: test -n "$OANDA_API_KEY" || { echo "OANDA_API_KEY repository secret is not configured"; exit 1; }
+      - name: Install and hydrate checksum-verified source
         run: npm ci
-      - name: Replay all 168 registered rows
+      - name: Replay all 168 registered gross-performance rows
         run: npm run certify:horizon-live
