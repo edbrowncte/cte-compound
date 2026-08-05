@@ -33,7 +33,7 @@ DARE(N), DARE, COMBO, NAI, and APEX are not forced onto the HTL Asset crossing c
 
 **Clean analytical certification: PASS**
 
-The permanent `npm run check` gate now verifies:
+The permanent `npm run check` gate verifies:
 
 - checksum-authenticated restoration of the exact Horizon source and implementation adapters;
 - the terminal-derived strategy parity fixture;
@@ -81,16 +81,16 @@ Registered Horizon gross performance and spread-adjusted performance are separat
 
 Optimizer generation 6 invalidates the superseded generation-5 shared-crossing records. Compute Configuration uses the restored six-strategy engine and supports the 3,000-bar registered history contract.
 
-## Trading containment after analytical certification
+## Private-owner trading authorization
 
-Analytical certification does not automatically authorize broker custody.
+The platform owner explicitly authorized the certified private runtime to trade. The engine reports:
 
-Automated execution and position reconciliation remain blocked until the user explicitly approves deployment and trading activation. The engine reports:
+- `armed: true`
+- `executionCertification: ARMED_PRIVATE_USER`
 
-- `armed: false`
-- `executionCertification: BLOCKED_PENDING_USER_DEPLOYMENT_APPROVAL`
+The analytical wrapper no longer overrides or suppresses automated `execute()` or position `reconcile()`. The inherited OANDA transaction reconciliation, pending-order recovery, no-hedging position handling, minimum-units preference, trade modification/closure routes, and Nemotron candidate ranking remain active beneath the certified six-strategy engine.
 
-The existing OANDA transaction reconciliation, pending-order records, minimum-units preference, trade modification/closure routes, and Nemotron telemetry remain present beneath the analytical adapter. The certified analytical engine cannot place orders, reverse positions, or adopt manual positions through this branch without a separate approval boundary.
+This authorization is specific to the owner's private platform. A production Worker must still be deployed from the armed commit before the live Cloudflare runtime reflects it.
 
 ## Analytical surfaces
 
@@ -112,5 +112,3 @@ npm run check
 ```
 
 The contaminated legacy comparison remains available only as an explicit forensic delta audit through workflow dispatch. It is not part of the acceptance target.
-
-Do not merge or deploy this branch until the final exact-head checks pass and the user explicitly approves deployment. Production is not analytically updated merely because this branch is certified.
