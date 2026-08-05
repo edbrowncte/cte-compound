@@ -1,6 +1,6 @@
 import horizonWorker from "./worker-horizon-base.js";
 import { handleCandidateOrder, __candidateTest } from "./horizon-candidate-orders.js";
-export { HtlEngine } from "./engine.js";
+export { HtlEngine } from "./engine-certified-execution.js";
 export { __candidateTest };
 
 const headers={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
