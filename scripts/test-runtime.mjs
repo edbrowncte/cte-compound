@@ -10,6 +10,6 @@ source=source.replaceAll('await readFile(new URL("../src/engine.js",import.meta.
 source=source.replace('parsed.searchParams.get("count")==="650"','parsed.searchParams.get("count")==="3000"');
 const oldReconcile=/await engine\.reconcile\(\{EUR_USD:[\s\S]*?assert\.equal\(engine\.lastWrite\.optimizerScore,3\);/;
 if(!oldReconcile.test(source))throw new Error("Runtime reconciliation adaptation boundary is missing.");
-source=source.replace(oldReconcile,'const reconciliation=await engine.reconcile({EUR_USD:{pair:"EUR_USD",event:{direction:-1,id:"-1:t"},configuration:{primary:{length:20,filter:1,score:3,trades:8,net:12,maxDrawdown:2,winRate:.625},confirmation:null}}},token,accountId,{events:{}},config);\nassert.deepEqual(reconciliation,{blocked:true,reason:"PENDING_SAVED_RECORD_PARITY"});assert.equal(closed.length,0);assert.equal(engine.lastWrite.type,"ANALYTICAL_CERTIFICATION_BLOCK");');
+source=source.replace(oldReconcile,'const reconciliation=await engine.reconcile({EUR_USD:{pair:"EUR_USD",event:{direction:-1,id:"-1:t"},configuration:{primary:{length:20,filter:1,score:3,trades:8,net:12,maxDrawdown:2,winRate:.625},confirmation:null}}},token,accountId,{events:{}},config);\nassert.deepEqual(reconciliation,{blocked:true,reason:"PENDING_USER_DEPLOYMENT_APPROVAL"});assert.equal(closed.length,0);assert.equal(engine.lastWrite.type,"ANALYTICAL_CERTIFICATION_BLOCK");');
 await writeFile(generatedUrl,source,"utf8");
 try{await import(`${generatedUrl.href}?run=${Date.now()}`);}finally{await rm(generatedUrl,{force:true});}
