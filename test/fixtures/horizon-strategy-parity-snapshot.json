@@ -1,0 +1,356 @@
+{
+  "source": {
+    "terminalSha256": "add9ec0632d18a6c8967a8577ea3424489ffe6456bed5c8988a4a68385309fb8",
+    "description": "Deterministic candle fixtures consumed by exact hardened-terminal functions extracted from public/index.html and the server strategy port."
+  },
+  "snapshots": [
+    {
+      "name": "EUR_USD-M1-default",
+      "prefix": 300,
+      "endpoints": {
+        "ASSET": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 1.0702878895845955,
+          "right": 1.0736009981400094
+        },
+        "DARE_N": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": -1,
+          "left": -1.754546221366529,
+          "right": 0.39422208709464523
+        },
+        "DARE": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 1.0719444438623025,
+          "right": 1.076017669544646
+        },
+        "COMBO": {
+          "mode": "CSF_EVENT",
+          "activeDirection": -1,
+          "eventDirection": 0,
+          "configSignature": "TWO_OPINIONS:DARE-NAI:DARE:NAI"
+        },
+        "NAI": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": 1,
+          "left": -0.6790927576102769,
+          "right": -1.6840596254662792
+        },
+        "APEX": {
+          "mode": "LATEST_EVENT",
+          "latestEvent": {
+            "sourceIndex": 263,
+            "signalIndex": 263,
+            "direction": 1,
+            "score": -2.2391333456007305,
+            "zup": -2.2391333456007305,
+            "puz": 2.2391333456007305,
+            "threshold": 2,
+            "source": "APEX BUY · zup ≤ −2.0 & puz ≥ 2.0",
+            "sourceSignalTime": "2026-01-05T04:23:00.000Z"
+          }
+        }
+      },
+      "counts": {
+        "asset": 1,
+        "dare": 1,
+        "dareN": 2,
+        "nai": 3,
+        "apex": 4,
+        "combo": 2
+      }
+    },
+    {
+      "name": "EUR_USD-M1-default",
+      "prefix": 420,
+      "endpoints": {
+        "ASSET": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 1.0877752193318044,
+          "right": 1.0877752193318049
+        },
+        "DARE_N": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": -1,
+          "left": 0.16444104541470111,
+          "right": 0.5060415634821591
+        },
+        "DARE": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": 1,
+          "left": 1.0877752193318047,
+          "right": 1.087680194499087
+        },
+        "COMBO": {
+          "mode": "CSF_EVENT",
+          "activeDirection": 1,
+          "eventDirection": 0,
+          "configSignature": "TWO_OPINIONS:DARE-NAI:DARE:NAI"
+        },
+        "NAI": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": -1,
+          "left": -0.3333333333333333,
+          "right": 0.16444104541508534
+        },
+        "APEX": {
+          "mode": "LATEST_EVENT",
+          "latestEvent": {
+            "sourceIndex": 385,
+            "signalIndex": 385,
+            "direction": 1,
+            "score": -2.1630318413283804,
+            "zup": -2.1630318413283804,
+            "puz": 2.1630318413283804,
+            "threshold": 2,
+            "source": "APEX BUY · zup ≤ −2.0 & puz ≥ 2.0",
+            "sourceSignalTime": "2026-01-05T06:25:00.000Z"
+          }
+        }
+      },
+      "counts": {
+        "asset": 3,
+        "dare": 2,
+        "dareN": 4,
+        "nai": 4,
+        "apex": 6,
+        "combo": 3
+      }
+    },
+    {
+      "name": "EUR_USD-M1-default",
+      "prefix": 600,
+      "endpoints": {
+        "ASSET": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 1.070026482046423,
+          "right": 1.0774749374362573
+        },
+        "DARE_N": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": -1,
+          "left": -2.093523172697772,
+          "right": 1.7831536016175256
+        },
+        "DARE": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 1.0737507097413401,
+          "right": 1.0755001719344623
+        },
+        "COMBO": {
+          "mode": "CSF_EVENT",
+          "activeDirection": -1,
+          "eventDirection": 0,
+          "configSignature": "TWO_OPINIONS:DARE-NAI:DARE:NAI"
+        },
+        "NAI": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": -1,
+          "left": -2.4637998877605307,
+          "right": 1.338344291527488
+        },
+        "APEX": {
+          "mode": "LATEST_EVENT",
+          "latestEvent": {
+            "sourceIndex": 583,
+            "signalIndex": 583,
+            "direction": 1,
+            "score": -2.080140530160017,
+            "zup": -2.080140530160017,
+            "puz": 2.080140530160017,
+            "threshold": 2,
+            "source": "APEX BUY · zup ≤ −2.0 & puz ≥ 2.0",
+            "sourceSignalTime": "2026-01-05T09:43:00.000Z"
+          }
+        }
+      },
+      "counts": {
+        "asset": 7,
+        "dare": 7,
+        "dareN": 8,
+        "nai": 8,
+        "apex": 10,
+        "combo": 8
+      }
+    },
+    {
+      "name": "USD_JPY-M5-custom",
+      "prefix": 300,
+      "endpoints": {
+        "ASSET": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 156.6180487613188,
+          "right": 156.8748096408989
+        },
+        "DARE_N": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": 1,
+          "left": -0.9966465860095912,
+          "right": -2.046622929898879
+        },
+        "DARE": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 156.74642920110884,
+          "right": 157.348828954972
+        },
+        "COMBO": {
+          "mode": "CSF_EVENT",
+          "activeDirection": -1,
+          "eventDirection": 0,
+          "configSignature": "CONFLICT_CONSENSUS:ASSET-DARE-NAI:DARE:NAI"
+        },
+        "NAI": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": 1,
+          "left": -0.13278122606165108,
+          "right": -1.0735259756777888
+        },
+        "APEX": {
+          "mode": "LATEST_EVENT",
+          "latestEvent": {
+            "sourceIndex": 261,
+            "signalIndex": 261,
+            "direction": 1,
+            "score": -1.7162713915032226,
+            "zup": -1.7162713915032226,
+            "puz": 1.7162713915032226,
+            "threshold": 1.5,
+            "source": "APEX BUY · zup ≤ −1.5 & puz ≥ 1.5",
+            "sourceSignalTime": "2026-02-02T21:45:00.000Z"
+          }
+        }
+      },
+      "counts": {
+        "asset": 5,
+        "dare": 3,
+        "dareN": 4,
+        "nai": 6,
+        "apex": 4,
+        "combo": 5
+      }
+    },
+    {
+      "name": "USD_JPY-M5-custom",
+      "prefix": 420,
+      "endpoints": {
+        "ASSET": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 158.45769290742155,
+          "right": 158.64858552691877
+        },
+        "DARE_N": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": 0,
+          "left": -1.0448412204260755,
+          "right": -1.2461834730994448
+        },
+        "DARE": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 158.55313921717016,
+          "right": 158.8408433245816
+        },
+        "COMBO": {
+          "mode": "CSF_EVENT",
+          "activeDirection": -1,
+          "eventDirection": 0,
+          "configSignature": "CONFLICT_CONSENSUS:ASSET-DARE-NAI:DARE:NAI"
+        },
+        "NAI": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": 1,
+          "left": -0.5729803619058751,
+          "right": -1.3270020804748976
+        },
+        "APEX": {
+          "mode": "LATEST_EVENT",
+          "latestEvent": {
+            "sourceIndex": 376,
+            "signalIndex": 376,
+            "direction": 1,
+            "score": -1.7225616801731172,
+            "zup": -1.7225616801731172,
+            "puz": 1.7225616801731172,
+            "threshold": 1.5,
+            "source": "APEX BUY · zup ≤ −1.5 & puz ≥ 1.5",
+            "sourceSignalTime": "2026-02-03T07:20:00.000Z"
+          }
+        }
+      },
+      "counts": {
+        "asset": 7,
+        "dare": 5,
+        "dareN": 6,
+        "nai": 8,
+        "apex": 6,
+        "combo": 7
+      }
+    },
+    {
+      "name": "USD_JPY-M5-custom",
+      "prefix": 600,
+      "endpoints": {
+        "ASSET": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 156.73906431457786,
+          "right": 157.79185700394245
+        },
+        "DARE_N": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": -1,
+          "left": -1.6069761113710785,
+          "right": 0.3575238759560025
+        },
+        "DARE": {
+          "mode": "ENDPOINT_CROSS",
+          "relation": -1,
+          "left": 157.26546065926016,
+          "right": 158.02637845612526
+        },
+        "COMBO": {
+          "mode": "CSF_EVENT",
+          "activeDirection": -1,
+          "eventDirection": 0,
+          "configSignature": "CONFLICT_CONSENSUS:ASSET-DARE-NAI:DARE:NAI"
+        },
+        "NAI": {
+          "mode": "ENDPOINT_QUALIFIED",
+          "direction": 1,
+          "left": -1.1009637651265558,
+          "right": -1.758144807105051
+        },
+        "APEX": {
+          "mode": "LATEST_EVENT",
+          "latestEvent": {
+            "sourceIndex": 580,
+            "signalIndex": 580,
+            "direction": 1,
+            "score": -1.5656497036099188,
+            "zup": -1.5656497036099188,
+            "puz": 1.5656497036099188,
+            "threshold": 1.5,
+            "source": "APEX BUY · zup ≤ −1.5 & puz ≥ 1.5",
+            "sourceSignalTime": "2026-02-04T00:20:00.000Z"
+          }
+        }
+      },
+      "counts": {
+        "asset": 11,
+        "dare": 9,
+        "dareN": 9,
+        "nai": 12,
+        "apex": 10,
+        "combo": 11
+      }
+    }
+  ]
+}
