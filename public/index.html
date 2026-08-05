@@ -1362,7 +1362,39 @@
 
   function renderMtfForecast(){const pair=state.selectedInstrument;el("mtfScope").textContent=`${formatPair(pair)} · HTL ${state.engineConfig.htlLength} · step-wise HTL and ${STRATEGIES.find(item=>item.id===state.selectedScheduleStrategy)?.label||state.selectedScheduleStrategy} alignment`;const rows=TIMEFRAMES.map(timeframe=>{const eventRow=mtfEventRow(pair,timeframe),analysis=state.scheduleEvaluations.get(scheduleKey(pair,timeframe))?.latest?.[state.selectedScheduleStrategy],eventDirection=eventRow?.currentEvent==="BUY"?1:eventRow?.currentEvent==="SELL"?-1:0,analyticalDirection=analysis?.direction||0,agreement=eventDirection&&analyticalDirection&&eventDirection===analyticalDirection,confidence=agreement?clamp(Number(analysis.confidence)||0,0,1):0;return `<tr><td>${timeframe}</td><td class="${directionClass(eventDirection)}">${signalWord(eventDirection)}</td><td class="${directionClass(analyticalDirection)}">${signalWord(analyticalDirection)}</td><td>${agreement?"MATCH":"—"}</td><td>${agreement?formatPct(confidence):"—"}</td><td><div class="mtf-step"><i class="${directionClass(agreement?eventDirection:0)}" style="width:${agreement?Math.max(8,confidence*100):4}%"></i></div></td></tr>`;});el("mtfBody").innerHTML=rows.join("");updateDecisionDisplays();}
 
-  function updateDecisionDisplays(){const strategy=state.engineConfig.strategy,timeframe=state.engineConfig.timeframe,unavailable=openPositionPairs(),eventCandidates=INSTRUMENTS.map(pair=>{if(unavailable.has(pair))return null;const output=state.scheduleEvaluations.get(scheduleKey(pair,timeframe))?.latest?.[strategy];return output?.direction?{pair,direction:output.direction,confidence:output.confidence,source:"EVENT"}:null;}).filter(Boolean).sort((a,b)=>b.confidence-a.confidence),a=eventCandidates[0]||null,used=new Set(a?[a.pair]:[]),mtfCandidates=INSTRUMENTS.map(pair=>unavailable.has(pair)?null:mtfPairDecision(pair,strategy)).filter(item=>item?.direction&&item.available>=2).sort((left,right)=>right.confidence-left.confidence||right.matches-left.matches),b=mtfCandidates.find(item=>!used.has(item.pair))||null;b&&used.add(b.pair);const combinedCandidates=eventCandidates.map(event=>{const mtf=mtfCandidates.find(item=>item.pair===event.pair&&item.direction===event.direction);return mtf?{pair:event.pair,direction:event.direction,confidence:(event.confidence+mtf.confidence)/2,source:"COMBINED"}:null;}).filter(Boolean).sort((left,right)=>right.confidence-left.confidence),c=combinedCandidates.find(item=>!used.has(item.pair))||null;state.decisionCandidates={A:a,B:b?{...b,source:"MTF"}:null,C:c};if(state.selectedDecisionCandidate&&!state.decisionCandidates[state.selectedDecisionCandidate])state.selectedDecisionCandidate=null;el("decisionA").textContent=a?`${formatPair(a.pair)} · ${signalWord(a.direction)} · ${formatPct(a.confidence)}`:"—";el("decisionB").textContent=b?`${formatPair(b.pair)} · ${signalWord(b.direction)} · ${formatPct(b.confidence)}`:"—";el("decisionC").textContent=c?`${formatPair(c.pair)} · ${signalWord(c.direction)} · ${formatPct(c.confidence)}`:"—";renderDecisionCandidates();}
+  function updateDecisionDisplays(){
+    const strategy=state.engineConfig.strategy,timeframe=state.engineConfig.timeframe,unavailable=openPositionPairs(),
+    eventCandidates=INSTRUMENTS.map(pair=>{
+      if(unavailable.has(pair))return null;
+      const output=state.scheduleEvaluations.get(scheduleKey(pair,timeframe))?.latest?.[strategy];
+      if(!output?.direction)return null;
+
+      // Ensure the event just crossed on the latest completed candle using htlCausal & htlCross
+      const candles=state.scheduleCandles.get(scheduleKey(pair,timeframe));
+      if(!candles||!candles.length)return null;
+      const config=resolvedConfiguration(pair,timeframe)?.[strategy]||STRATEGY_CONFIG[strategy];
+      const htl=htlCausal(candles,config.length);
+      const crossingDirection=htlCross(htl.asset,htl.inverse,candles.length-1);
+      if(!crossingDirection||crossingDirection!==output.direction)return null;
+
+      return{pair,direction:output.direction,confidence:output.confidence,source:"EVENT"};
+    }).filter(Boolean).sort((a,b)=>b.confidence-a.confidence),
+    a=eventCandidates[0]||null,used=new Set(a?[a.pair]:[]),
+    mtfCandidates=INSTRUMENTS.map(pair=>unavailable.has(pair)?null:mtfPairDecision(pair,strategy)).filter(item=>item?.direction&&item.available>=2).sort((left,right)=>right.confidence-left.confidence||right.matches-left.matches),
+    b=mtfCandidates.find(item=>!used.has(item.pair))||null;
+    b&&used.add(b.pair);
+    const combinedCandidates=eventCandidates.map(event=>{
+      const mtf=mtfCandidates.find(item=>item.pair===event.pair&&item.direction===event.direction);
+      return mtf?{pair:event.pair,direction:event.direction,confidence:(event.confidence+mtf.confidence)/2,source:"COMBINED"}:null;
+    }).filter(Boolean).sort((left,right)=>right.confidence-left.confidence),
+    c=combinedCandidates.find(item=>!used.has(item.pair))||null;
+    state.decisionCandidates={A:a,B:b?{...b,source:"MTF"}:null,C:c};
+    if(state.selectedDecisionCandidate&&!state.decisionCandidates[state.selectedDecisionCandidate])state.selectedDecisionCandidate=null;
+    el("decisionA").textContent=a?`${formatPair(a.pair)} · ${signalWord(a.direction)} · ${formatPct(a.confidence)}`:"—";
+    el("decisionB").textContent=b?`${formatPair(b.pair)} · ${signalWord(b.direction)} · ${formatPct(b.confidence)}`:"—";
+    el("decisionC").textContent=c?`${formatPair(c.pair)} · ${signalWord(c.direction)} · ${formatPct(c.confidence)}`:"—";
+    renderDecisionCandidates();
+  }
   function renderEventDetail(row){
     if(!row)return;
     state.eventData=row.data;state.eventHtl=row.htl;state.eventEvents=row.eventList;
