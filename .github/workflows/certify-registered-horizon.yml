@@ -55,3 +55,10 @@ jobs:
         run: npm ci
       - name: Replay all 168 registered gross-performance rows through the GET-only candle proxy
         run: node scripts/replay-registered-horizon-via-worker.mjs
+      - name: Preserve complete numerical replay audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registered-horizon-live-replay-audit
+          path: artifacts/registered-horizon-live-replay.json
+          if-no-files-found: warn
