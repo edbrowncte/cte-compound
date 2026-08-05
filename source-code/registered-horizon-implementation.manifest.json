@@ -1,18 +1,18 @@
 {
   "format": "cte-compound-registered-horizon-implementation-manifest-v1",
-  "payload_sha256": "4f7e57af0b1f198741e0978269fe8b95524d54fbf7bc747150a28d543a064c32",
-  "archive_sha256": "de1eac10bd4f5e2f61402fd33d2ac5def53c5c7fecc3483ac04745d48728463b",
-  "encoded_sha256": "ee01a578d370b92f70b0b3d4eb605d888ca8e1dbe6eb0e8c6dbc17cf5cba92c3",
+  "payload_sha256": "dcb7f5c5366ac0cc09959a237e06ca550000410e9fa09dae70bb7cd26530ffa9",
+  "archive_sha256": "99fb44af50160678d81c003a2a4b2ac6c1783d33675a8b5fb88686eba2f4e489",
+  "encoded_sha256": "b30836b72d602078fbe07a436b16398fefa5a8307b5b465f4fdcb05ff81afdbd",
   "part_count": 3,
   "file_hashes": {
     "src/horizon-registered-performance.js": "0b1e5ecc2b9cf0bc9cd3921cf4ca0dbdbe1ea2ab716212f776d3a04d202f13c1",
-    "src/horizon-platform-engine.js": "fda3c93cc5fa4bad07811a05f90e5354141926a1276f58bce859c38897a0f3b4",
-    "src/engine.js": "ca48f1a7eb8fcf30c2560edf61b6e0ea9d9b395b8aa603cb1bb16ad0311de11e",
+    "src/horizon-platform-engine.js": "d766fca5e00fea5aa8c8d81193c4abc4663d70630bacc26d09b3413e6cce7c41",
+    "src/engine.js": "4a66d76ee28b3714b9f1e71900c50fe30475777e9391350e5eca7bba16a024f3",
     "test/fixtures/horizon-strategy-parity.json": "7d6be96d1e995db9c715c47169ba4dae163c0494a6fdeb4366203697f2dea135",
     "test/fixtures/horizon-strategy-parity-snapshot.json": "b8e63ff78b7e30c53f08aa08647e29f010e0717837f376fd10637578c2ce74a6",
     "test/registered-strategy-parity-snapshot.test.js": "d644dee27b0c3fbbe46204106c3dce882a1b4ee0323a4891eace6f21b09a9714",
     "test/registered-performance.test.js": "f8e12f105b32a842a1e7c2d74ca5c3938df278953903190347b76b4e007901bd",
     "scripts/certify-registered-horizon-live.mjs": "4c415c797ec03af72c994631a50ee57f1576b2e0e92109d2597d23e755d1de82",
-    "scripts/check-worker.mjs": "aab739775bf54ad95988b70171aba60b67fd9bfd30415bd7715c5a646d218ba9"
+    "scripts/check-worker.mjs": "f0a8a32b8af760dca6a60f9c785e1a2675adf6042b1b153c23b784855d3e3cac"
   }
 }
