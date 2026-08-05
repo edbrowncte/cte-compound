@@ -13,7 +13,11 @@ async function hydrate(manifestName,prefix){
   }
   const encoded=parts.join("");
   const label=prefix.toUpperCase().replaceAll("-","_");
-  if(hash(encoded)!==manifest.encoded_sha256)throw new Error(`${label}_ENCODED_HASH_MISMATCH`);
+  const encodedHash=hash(encoded);
+  if(encodedHash!==manifest.encoded_sha256){
+    const partHashes=parts.map((part,index)=>`${String(index).padStart(2,"0")}:${hash(part)}:${part.length}`).join(",");
+    throw new Error(`${label}_ENCODED_HASH_MISMATCH expected=${manifest.encoded_sha256} actual=${encodedHash} parts=${partHashes}`);
+  }
   const archive=Buffer.from(encoded,"base64");
   if(hash(archive)!==manifest.archive_sha256)throw new Error(`${label}_ARCHIVE_HASH_MISMATCH`);
   const payload=gunzipSync(archive);
