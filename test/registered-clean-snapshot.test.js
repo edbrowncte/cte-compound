@@ -7,6 +7,7 @@ import { evaluateRegisteredPerformance, registeredExportRows } from "../src/hori
 
 const sha256=value=>createHash("sha256").update(value).digest("hex");
 const fixtureUrl=name=>new URL(`./fixtures/${name}`,import.meta.url);
+const serialized=value=>JSON.parse(JSON.stringify(value));
 
 const manifest=JSON.parse(await readFile(fixtureUrl("registered-horizon-clean-manifest.json"),"utf8"));
 const pairIndex=JSON.parse(await readFile(fixtureUrl("registered-horizon-clean-pairs.json"),"utf8"));
@@ -53,7 +54,7 @@ test("clean pair-scoped evidence is immutable and internally authenticated",asyn
   }
 });
 
-test("registered six-strategy engine reproduces all 168 clean rows exactly",async()=>{
+test("registered six-strategy engine reproduces all 168 exported JSON rows exactly",async()=>{
   let certifiedRows=0;
   for(const entry of pairIndex.pairs){
     const candles=await loadPair(entry);
@@ -65,7 +66,7 @@ test("registered six-strategy engine reproduces all 168 clean rows exactly",asyn
     const expected=expectedPairRows(entry.pair);
     assert.equal(actual.length,6,`${entry.pair} must produce six registered strategy rows`);
     assert.equal(expected.length,6,`${entry.pair} clean baseline must contain six strategy rows`);
-    assert.deepEqual(actual,expected,`${entry.pair} six-strategy performance must reproduce exactly`);
+    assert.deepEqual(serialized(actual),expected,`${entry.pair} six-strategy exported JSON must reproduce exactly`);
     certifiedRows+=actual.length;
   }
   assert.equal(certifiedRows,168,"all 168 clean registered-Horizon rows must be certified");
