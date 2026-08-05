@@ -1,0 +1,76 @@
+import assert from "node:assert/strict";
+import { HtlEngine, __executionTest } from "../src/engine-certified-execution.js";
+
+class Storage{
+  constructor(){this.map=new Map();}
+  async get(key){return this.map.get(key);}
+  async put(key,value){this.map.set(key,value);}
+  async delete(key){this.map.delete(key);}
+  async getAlarm(){return null;}
+  async deleteAlarm(){}
+}
+
+const storage=new Storage();
+const engine=new HtlEngine({storage},{OANDA_API_KEY:"x".repeat(40),OANDA_ACCOUNT_ID:"101-001-12345678-001"});
+engine.write=async entry=>{engine.writes=(engine.writes||[]).concat(entry);};
+
+assert.equal(__executionTest.EXECUTION_POLICY_VERSION,"CERTIFIED_MULTI_REVERSAL@1.0.0");
+assert.equal(__executionTest.positionDirection({long:{units:"1000"},short:{units:"0"}}),1);
+assert.equal(__executionTest.positionDirection({long:{units:"0"},short:{units:"-1000"}}),-1);
+assert.equal(__executionTest.requirementDirection({event:{direction:-1}}),-1);
+
+const candidates=[
+  {pair:"EUR_USD",event:{id:"eur-reverse",direction:-1}},
+  {pair:"GBP_USD",event:{id:"gbp-new",direction:1}},
+  {pair:"USD_JPY",event:{id:"jpy-match",direction:1}},
+];
+const positions=[
+  {instrument:"EUR_USD",long:{units:"1000"},short:{units:"0"}},
+  {instrument:"USD_JPY",long:{units:"1000"},short:{units:"0"}},
+];
+const classified=engine.classifyCandidates(candidates,positions);
+assert.deepEqual(classified.reversals.map(row=>row.pair),["EUR_USD"]);
+assert.deepEqual(classified.newEntries.map(row=>row.pair),["GBP_USD"]);
+assert.deepEqual(classified.matching.map(row=>row.pair),["USD_JPY"]);
+
+const state={pendingReversals:{}};
+await engine.claimReversals(classified.reversals,state);
+assert.equal(state.pendingReversals.EUR_USD.eventId,"eur-reverse");
+assert.equal((await storage.get("state")).pendingReversals.EUR_USD.direction,-1);
+
+const executed=[];
+engine.execute=async candidate=>{executed.push(candidate.pair);};
+await engine.processPendingReversals(state,"token","account");
+assert.deepEqual(executed,["EUR_USD"]);
+assert.equal(Object.keys(state.pendingReversals).length,0);
+assert.equal(engine.writes.at(-1).type,"REVERSAL_CLAIM_RESOLVED");
+
+await engine.claimReversals([{pair:"AUD_USD",event:{id:"aud-reverse",direction:1}}],state);
+engine.execute=async()=>{throw new Error("simulated transient execution failure");};
+await engine.processPendingReversals(state,"token","account");
+assert.equal(state.pendingReversals.AUD_USD.attempts,1);
+assert.match(state.pendingReversals.AUD_USD.lastError,/simulated transient/);
+assert.equal(engine.writes.at(-1).type,"REVERSAL_RETRY_PENDING");
+
+const closed=[];
+engine.closePosition=async pair=>{closed.push(pair);return{id:`close-${pair}`};};
+engine.decisionContext=()=>({strategy:"NAI",timeframe:"M5"});
+const requirements={
+  EUR_USD:{pair:"EUR_USD",event:{id:"eur-event",direction:-1}},
+  GBP_USD:{pair:"GBP_USD",event:{id:"gbp-event",direction:-1}},
+};
+const opposingPositions=[
+  {instrument:"EUR_USD",long:{units:"1000"},short:{units:"0"}},
+  {instrument:"GBP_USD",long:{units:"1000"},short:{units:"0"}},
+];
+await engine.reconcile(requirements,"token","account",{events:{}},{strategy:"NAI",timeframe:"M5",htlLength:50,filter:1.5},opposingPositions,new Set(["EUR_USD"]));
+assert.deepEqual(closed,["GBP_USD"],"reversal pairs must bypass generic close-only reconciliation");
+
+engine.ensureAiTelemetry=async()=>({integrationVersion:"test"});
+const status=await engine.status();
+assert.equal(status.armed,true);
+assert.equal(status.executionCertification,"ARMED_PRIVATE_USER");
+assert.equal(status.executionPolicy,"CERTIFIED_MULTI_REVERSAL@1.0.0");
+assert.equal(status.reconciliationCadence,"EVERY_CRON_HEARTBEAT");
+
+console.log("Certified multi-reversal execution, durable recovery, reconciliation exclusion, and armed status verified.");
