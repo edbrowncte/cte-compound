@@ -1,0 +1,59 @@
+name: Certify registered Horizon analytics
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+    inputs:
+      run_live_replay:
+        description: Replay the saved 168-row record against OANDA history
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: certify-registered-horizon-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies and hydrate checksum-verified source
+        run: npm ci
+      - name: Run complete repository and registered-Horizon certification
+        run: npm run check
+
+  live-saved-record-replay:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_live_replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require live OANDA credential
+        run: test -n "$OANDA_API_KEY" || { echo "OANDA_API_KEY is required for the saved-record replay"; exit 1; }
+      - name: Install and hydrate
+        run: npm ci
+      - name: Replay all 168 registered rows
+        run: npm run certify:horizon-live
