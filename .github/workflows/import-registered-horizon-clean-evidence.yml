@@ -1,0 +1,68 @@
+name: Import registered Horizon clean evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  import:
+    if: github.head_ref == 'repair/registered-horizon-analytical-certification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: repair/registered-horizon-analytical-certification
+          fetch-depth: 1
+      - name: Download immutable certification evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/${{ github.repository }}/actions/artifacts/8914001768/zip > /tmp/registered-horizon-certification-evidence.zip
+          echo '444a1226b70460d51d9c0a3e5c09f1de5f9f976878c4a62ab384b318f868281c  /tmp/registered-horizon-certification-evidence.zip' | sha256sum -c -
+          mkdir -p /tmp/evidence test/fixtures
+          unzip -q /tmp/registered-horizon-certification-evidence.zip -d /tmp/evidence
+      - name: Verify and install clean evidence
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFile,copyFile} from 'node:fs/promises';
+          import {createHash} from 'node:crypto';
+          import {gunzipSync} from 'node:zlib';
+          const hash=value=>createHash('sha256').update(value).digest('hex');
+          const base='/tmp/evidence/';
+          const manifest=JSON.parse(await readFile(base+'registered-horizon-clean-manifest.json','utf8'));
+          const gzip=await readFile(base+'registered-horizon-clean-candles.json.gz');
+          const raw=gunzipSync(gzip);
+          const performance=await readFile(base+'registered-horizon-clean-performance.json');
+          if(hash(gzip)!==manifest.candleSnapshotGzipSha256)throw new Error('CLEAN_GZIP_HASH_MISMATCH');
+          if(hash(raw)!==manifest.candleSnapshotSha256)throw new Error('CLEAN_CANDLE_HASH_MISMATCH');
+          if(hash(performance)!==manifest.cleanPerformanceSha256)throw new Error('CLEAN_PERFORMANCE_HASH_MISMATCH');
+          await copyFile(base+'registered-horizon-clean-candles.json.gz','test/fixtures/registered-horizon-clean-candles.json.gz');
+          await copyFile(base+'registered-horizon-clean-performance.json','test/fixtures/registered-horizon-clean-performance.json');
+          await copyFile(base+'registered-horizon-clean-manifest.json','test/fixtures/registered-horizon-clean-manifest.json');
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify frozen clean snapshot before commit
+        run: |
+          npm ci
+          node --test test/registered-clean-snapshot.test.js
+      - name: Commit authenticated evidence to certification branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f test/fixtures/registered-horizon-clean-candles.json.gz
+          git add test/fixtures/registered-horizon-clean-performance.json test/fixtures/registered-horizon-clean-manifest.json
+          git diff --cached --quiet || git commit -m 'certification: freeze clean 28-pair Horizon benchmark'
+          git push origin HEAD:repair/registered-horizon-analytical-certification
