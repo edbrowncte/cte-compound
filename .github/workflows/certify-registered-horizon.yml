@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       run_live_replay:
-        description: Replay the saved 168-row record against OANDA history
+        description: Replay the saved 168-row record through the deployed read-only Worker proxy
         required: false
         type: boolean
         default: false
@@ -44,16 +44,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
+      CERTIFICATION_WORKER_ORIGIN: https://cte-compound.thetestamony.workers.dev
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Require read-only OANDA credential
-        run: test -n "$OANDA_API_KEY" || { echo "OANDA_API_KEY repository secret is not configured"; exit 1; }
       - name: Install and hydrate checksum-verified source
         run: npm ci
-      - name: Replay all 168 registered gross-performance rows
-        run: npm run certify:horizon-live
+      - name: Replay all 168 registered gross-performance rows through the GET-only candle proxy
+        run: node scripts/replay-registered-horizon-via-worker.mjs
