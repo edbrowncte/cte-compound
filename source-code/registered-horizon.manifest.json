@@ -1,0 +1,11 @@
+{
+  "format": "cte-compound-registered-horizon-manifest-v1",
+  "payload_sha256": "304ad92480c7f6908e2f09a75ec7830431b4299ffdf70f72828fdc3170300c40",
+  "archive_sha256": "4d81cc223806fd1d2e2335e9a513be3d33b1af35f7caad93ea52d4cc046ac04e",
+  "encoded_sha256": "a429824a93a1d783484ed5d85a627c337199c7e1a239fa04673943acbbd9492e",
+  "part_count": 5,
+  "file_hashes": {
+    "src/horizon-strategy-v1.js": "5dbf45b24ceff1f1d740dbf6aed7a17012f43210d79506d5a930567b6b391814",
+    "test/fixtures/registered-horizon-performance.json": "dfd1800377824ce726f957361fdc52a4943d01875ff7c6339924f6862e68ccf4"
+  }
+}

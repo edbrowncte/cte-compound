@@ -1,0 +1,37 @@
+{
+  "format": "legacy-horizon-contamination-evidence-v1",
+  "sourceFiles": {
+    "tradeLedgerAudit": {
+      "name": "trade-ledger-audit-NZDCAD-M1-2026-07-28T03-51-28-785Z.json",
+      "sha256": "fed5322c24616babb5126c28ecf66e68bd439d0b5eb56408dbbe9c23a16f4bdd",
+      "rows": 6431
+    },
+    "performanceExport": {
+      "name": "28-pair-six-strategy-performance-NZDCAD-M1-2026-07-28T03-51-41-336Z.json",
+      "sha256": "45d96f727b33b03e3e45bf650118f54920f2dcd31d7a2e9c0424464fdc3b5cef",
+      "rows": 168
+    },
+    "integratedTerminal": {
+      "name": "gemini-code-1785017016235-integrated(1).html",
+      "sha256": "add9ec0632d18a6c8967a8577ea3424489ffe6456bed5c8988a4a68385309fb8"
+    }
+  },
+  "crossInstrumentFinding": {
+    "nzdUsdTrades": 226,
+    "nzdCadTrades": 250,
+    "exactDuplicateTradeTuples": 198,
+    "duplicateTupleFields": [
+      "Strategy",
+      "Side",
+      "Signal time",
+      "Entry time",
+      "Entry price",
+      "Exit time",
+      "Exit price"
+    ],
+    "nzdUsdObservedPriceRange": [0.57675, 0.81828],
+    "nzdCadObservedPriceRange": [0.81317, 0.81828],
+    "verdict": "REJECTED_DATA_CONTAMINATION",
+    "reason": "198 NZD/USD trades are exact NZD/CAD trade-tuple duplicates and NZD/USD contains NZD/CAD-like prices near 0.815 alongside actual NZD/USD prices near 0.577. Reproducing the legacy totals would reproduce cross-instrument contamination rather than certify the strategy."
+  }
+}

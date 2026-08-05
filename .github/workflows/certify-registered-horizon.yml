@@ -1,0 +1,64 @@
+name: Certify registered Horizon analytics
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+    inputs:
+      rerun_legacy_delta_audit:
+        description: Re-run the rejected legacy 168-row comparison through the deployed GET-only Worker proxy
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: certify-registered-horizon-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies and hydrate checksum-verified source
+        run: npm ci
+      - name: Run complete repository and clean 168-row Horizon certification
+        run: npm run check
+
+  legacy-forensic-delta-audit:
+    if: github.event_name == 'workflow_dispatch' && inputs.rerun_legacy_delta_audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CERTIFICATION_WORKER_ORIGIN: https://cte-compound.thetestamony.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install and hydrate checksum-verified source
+        run: npm ci
+      - name: Re-run contaminated legacy benchmark delta audit
+        run: node scripts/replay-registered-horizon-via-worker.mjs
+      - name: Preserve forensic delta evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registered-horizon-legacy-delta-audit
+          path: artifacts/
+          if-no-files-found: error
