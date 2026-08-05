@@ -53,12 +53,12 @@ jobs:
           cache: npm
       - name: Install and hydrate checksum-verified source
         run: npm ci
-      - name: Replay all 168 registered gross-performance rows through the GET-only candle proxy
+      - name: Replay legacy record and create clean certification snapshot
         run: node scripts/replay-registered-horizon-via-worker.mjs
-      - name: Preserve complete numerical replay audit
+      - name: Preserve replay audit, clean candles, performance and manifest
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: registered-horizon-live-replay-audit
-          path: artifacts/registered-horizon-live-replay.json
-          if-no-files-found: warn
+          name: registered-horizon-certification-evidence
+          path: artifacts/
+          if-no-files-found: error
