@@ -1,0 +1,50 @@
+name: Repack certified analytical runtime
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+
+jobs:
+  repack:
+    if: github.head_ref == 'repair/registered-horizon-analytical-certification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: repair/registered-horizon-analytical-certification
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Restore prior verified implementation bundle
+        run: |
+          git checkout 72fb37efc081e35172e11af4b73d5ba52b144652 -- \
+            source-code/registered-horizon-implementation.manifest.json \
+            source-code/registered-horizon-implementation.gz.b64.part-00 \
+            source-code/registered-horizon-implementation.gz.b64.part-01 \
+            source-code/registered-horizon-implementation.gz.b64.part-02
+          node scripts/hydrate-registered-horizon.mjs
+      - name: Apply exact certification disclosure and repack
+        run: node scripts/repack-certified-runtime.mjs
+      - name: Verify regenerated bundle and complete repository gate
+        run: |
+          node scripts/hydrate-registered-horizon.mjs
+          npm ci
+          npm run check
+      - name: Commit byte-exact regenerated bundle
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add source-code/registered-horizon-implementation.manifest.json source-code/registered-horizon-implementation.gz.b64.part-*.part source-code/registered-horizon-implementation.gz.b64.part-* || true
+          git add source-code/registered-horizon-implementation.manifest.json source-code/registered-horizon-implementation.gz.b64.part-00 source-code/registered-horizon-implementation.gz.b64.part-01 source-code/registered-horizon-implementation.gz.b64.part-02
+          git diff --cached --quiet || git commit -m 'certification: refresh analytical runtime disclosure bundle'
+          git push origin HEAD:repair/registered-horizon-analytical-certification
