@@ -21,9 +21,8 @@ checks(engine,[
   [/OPTIMIZER_VERSION\s*=\s*6/,"optimizer generation 6"],
   [/OPPOSITE STRATEGY EVENT · NEXT OPEN/,"registered trade timing"],
   [/spreadAdjustedPerformance:\{status:"SEPARATE_NOT_COMPUTED"/,"gross/spread separation"],
-  [/BLOCKED_PENDING_USER_DEPLOYMENT_APPROVAL/,"execution certification block"],
-  [/async reconcile\(/,"reconciliation override"],
-  [/async execute\(/,"execution override"],
+  [/armed:true/,"armed private runtime"],
+  [/executionCertification:"ARMED_PRIVATE_USER"/,"private execution certification"],
   [/NEMOTRON_CANDIDATE_TOOL@2\.0\.0/,"Nemotron structured integration"],
   [/transactions\/sinceid/,"lost-response transaction synchronization"],
   [/pendingOrders/,"durable pending-order state"],
@@ -31,9 +30,10 @@ checks(engine,[
 ]);
 
 const inherited=await readFile(new URL("../src/engine-nemotron-base.js",import.meta.url),"utf8");
+checks(inherited,[[/async reconcile\(/,"inherited reconciliation"],[/async execute\(/,"inherited automated execution"]]);
 const registeredLayer=engine.replace(inherited,"");
-for(const forbidden of [/ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK/,/POST_CROSS_STRATEGY_QUALIFICATION/]){
+for(const forbidden of [/ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK/,/POST_CROSS_STRATEGY_QUALIFICATION/,/BLOCKED_PENDING_/,/ANALYTICAL_CERTIFICATION_BLOCK/,/PENDING_USER_DEPLOYMENT_APPROVAL/]){
   if(forbidden.test(registeredLayer))throw new Error(`Forbidden registered analytical contract: ${forbidden}`);
 }
 
-console.log("Registered six-strategy Horizon analytical, performance, deployment-block, OANDA, ledger, and Nemotron boundaries verified.");
+console.log("Registered six-strategy Horizon analytical, performance, armed private execution, OANDA, ledger, and Nemotron boundaries verified.");
