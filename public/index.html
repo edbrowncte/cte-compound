@@ -178,7 +178,7 @@
     }
     .app-tabs { display:flex; gap:6px; margin-top:10px; border:1px solid var(--line2); background:#0c1118; padding:6px; overflow:auto; }
     .app-tab[aria-selected="true"] { color:#10141b; background:var(--accent); border-color:var(--accent); }
-    .tab-panel[hidden] { display:none; }
+    [hidden], .tab-panel[hidden] { display: none !important; }
     .event-controls { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
     .event-chart-stage { height:360px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); position:relative; background:#080c12; }
     .event-chart-toolbar { padding:10px 14px; border-top:1px solid var(--line); }
@@ -529,6 +529,7 @@
           <div class="chat-input-area">
             <input type="text" id="chatInput" placeholder="Ask Nemotron anything or issue a command..." autocomplete="off">
             <button id="voiceToggle" type="button" class="voice-btn" aria-pressed="false">Voice TTS off</button>
+            <button id="micToggle" type="button" class="voice-btn" aria-pressed="false" title="Speech to Text (Voice input)">🎤 Mic off</button>
             <button id="sendChat" type="button" class="send-btn">Send</button>
           </div>
         </div>
@@ -1652,6 +1653,68 @@
     el("sendChat").addEventListener("click",submitChat);
     el("chatInput").addEventListener("keydown",event=>{if(event.key==="Enter")submitChat();});
     el("voiceToggle").addEventListener("click",event=>{const btn=event.currentTarget,active=btn.getAttribute("aria-pressed")==="true";btn.setAttribute("aria-pressed",String(!active));btn.textContent=!active?"Voice TTS on":"Voice TTS off";btn.classList.toggle("active",!active);});
+
+    // Speech-to-Text (Microphone Toggle) using Web Speech API
+    let recognition = null;
+    const hasSpeech = "webkitSpeechRecognition" in window || "SpeechRecognition" in window;
+    if (hasSpeech) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        const btn = el("micToggle");
+        btn.setAttribute("aria-pressed", "true");
+        btn.textContent = "🎤 Listening…";
+        btn.classList.add("active");
+      };
+
+      recognition.onend = () => {
+        const btn = el("micToggle");
+        btn.setAttribute("aria-pressed", "false");
+        btn.textContent = "🎤 Mic off";
+        btn.classList.remove("active");
+      };
+
+      recognition.onerror = event => {
+        console.error("Speech recognition error:", event.error);
+        if (recognition) {
+          try { recognition.stop(); } catch(e) {}
+        }
+      };
+
+      recognition.onresult = event => {
+        let finalTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (finalTranscript) {
+          const input = el("chatInput");
+          const space = input.value && !input.value.endsWith(" ") ? " " : "";
+          input.value += space + finalTranscript.trim();
+        }
+      };
+
+      el("micToggle").addEventListener("click", () => {
+        const pressed = el("micToggle").getAttribute("aria-pressed") === "true";
+        if (pressed) {
+          recognition.stop();
+        } else {
+          recognition.start();
+        }
+      });
+    } else {
+      const btn = el("micToggle");
+      if (btn) {
+        btn.disabled = true;
+        btn.title = "Speech recognition is not supported in this browser";
+      }
+    }
+
     document.querySelectorAll(".suggestion-chip").forEach(chip=>{chip.addEventListener("click",event=>{el("chatInput").value=event.currentTarget.textContent;submitChat();});});
     el("applyConfiguration").addEventListener("click",applyConfiguration);
     el("computeConfiguration").addEventListener("click",computeConfiguration);

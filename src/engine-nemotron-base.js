@@ -106,11 +106,61 @@ export class HtlEngine extends HorizonEngine {
 
   async runChatLoop(messages){
     const maxIterations=5,tools=[
-      {name:"getSystemStatus",description:"Fetch positions, configurations, pending reversals, and last completed candle status.",parameters:{type:"object",properties:{}}},
-      {name:"getTradingLedger",description:"Pull recent trade rows and ledger records.",parameters:{type:"object",properties:{limit:{type:"integer",minimum:1,maximum:100,default:20}}}},
-      {name:"getOptimizerRecords",description:"Load server-managed causal optimizer records for pair/timeframe configurations.",parameters:{type:"object",properties:{}}},
-      {name:"getAccountSummary",description:"Retrieve Oanda live account summary details (NAV, balance, margin, available units).",parameters:{type:"object",properties:{}}},
-      {name:"updateEngineConfig",description:"Directly adjust strategy configurations (timeframe, strategy, length, filters, decisionMode).",parameters:{type:"object",properties:{strategy:{type:"string",enum:["ASSET","DARE_N","DARE","COMBO","NAI","APEX"]},timeframe:{type:"string",enum:["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]},htlLength:{type:"integer",minimum:3,maximum:200},filter:{type:"number",minimum:0,maximum:10},decisionMode:{type:"string",enum:["EVENT","MTF","COMBINED"]}},required:["strategy","timeframe","htlLength","filter","decisionMode"]}}
+      {
+        type:"function",
+        function:{
+          name:"getSystemStatus",
+          description:"Fetch positions, configurations, pending reversals, and last completed candle status.",
+          parameters:{type:"object",properties:{}}
+        }
+      },
+      {
+        type:"function",
+        function:{
+          name:"getTradingLedger",
+          description:"Pull recent trade rows and ledger records.",
+          parameters:{
+            type:"object",
+            properties:{
+              limit:{type:"integer",description:"Number of ledger records to pull (between 1 and 100, defaults to 20)."}
+            }
+          }
+        }
+      },
+      {
+        type:"function",
+        function:{
+          name:"getOptimizerRecords",
+          description:"Load server-managed causal optimizer records for pair/timeframe configurations.",
+          parameters:{type:"object",properties:{}}
+        }
+      },
+      {
+        type:"function",
+        function:{
+          name:"getAccountSummary",
+          description:"Retrieve Oanda live account summary details (NAV, balance, margin, available units).",
+          parameters:{type:"object",properties:{}}
+        }
+      },
+      {
+        type:"function",
+        function:{
+          name:"updateEngineConfig",
+          description:"Directly adjust strategy configurations (timeframe, strategy, length, filters, decisionMode).",
+          parameters:{
+            type:"object",
+            properties:{
+              strategy:{type:"string",enum:["ASSET","DARE_N","DARE","COMBO","NAI","APEX"]},
+              timeframe:{type:"string",enum:["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]},
+              htlLength:{type:"integer",description:"HTL period length, between 3 and 200."},
+              filter:{type:"number",description:"Filter size, between 0 and 10."},
+              decisionMode:{type:"string",enum:["EVENT","MTF","COMBINED"]}
+            },
+            required:["strategy","timeframe","htlLength","filter","decisionMode"]
+          }
+        }
+      }
     ];
     const currentMessages=[...messages];
     for(let iter=0;iter<maxIterations;iter++){
@@ -221,7 +271,21 @@ export class HtlEngine extends HorizonEngine {
           {role:"system",content:"Choose exactly one already-eligible trading candidate. Do not create a pair, alter direction, or reject all candidates. Use the selectCandidate tool exactly once. Rank by causal optimizer evidence, drawdown, sample size, multi-timeframe confidence, and event recency."},
           {role:"user",content:JSON.stringify(table)},
         ],
-        tools:[{name:"selectCandidate",description:"Return the single eligible currency pair selected by Nemotron.",parameters:{type:"object",additionalProperties:false,properties:{pair:{type:"string",enum:pairs},reason:{type:"string",maxLength:240}},required:["pair","reason"]}}],
+        tools:[{
+          type:"function",
+          function:{
+            name:"selectCandidate",
+            description:"Return the single eligible currency pair selected by Nemotron.",
+            parameters:{
+              type:"object",
+              properties:{
+                pair:{type:"string",enum:pairs},
+                reason:{type:"string",description:"Short textual reason (max 240 chars)."}
+              },
+              required:["pair","reason"]
+            }
+          }
+        }],
         tool_choice:"required",parallel_tool_calls:false,temperature:0,max_completion_tokens:220,
       };
       const result=await this.env.AI.run(AI_MODEL,request),extracted=extractNemotronSelection(result),returnedPair=normalizePair(extracted.args?.pair),selected=candidates.find(row=>normalizePair(row.pair)===returnedPair),latencyMs=Date.now()-started;
