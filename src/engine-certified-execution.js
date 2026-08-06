@@ -1,5 +1,7 @@
 import { HtlEngine as CertifiedAnalyticsEngine } from "./engine.js";
 import { PAIRS, TIMEFRAMES, OPTIMIZER_VERSION, currentOptimizer, candles } from "./horizon-platform-engine.js";
+import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
+import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
 import {
   optimizedOptimizeNext,
   optimizedComputeConfiguration,
@@ -214,6 +216,24 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
     if(this.running)return;
     this.running=true;
     let state=(await this.ctx.storage.get("state"))||{events:{},initialized:false};
+
+    if(state.strategyEngineVersion!==STRATEGY_ENGINE_VERSION){
+      Object.assign(state,{
+        events:{},directions:null,requirements:null,lastCandle:null,
+        mtf:{},mtfDecisionDirections:{},mtfRotation:0,initialized:false,
+        reconciledCandle:null,
+        strategyEngineVersion:STRATEGY_ENGINE_VERSION,
+        performanceVersion:REGISTERED_PERFORMANCE_VERSION,
+      });
+      await this.ctx.storage.put("state",state);
+      await this.write({
+        type:"ANALYTICAL_ENGINE_MIGRATION",
+        strategyEngineVersion:STRATEGY_ENGINE_VERSION,
+        performanceVersion:REGISTERED_PERFORMANCE_VERSION,
+        message:"Engine state reset for strategy version change (reconciled from engine-certified-execution.js — engine.js's original migration path is unreachable due to tick() override without super call)",
+      },false);
+    }
+
     try{
       const config=await this.config();
       const fingerprint=configFingerprint(config);
@@ -228,6 +248,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         state.events={};
         state.lastCandle=null;
         state.initialized=false;
+        state.reconciledCandle=null;
       }
 
       const{token,accountId:configured}=credentials(this.env);
@@ -261,8 +282,11 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
           state.requirements=Object.fromEntries(rows.map(row=>[row.pair,row]));
           state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));
         }
-        const positions=await this.loadPositions(token,accountId);
-        await this.reconcile(state.requirements,token,accountId,state,config,positions);
+        if(state.reconciledCandle!==lastCandle){
+          const positions=await this.loadPositions(token,accountId);
+          await this.reconcile(state.requirements,token,accountId,state,config,positions);
+          state.reconciledCandle=lastCandle;
+        }
         state.lastRun=new Date().toISOString();
         state.lastError=null;
         return;
@@ -277,6 +301,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
       if(!state.initialized){
         await this.reconcile(requirements,token,accountId,state,config,positions);
+        state.reconciledCandle=lastCandle;
         state.events=Object.fromEntries(rows.map(row=>[row.pair,row.event.id]));
         state.mtfDecisionDirections=Object.fromEntries(mtfNow.map(row=>[row.pair,row.event.direction]));
         state.initialized=true;
@@ -296,6 +321,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         const reversalPairs=new Set(reversals.map(candidate=>candidate.pair));
 
         await this.reconcile(requirements,token,accountId,state,config,positions,reversalPairs);
+        state.reconciledCandle=lastCandle;
 
         if(reversals.length){
           await this.claimReversals(reversals,state);
