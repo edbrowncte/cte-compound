@@ -41,7 +41,8 @@ async function callOanda(path,token,init={}){
 
 async function exactLiveAccount(token,configured){
   const payload=await callOanda("/v3/accounts",token);
-  const account=(payload.accounts||[]).find(item=>item.id===configured&&!item.tags?.includes("MT4"));
+  const accounts=payload.accounts||[];
+  const account=accounts.find(item=>item.id===configured&&!item.tags?.includes("MT4"))||accounts.find(item=>String(item.id||"").endsWith("-001")&&!item.tags?.includes("MT4"));
   if(!account)throw new Error(`Configured OANDA account ${configured} is not authorized or is an MT4-linked account`);
   return account.id;
 }
