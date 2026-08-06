@@ -222,6 +222,12 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         state.mtf={};
         state.mtfRotation=0;
         state.mtfFingerprint=fingerprint;
+        // Clean stale strategy requirements, directions, events, candle markers, and initialized flag to prevent premature position closures on configuration change
+        state.requirements=null;
+        state.directions=null;
+        state.events={};
+        state.lastCandle=null;
+        state.initialized=false;
       }
 
       const{token,accountId:configured}=credentials(this.env);
