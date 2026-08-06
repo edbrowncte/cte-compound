@@ -58,42 +58,6 @@ export const __nemotronTest=Object.freeze({normalizePair,candidateTable,extractN
 export class HtlEngine extends HorizonEngine {
   async fetch(request) {
     const path=new URL(request.url).pathname;
-    if(path==="/chat"&&request.method==="GET"){
-      const history=(await this.ctx.storage.get("chat_history"))||[];
-      return response({history});
-    }
-    if(path==="/chat"&&request.method==="DELETE"){
-      await this.ctx.storage.delete("chat_history");
-      return response({ok:true});
-    }
-    if(path==="/chat"&&request.method==="POST"){
-      try{
-        const body=await request.json().catch(()=>({})),userMessage=String(body.message||"").trim(),playVoice=Boolean(body.voice);
-        if(!userMessage)return response({error:"Empty message"},400);
-        const history=(await this.ctx.storage.get("chat_history"))||[];
-        history.push({role:"user",content:userMessage});
-        const maxHistoryWindow=12,historyWindow=history.slice(-maxHistoryWindow);
-        const systemPrompt={
-          role:"system",
-          content:"You are Nemotron 3 Super, an advanced Personal Copilot, Trading Assistant, and Personal Agent for Criterion Echelon HTL Asset Analytical Compound (cte-compound). You help the user optimize their platform's performance and Oanda Account's bottom line. You have direct agentic access to system status, live account details, ledger logs, and optimizer configurations. Be concise, highly professional, analytical, and supportive of the user's entrepreneurial goals. Do not invent pair directions, status values, or configurations. If you perform an action (like updateEngineConfig), explain your choice clearly to the user."
-        };
-        const messages=[systemPrompt,...historyWindow];
-        if(!this.env.AI){
-          const reply="I am currently running in fallback mode because the Workers AI binding is unavailable.";
-          history.push({role:"assistant",content:reply});
-          await this.ctx.storage.put("chat_history",history);
-          return response({content:reply,audio:null});
-        }
-        const loopResult=await this.runChatLoop(messages);
-        history.push({role:"assistant",content:loopResult.content});
-        await this.ctx.storage.put("chat_history",history);
-        let audioBase64=null;
-        if(playVoice){audioBase64=await this.synthesizeSpeech(loopResult.content);}
-        return response({content:loopResult.content,audio:audioBase64});
-      }catch(err){
-        return response({error:String(err?.message||err)},500);
-      }
-    }
     if(path==="/optimizer"&&request.method==="GET")return response({version:OPTIMIZER_VERSION,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,records:currentOptimizer(await this.ctx.storage.get("optimizer"))});
     if(path==="/compute"&&request.method==="POST"){try{return response(await this.computeConfiguration(await request.json()));}catch(error){return response({error:String(error?.message||error),stage:error?.stage||"compute"},Number(error?.status)||500);}}
     if(path==="/manual-trade-action"&&request.method==="POST"){
@@ -102,140 +66,6 @@ export class HtlEngine extends HorizonEngine {
       await this.write({...entry,calculationVersion:entry.calculationVersion||H.VERSION,qualificationVersion:entry.qualificationVersion||S.VERSION},false);return response({ok:true});
     }
     return super.fetch(request);
-  }
-
-  async runChatLoop(messages){
-    const maxIterations=5,tools=[
-      {
-        type:"function",
-        function:{
-          name:"getSystemStatus",
-          description:"Fetch positions, configurations, pending reversals, and last completed candle status.",
-          parameters:{type:"object",properties:{}}
-        }
-      },
-      {
-        type:"function",
-        function:{
-          name:"getTradingLedger",
-          description:"Pull recent trade rows and ledger records.",
-          parameters:{
-            type:"object",
-            properties:{
-              limit:{type:"integer",description:"Number of ledger records to pull (between 1 and 100, defaults to 20)."}
-            }
-          }
-        }
-      },
-      {
-        type:"function",
-        function:{
-          name:"getOptimizerRecords",
-          description:"Load server-managed causal optimizer records for pair/timeframe configurations.",
-          parameters:{type:"object",properties:{}}
-        }
-      },
-      {
-        type:"function",
-        function:{
-          name:"getAccountSummary",
-          description:"Retrieve Oanda live account summary details (NAV, balance, margin, available units).",
-          parameters:{type:"object",properties:{}}
-        }
-      },
-      {
-        type:"function",
-        function:{
-          name:"updateEngineConfig",
-          description:"Directly adjust strategy configurations (timeframe, strategy, length, filters, decisionMode).",
-          parameters:{
-            type:"object",
-            properties:{
-              strategy:{type:"string",enum:["ASSET","DARE_N","DARE","COMBO","NAI","APEX"]},
-              timeframe:{type:"string",enum:["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]},
-              htlLength:{type:"integer",description:"HTL period length, between 3 and 200."},
-              filter:{type:"number",description:"Filter size, between 0 and 10."},
-              decisionMode:{type:"string",enum:["EVENT","MTF","COMBINED"]}
-            },
-            required:["strategy","timeframe","htlLength","filter","decisionMode"]
-          }
-        }
-      }
-    ];
-    const currentMessages=[...messages];
-    for(let iter=0;iter<maxIterations;iter++){
-      const options={messages:currentMessages,tools,tool_choice:"auto",parallel_tool_calls:false,temperature:0.2};
-      let result;
-      if(this.env.AI_GATEWAY_URL){
-        const response=await fetch(this.env.AI_GATEWAY_URL,{method:"POST",headers:{"Content-Type":"application/json","x-session-affinity":"cte-compound-session"},body:JSON.stringify(options)});
-        result=await response.json();
-      }else{
-        result=await this.env.AI.run(AI_MODEL,options);
-      }
-      const message=result?.choices?.[0]?.message||result?.message||{};
-      const content=message.content||result?.result||"";
-      currentMessages.push({role:"assistant",content:content||null,tool_calls:message.tool_calls||result?.tool_calls||null});
-      const toolCalls=message.tool_calls||result?.tool_calls||[];
-      if(toolCalls.length===0)return{content,messages:currentMessages};
-      for(const call of toolCalls){
-        const name=call.name||call.function?.name;
-        let args=call.arguments||call.function?.arguments||{};
-        if(typeof args==="string"){try{args=JSON.parse(args);}catch{args={};}}
-        let toolResult;
-        try{
-          if(name==="getSystemStatus"){
-            toolResult=await this.status();
-          }else if(name==="getTradingLedger"){
-            const limit=Math.min(100,Math.max(1,Number(args.limit)||20)),index=(await this.ctx.storage.get("ledgerIndex"))||[],keys=index.slice(0,limit),records=keys.length?await this.ctx.storage.get(keys):new Map();
-            let rows=keys.map(k=>records.get(k)).filter(Boolean);
-            if(!rows.length){rows=((await this.ctx.storage.get("ledger"))||[]).slice(0,limit);}
-            toolResult=rows.map(r=>({time:r.time,type:r.type,pair:r.pair,strategy:r.strategy,direction:r.direction,units:r.units,price:r.price,realizedPL:r.realizedPL,message:r.message}));
-          }else if(name==="getOptimizerRecords"){
-            const records=(await this.ctx.storage.get("optimizer"))||{},active=currentOptimizer(records);
-            toolResult=Object.entries(active).map(([key,item])=>({dataset:key,computedAt:item.computedAt}));
-          }else if(name==="getAccountSummary"){
-            const token=String(this.env.OANDA_API_KEY||"").trim(),configured=String(this.env.OANDA_ACCOUNT_ID||"").trim();
-            if(token&&configured){
-              const accountsPayload=await fetch("https://api-fxtrade.oanda.com/v3/accounts",{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
-              const accountId=(accountsPayload.accounts||[]).find(a=>a.id===configured)?.id||configured;
-              const summaryPayload=await fetch(`https://api-fxtrade.oanda.com/v3/accounts/${accountId}/summary`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
-              const acc=summaryPayload.account||{};
-              toolResult={id:acc.id||accountId,alias:acc.alias||"",currency:acc.currency||"",balance:acc.balance||"0",NAV:acc.NAV||"0",marginAvailable:acc.marginAvailable||"0",marginUsed:acc.marginUsed||"0",openPositionCount:acc.openPositionCount||0,unrealizedPL:acc.unrealizedPL||"0"};
-            }else{
-              toolResult={error:"Oanda credentials unavailable"};
-            }
-          }else if(name==="updateEngineConfig"){
-            const normalized={strategy:args.strategy,timeframe:args.timeframe,htlLength:args.htlLength,filter:args.filter,decisionMode:args.decisionMode};
-            const updated=await this.configure(normalized);
-            toolResult={ok:true,message:"Engine configuration updated successfully",updated};
-          }else{
-            toolResult={error:`Unknown tool: ${name}`};
-          }
-        }catch(err){
-          toolResult={error:String(err?.message||err)};
-        }
-        currentMessages.push({role:"tool",name,tool_call_id:call.id||"call_local",content:JSON.stringify(toolResult)});
-      }
-    }
-    const lastMsg=currentMessages.at(-1);
-    return{content:lastMsg?.content||"Maximum tool-execution limit reached.",messages:currentMessages};
-  }
-
-  async synthesizeSpeech(text){
-    if(!this.env.AI)return null;
-    try{
-      const maxTextLength=200;
-      let cleanText=text.replace(/[*#`_]/g,"").trim();
-      if(cleanText.length>maxTextLength){cleanText=`${cleanText.slice(0,maxTextLength)}...`;}
-      const response=await this.env.AI.run("@cf/myshell-ai/melotts",{text:cleanText,speaker:"stella"});
-      if(response instanceof Response){const buffer=await response.arrayBuffer();return btoa(String.fromCharCode(...new Uint8Array(buffer)));}
-      if(response instanceof ArrayBuffer){return btoa(String.fromCharCode(...new Uint8Array(response)));}
-      if(response&&typeof response==="object"){const buffer=response.audio||response;if(buffer instanceof ArrayBuffer||ArrayBuffer.isView(buffer)){const view=ArrayBuffer.isView(buffer)?buffer:new Uint8Array(buffer);return btoa(String.fromCharCode(...view));}}
-      return null;
-    }catch(err){
-      console.error("Speech synthesis failed:",err);
-      return null;
-    }
   }
 
   async ensureAiTelemetry(){
@@ -273,21 +103,7 @@ export class HtlEngine extends HorizonEngine {
           {role:"system",content:"Choose exactly one already-eligible trading candidate. Do not create a pair, alter direction, or reject all candidates. Use the selectCandidate tool exactly once. Rank by causal optimizer evidence, drawdown, sample size, multi-timeframe confidence, and event recency."},
           {role:"user",content:JSON.stringify(table)},
         ],
-        tools:[{
-          type:"function",
-          function:{
-            name:"selectCandidate",
-            description:"Return the single eligible currency pair selected by Nemotron.",
-            parameters:{
-              type:"object",
-              properties:{
-                pair:{type:"string",enum:pairs},
-                reason:{type:"string",description:"Short textual reason (max 240 chars)."}
-              },
-              required:["pair","reason"]
-            }
-          }
-        }],
+        tools:[{name:"selectCandidate",description:"Return the single eligible currency pair selected by Nemotron.",parameters:{type:"object",additionalProperties:false,properties:{pair:{type:"string",enum:pairs},reason:{type:"string",maxLength:240}},required:["pair","reason"]}}],
         tool_choice:"required",parallel_tool_calls:false,temperature:0,max_completion_tokens:220,
       };
       const result=await this.env.AI.run(AI_MODEL,request),extracted=extractNemotronSelection(result),returnedPair=normalizePair(extracted.args?.pair),selected=candidates.find(row=>normalizePair(row.pair)===returnedPair),latencyMs=Date.now()-started;

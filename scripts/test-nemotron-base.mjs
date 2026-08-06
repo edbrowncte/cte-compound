@@ -28,7 +28,7 @@ assert.equal(selected.pair,"AUD_CAD");
 assert.equal(requestPayload.tool_choice,"required");
 assert.equal(requestPayload.parallel_tool_calls,false);
 assert.equal("response_format" in requestPayload,false,"unsupported free-form JSON mode must not be used");
-assert.deepEqual(requestPayload.tools[0].function.parameters.properties.pair.enum,["AUD_CAD","NZD_CAD"]);
+assert.deepEqual(requestPayload.tools[0].parameters.properties.pair.enum,["AUD_CAD","NZD_CAD"]);
 let telemetry=await storage.get("aiTelemetry");
 assert.equal(telemetry.integrationVersion,__nemotronTest.AI_ORCHESTRATION_VERSION);
 assert.equal(telemetry.totalInvocations,1);
