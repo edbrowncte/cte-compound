@@ -35,6 +35,7 @@ import {
   candles,
   candlesForRange,
   currentEvent,
+  currentOptimizer,
 } from "./horizon-platform-engine.js";
 
 const responseError = (message, status = 400) => Object.assign(new Error(message), { status });
