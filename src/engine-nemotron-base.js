@@ -187,18 +187,20 @@ export class HtlEngine extends HorizonEngine {
             toolResult=await this.status();
           }else if(name==="getTradingLedger"){
             const limit=Math.min(100,Math.max(1,Number(args.limit)||20)),index=(await this.ctx.storage.get("ledgerIndex"))||[],keys=index.slice(0,limit),records=keys.length?await this.ctx.storage.get(keys):new Map();
-            toolResult=keys.map(k=>records.get(k)).filter(Boolean);
-            if(!toolResult.length){toolResult=((await this.ctx.storage.get("ledger"))||[]).slice(0,limit);}
+            let rows=keys.map(k=>records.get(k)).filter(Boolean);
+            if(!rows.length){rows=((await this.ctx.storage.get("ledger"))||[]).slice(0,limit);}
+            toolResult=rows.map(r=>({time:r.time,type:r.type,pair:r.pair,strategy:r.strategy,direction:r.direction,units:r.units,price:r.price,realizedPL:r.realizedPL,message:r.message}));
           }else if(name==="getOptimizerRecords"){
             const records=(await this.ctx.storage.get("optimizer"))||{},active=currentOptimizer(records);
-            toolResult=Object.entries(active).map(([key,item])=>({dataset:key,stamp:item.stamp,computedAt:item.computedAt,config:item.config}));
+            toolResult=Object.entries(active).map(([key,item])=>({dataset:key,computedAt:item.computedAt}));
           }else if(name==="getAccountSummary"){
             const token=String(this.env.OANDA_API_KEY||"").trim(),configured=String(this.env.OANDA_ACCOUNT_ID||"").trim();
             if(token&&configured){
               const accountsPayload=await fetch("https://api-fxtrade.oanda.com/v3/accounts",{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
               const accountId=(accountsPayload.accounts||[]).find(a=>a.id===configured)?.id||configured;
               const summaryPayload=await fetch(`https://api-fxtrade.oanda.com/v3/accounts/${accountId}/summary`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
-              toolResult=summaryPayload.account||summaryPayload;
+              const acc=summaryPayload.account||{};
+              toolResult={id:acc.id||accountId,alias:acc.alias||"",currency:acc.currency||"",balance:acc.balance||"0",NAV:acc.NAV||"0",marginAvailable:acc.marginAvailable||"0",marginUsed:acc.marginUsed||"0",openPositionCount:acc.openPositionCount||0,unrealizedPL:acc.unrealizedPL||"0"};
             }else{
               toolResult={error:"Oanda credentials unavailable"};
             }
