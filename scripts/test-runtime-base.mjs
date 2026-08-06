@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
 import worker from "../src/worker.js";
-import {HtlEngine} from "../src/engine.js";
+import {HtlEngine} from "../src/worker.js";
 import {readFile} from "node:fs/promises";
 
-const accountId="001-001-1234567-001",token="x".repeat(32),origin="https://cte.example";
-const browser=(path,init={})=>new Request(origin+path,{...init,headers:{Origin:origin,"Sec-Fetch-Site":"same-origin",...(init.headers||{})}});
-let capturedOrder=null,closed=[];
+const accountId="001-001-1234567-001",token="x".repeat(32),origin="https://cte.example",accessToken="test-access-token-runtime-fixture-0123456789abcdef";
+const browser=(path,init={},authenticated=true)=>new Request(origin+path,{...init,headers:{Origin:origin,"Sec-Fetch-Site":"same-origin",...(authenticated?{Authorization:`Bearer ${accessToken}`}:{}),...(init.headers||{})}});
+let capturedOrder=null,closed=[],upstreamCalls=0;
 const originalFetch=globalThis.fetch;
+// Node/undici requires duplex:"half" when constructing Requests with stream bodies; the Workers runtime does not.
+const NativeRequest=globalThis.Request;
+globalThis.Request=class extends NativeRequest{constructor(input,init={}){if(init&&init.body&&!("duplex" in init))init={...init,duplex:"half"};super(input,init);}};
 globalThis.fetch=async(url,init={})=>{
   const value=String(url);
+  if(value.startsWith("https://api-fxtrade.oanda.com"))upstreamCalls++;
   if(value.endsWith("/v3/accounts"))return new Response(JSON.stringify({accounts:[{id:accountId,tags:[]}]}),{status:200});
   if(value.endsWith(`/v3/accounts/${accountId}/summary`))return new Response(JSON.stringify({account:{id:accountId,balance:"1000",NAV:"1000",marginAvailable:"900"},lastTransactionID:"1"}),{status:200});
   if(value.endsWith(`/v3/accounts/${accountId}/orders`)&&init.method==="POST"){capturedOrder=JSON.parse(init.body);return new Response(JSON.stringify({orderFillTransaction:{id:"2",price:"1.1",units:capturedOrder.order.units},lastTransactionID:"2"}),{status:200});}
@@ -17,8 +21,17 @@ globalThis.fetch=async(url,init={})=>{
   if(value.endsWith(`/v3/accounts/${accountId}/positions/EUR_USD/close`)){closed.push(JSON.parse(init.body));return new Response(JSON.stringify({longOrderFillTransaction:{id:"3",units:"-10",price:"1.09",pl:"1"}}),{status:200});}
   throw new Error(`Unexpected fetch: ${value}`);
 };
-const env={OANDA_API_KEY:token,OANDA_ACCOUNT_ID:accountId,CF_VERSION_METADATA:{id:"version-1",tag:"source-sha",timestamp:"2026-08-04T18:00:00Z"}};
-let response=await worker.fetch(browser("/api/oanda/order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({order:{instrument:"EUR_USD",units:"25",type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT",unsafe:"removed"}})}),env);
+const env={OANDA_API_KEY:token,OANDA_ACCOUNT_ID:accountId,CTE_ACCESS_TOKEN:accessToken,CF_VERSION_METADATA:{id:"version-1",tag:"source-sha",timestamp:"2026-08-04T18:00:00Z"}};
+
+// Authentication gate: missing and wrong bearer tokens are rejected with 401 before any upstream work.
+let response=await worker.fetch(browser("/api/engine/status",{},false),env);assert.equal(response.status,401,"missing token must be rejected");
+response=await worker.fetch(browser("/api/engine/status",{headers:{Authorization:"Bearer wrong-access-token-000"}}),env);assert.equal(response.status,401,"wrong token must be rejected");
+const upstreamBeforeAuth=upstreamCalls;
+response=await worker.fetch(browser("/api/oanda/order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({order:{instrument:"EUR_USD",units:"1",type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT"}})},false),env);assert.equal(response.status,401);assert.equal(upstreamCalls,upstreamBeforeAuth,"401 must short-circuit before any OANDA upstream call");
+
+// Authenticated API routes (offline stubs).
+response=await worker.fetch(browser("/api/oanda/connect"),env);assert.equal(response.status,200);assert.equal((await response.json()).account.id,accountId);
+response=await worker.fetch(browser("/api/oanda/order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({order:{instrument:"EUR_USD",units:"25",type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT",unsafe:"removed"}})}),env);
 assert.equal(response.status,200);assert.deepEqual(capturedOrder,{order:{instrument:"EUR_USD",units:"25",type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT"}});
 response=await worker.fetch(browser("/api/oanda/order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({order:{instrument:"BAD",units:"1",type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT"}})}),env);assert.equal(response.status,400);
 response=await worker.fetch(browser("/api/oanda/proxy?path=x",{method:"POST"}),env);assert.equal(response.status,405);
@@ -26,14 +39,34 @@ response=await worker.fetch(browser("/api/engine/optimizer",{method:"PUT"}),env)
 response=await worker.fetch(browser("/api/oanda/candles?instrument=EUR_USD&granularity=M15&count=60"),env);const candlePayload=await response.json();assert.equal(candlePayload.candles[0].mid.c,"1.1");assert.equal(candlePayload.candles[0].close,1.1);response=await worker.fetch(browser("/api/platform/version"),env);assert.equal(response.status,200);const versionPayload=await response.json();assert.equal(versionPayload.deployment.versionId,"version-1");assert.equal(versionPayload.deployment.versionTag,"source-sha");
 
 class Storage{constructor(){this.map=new Map();}async get(key){if(Array.isArray(key))return new Map(key.map(item=>[item,this.map.get(item)]));return this.map.get(key);}async put(key,value){this.map.set(key,value);}async delete(key){if(Array.isArray(key))for(const item of key)this.map.delete(item);else this.map.delete(key);}async getAlarm(){return null;}async deleteAlarm(){}}
-const ctx={storage:new Storage()},engine=new HtlEngine(ctx,env),config=await engine.config();
+const ctx={storage:new Storage()},engine=new HtlEngine(ctx,env),engineEnv={...env,HTL_ENGINE:{getByName:()=>({fetch:async request=>engine.fetch(typeof request==="string"?new Request(request):request)})}},config=await engine.config();
 assert.equal(config.strategy,"ASSET");assert.equal(config.configurationSource,"OPTIMIZED");const forced=await engine.configure({...config,configurationSource:"FIXED"});assert.equal(forced.configurationSource,"OPTIMIZED");
 engine.write=async entry=>{engine.lastWrite=entry;};
 await engine.reconcile({EUR_USD:{pair:"EUR_USD",event:{direction:-1,id:"-1:t"},configuration:{primary:{length:20,filter:1,score:3,trades:8,net:12,maxDrawdown:2,winRate:.625},confirmation:null}}},token,accountId,{events:{}},config);
 assert.equal(closed.length,1);assert.equal(engine.lastWrite.type,"POSITION_CLOSED");assert.equal(engine.lastWrite.htlLength,20);assert.equal(engine.lastWrite.optimizerScore,3);
+
+// Authenticated engine routes through the worker (offline Durable Object binding).
+response=await worker.fetch(browser("/api/engine/status"),engineEnv);assert.equal(response.status,200);const armedStatus=await response.json();assert.equal(armedStatus.armed,true,"default engine state is armed");
+response=await worker.fetch(browser("/api/engine/config"),engineEnv);assert.equal(response.status,200);assert.equal((await response.json()).strategy,"ASSET");
+response=await worker.fetch(browser("/api/engine/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(config)}),engineEnv);assert.equal(response.status,200);assert.equal((await response.json()).strategy,"ASSET");
+
+// Arm/disarm: POST /api/engine/arm persists; disarmed ticks skip execution/reconcile; status reflects the value; re-arm works.
+response=await worker.fetch(browser("/api/engine/arm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({armed:false})}),engineEnv);assert.equal(response.status,200);assert.equal((await response.json()).armed,false);
+response=await worker.fetch(browser("/api/engine/status"),engineEnv);assert.equal((await response.json()).armed,false,"status must reflect persisted disarm");
+const originalReconcile=engine.reconcile;let reconcileCalls=0;engine.reconcile=async()=>{reconcileCalls++;};
+const upstreamBeforeTick=upstreamCalls;
+await engine.tick();
+assert.equal(reconcileCalls,0,"disarmed tick must not reconcile");
+assert.equal(upstreamCalls,upstreamBeforeTick,"disarmed tick must not touch OANDA");
+engine.reconcile=originalReconcile;
+response=await worker.fetch(browser("/api/engine/arm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({armed:true})}),engineEnv);assert.equal(response.status,200);assert.equal((await response.json()).armed,true);
+response=await worker.fetch(browser("/api/engine/status"),engineEnv);assert.equal((await response.json()).armed,true,"re-arm must persist");
+
 response=await engine.fetch(new Request("https://engine/optimizer",{method:"PUT",headers:{"Content-Type":"application/json"},body:"{}"}));assert.equal(response.status,405);response=await engine.fetch(new Request("https://engine/compute",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pair:"EUR_USD",timeframe:"M15",startDate:"bad",endDate:"2026-08-04"})}));assert.equal(response.status,400);response=await engine.fetch(new Request("https://engine/compute",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pair:"EUR_USD",timeframe:"M15",startDate:"2026-07-01",endDate:"2026-07-03"})}));assert.equal(response.status,200);const computed=await response.json();assert.equal(computed.record.source,"COMPUTE_CONFIGURATION");assert.equal(computed.record.range.bars,180);response=await engine.fetch(new Request("https://engine/compute",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pair:"EUR_USD",timeframe:"M15"})}));assert.equal(response.status,200);const automatic=await response.json();assert.equal(automatic.record.range.startDate,null);assert.equal(automatic.record.range.endDate,null);assert.equal(automatic.record.range.bars,180);assert.ok(automatic.record.range.firstCandle);assert.ok(automatic.record.range.lastCandle);response=await engine.fetch(new Request("https://engine/preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({selectedInstrument:"EUR_AUD",selectedTimeframe:"M30",selectedStrategy:"NAI",activeFacility:"performance",visibleBars:51,minimumUnits:1500})}));assert.equal(response.status,200);const storedPreferences=await response.json();assert.equal(storedPreferences.selectedInstrument,"EUR_AUD");assert.equal(storedPreferences.selectedStrategy,"NAI");assert.equal(storedPreferences.minimumUnits,1500);response=await engine.fetch(new Request("https://engine/preferences"));assert.equal((await response.json()).visibleBars,51);
 
 const html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");
 assert.match(html,/id="connectButton"[^>]*>TEST<\/button>/);assert.match(html,/selectedStrategy:"ASSET"/);assert.match(html,/configurationSource:"OPTIMIZED"/);assert.match(html,/selectChart\(event\.target\.value,state\.selectedTimeframe\)/);assert.match(html,/async function causalIndicatorSet/);assert.match(html,/token!==state\.chartCausalToken/);assert.match(html,/MAX_CANDLE_REQUESTS=1/);assert.doesNotMatch(await readFile(new URL("../src/engine.js",import.meta.url),"utf8"),/htlBuild\(data\.slice\(0,end\+1\),length\)/);assert.match(html,/payload\.stage\|\|"compute"/);assert.match(html,/\/api\/engine\/compute/);assert.match(html,/source==="COMPUTE_CONFIGURATION"/);assert.match(html,/record\.range\?\.bars/);assert.match(html,/button\.textContent="Computing…"/);assert.doesNotMatch(html,/function renderMacroPerformance\(\).*causalAnalysisWithConfiguration/s);assert.match(html,/id="minimumUnits"[^>]*value="1000"/);assert.match(html,/minimumUnitAmount/);assert.match(html,/synchronizeMinimumUnits/);assert.match(html,/amount<minimumUnitAmount\(\)/);assert.match(await readFile(new URL("../src/engine.js",import.meta.url),"utf8"),/units<minimumUnits/);assert.match(html,/id="refreshEventChart"/);assert.match(html,/refreshSelectedEventChart/);assert.match(html,/normalizeInstrumentCandles/);assert.match(html,/median>=1/);assert.match(html,/high=1\/candle\.low,low=1\/candle\.high/);assert.match(html,/Candle identity mismatch/);assert.match(html,/decisionCandidateStrip/);assert.match(html,/executeSelectedDecisionCandidate/);assert.match(html,/state\.decisionCandidates=\{A:a,B:b/);assert.match(html,/b=mtfCandidates\.find\(item=>!used\.has\(item\.pair\)\)/);assert.match(html,/positionsPayload=await oanda\(`\/v3\/accounts\/\$\{encodeURIComponent\(accountId\)\}\/positions`\)/);assert.match(html,/openPositionPairs\(\)/);assert.match(html,/causalIndicatorSetFast/);assert.match(html,/causalAnalysisWithConfiguration/);assert.doesNotMatch(html,/prepareIndicators\(data\.slice\(0,index\+1\)/);assert.match(html,/\/api\/platform\/preferences/);assert.match(html,/NAI:\{price:\[\],z:/);assert.match(html,/const zDefinitions=indicatorSet\.z/);assert.match(html,/activeFacility:/);assert.match(html,/const assetAt=/);assert.doesNotMatch(html,/htlBuild\(data\.slice\(0,index\+1\),length\)/);assert.match(html,/eventLoadedKey/);assert.match(html,/await loadTradeCapacity\(\);await loadChart\(\);void loadSchedule\("focused"\)/);assert.doesNotMatch(html,/Fixed controls/);assert.doesNotMatch(html,/id="macroStartDate"/);assert.doesNotMatch(html,/id="macroEndDate"/);assert.doesNotMatch(html,/macroClearDates/);assert.match(html,/History started/);assert.match(html,/body:JSON.stringify\(\{pair:state.selectedInstrument,timeframe:state.selectedTimeframe\}\)/);assert.match(html,/microStartDate/);assert.match(html,/runPlatformDiagnostic/);assert.match(html,/MAX_BACKGROUND_CANDLE_REQUESTS=1/);assert.match(html,/foregroundCandleDemand/);assert.match(html,/queueProgressiveSchedule/);assert.match(html,/scheduleJobsForMode/);assert.match(html,/chartRequestCount/);assert.match(html,/const controller=new AbortController\(\),count=chartRequestCount\(instrument,timeframe\);state\.chartController=controller;/);assert.doesNotMatch(html,/state\.chartController=controller,count=/);assert.match(html,/await loadChart\(\);void loadSchedule\("focused"\)/);assert.match(html,/setInterval\(refreshOpenPositions,10000\)/);assert.match(html,/setInterval\(refreshAdaptiveTimeframe,300000\)/);assert.match(html,/runPool\(pairs,1,async pair=>/);assert.match(html,/refreshChart"\)\.addEventListener\("click",\(\)=>loadChart\(\)\)/);assert.match(html,/const current=state\.chartController===controller/);assert.match(html,/state\.scheduleController===controller\)\{/);assert.match(html,/hasMid=Boolean/);assert.match(html,/hasNormalized=/);assert.match(html,/Worker deployment/);assert.doesNotMatch(html,/structuredClone\s*\(/);assert.doesNotMatch(html,/\/api\/engine\/optimizer[^\n]+method:"PUT"/);
+// Security gate UI contract.
+assert.match(html,/id="authGate"/);assert.match(html,/id="authTokenInput"/);assert.match(html,/id="authUnlockButton"/);assert.match(html,/id="authLockButton"/);assert.match(html,/sessionStorage/);assert.match(html,/Authorization/);assert.match(html,/apiFetch/);assert.match(html,/id="engineArmToggle"/);assert.match(html,/id="engineArmState"/);assert.match(html,/api\/engine\/arm/);
 globalThis.fetch=originalFetch;
-console.log("Runtime routes, JPY chart normalization, event refresh, selectable candidates, persistence, diagnostics, causal performance, and no-data orchestration contracts verified.");
+console.log("Runtime routes, bearer auth gate, arm/disarm persistence, JPY chart normalization, event refresh, selectable candidates, persistence, diagnostics, causal performance, and no-data orchestration contracts verified.");

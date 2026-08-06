@@ -34,4 +34,4 @@ new_sqlite_classes = [ "HtlEngine" ]
 crons = [ "* * * * *" ]
 
 [secrets]
-required = [ "OANDA_ACCOUNT_ID", "OANDA_API_KEY" ]
+required = [ "OANDA_ACCOUNT_ID", "OANDA_API_KEY", "CTE_ACCESS_TOKEN" ]

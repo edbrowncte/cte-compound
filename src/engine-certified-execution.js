@@ -106,7 +106,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
     const state=(await this.ctx.storage.get("state"))||{};
     return{
       ...status,
-      armed:true,
+      armed:state.armed!==false,
       executionCertification:"ARMED_PRIVATE_USER",
       executionPolicy:EXECUTION_POLICY_VERSION,
       pendingReversals:Object.keys(state.pendingReversals||{}).length,
@@ -212,8 +212,9 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
   async tick(){
     if(this.running)return;
-    this.running=true;
     let state=(await this.ctx.storage.get("state"))||{events:{},initialized:false};
+    if(state.armed===false)return;
+    this.running=true;
     try{
       const config=await this.config();
       const fingerprint=configFingerprint(config);

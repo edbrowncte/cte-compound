@@ -44,6 +44,7 @@ function assertSameOrigin(request) {
   if(!origin&&!site) throw Object.assign(new Error("Browser-origin request required."),{status:403});
   if(site&&!['same-origin','same-site','none'].includes(site)) throw Object.assign(new Error("Cross-site request rejected."),{status:403});
 }
+async function assertAccessToken(request,env){const expected=String(env.CTE_ACCESS_TOKEN||"");const supplied=request.headers.get("Authorization")||"";const match=/^Bearer (.+)$/i.exec(supplied);if(!expected||!match)throw Object.assign(new Error("Authentication required."),{status:401});const digest=async value=>new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)));const [a,b]=await Promise.all([digest(match[1]),digest(expected)]);let diff=a.length===b.length?0:1;for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a[i%a.length]||0)^(b[i%b.length]||0);if(diff)throw Object.assign(new Error("Invalid access token."),{status:401});}
 
 async function acquireOandaSlot(){if(oandaActive<OANDA_MAX_CONCURRENCY){oandaActive++;return;}await new Promise(resolve=>oandaWaiters.push(resolve));}
 function releaseOandaSlot(){const next=oandaWaiters.shift();if(next)next();else oandaActive=Math.max(0,oandaActive-1);}
@@ -185,7 +186,7 @@ export default {
     const url=new URL(request.url);
     try {
       if(url.pathname.startsWith("/api/")) {
-        assertSameOrigin(request);
+        assertSameOrigin(request);await assertAccessToken(request,env);
         if(url.pathname==="/api/oanda/connect"&&request.method==="GET") return await handleConnect(env);
         if(url.pathname==="/api/oanda/accounts"&&request.method==="GET") return await handleAccountDiagnostic(env);
         if(url.pathname==="/api/platform/version"&&request.method==="GET") return await handlePlatformVersion(env);
@@ -196,6 +197,7 @@ export default {
         if(url.pathname==="/api/engine/chat"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/engine/chat"&&request.method==="DELETE") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/chat",{method:"DELETE"}));
         if(url.pathname==="/api/engine/status"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/status");
+        if(url.pathname==="/api/engine/arm"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/arm",{method:"POST",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/engine/config"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/config");
         if(url.pathname==="/api/engine/config"&&request.method==="PUT") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/engine/optimizer"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/optimizer");

@@ -112,3 +112,6 @@ npm run check
 ```
 
 The contaminated legacy comparison remains available only as an explicit forensic delta audit through workflow dispatch. It is not part of the acceptance target.
+
+## Security and operator control
+All `/api/*` requests require `Authorization: Bearer <CTE_ACCESS_TOKEN>` in addition to the existing same-origin checks. Configure `CTE_ACCESS_TOKEN` as a Worker secret; it is never stored in source or logs. The engine's persisted arm state is controlled by authenticated `POST /api/engine/arm` with `{ "armed": true|false }`; disarming prevents execution and reconciliation on subsequent ticks.

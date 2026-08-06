@@ -37,6 +37,14 @@
     h1 { margin:5px 0 4px; font-size:clamp(20px,2.2vw,34px); line-height:1.05; letter-spacing:.03em; }
     .subtitle { margin:0; color:var(--muted); font-size:12px; }
     .credential-grid { display:grid; grid-template-columns:minmax(160px,.8fr) minmax(220px,1.25fr) auto auto; gap:8px; align-items:end; }
+    .auth-gate { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--line2); border-radius:8px; background:var(--panel2); margin-bottom:8px; }
+    .auth-gate-row { display:flex; gap:8px; align-items:center; flex:1 1 320px; }
+    .auth-gate-status { font-weight:800; font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
+    .auth-gate.locked .auth-gate-status { color:var(--warn); }
+    .auth-gate.unlocked .auth-gate-status { color:var(--buy); }
+    #authTokenInput { flex:1 1 200px; min-width:160px; }
+    .auth-gate.unlocked #authTokenInput,.auth-gate.unlocked #authUnlockButton { display:none; }
+    .auth-gate.locked #authLockButton { display:none; }
     .field { display:grid; gap:4px; min-width:0; }
     .field span, .field label { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
     .field input { width:100%; }
@@ -178,7 +186,7 @@
     }
     .app-tabs { display:flex; gap:6px; margin-top:10px; border:1px solid var(--line2); background:#0c1118; padding:6px; overflow:auto; }
     .app-tab[aria-selected="true"] { color:#10141b; background:var(--accent); border-color:var(--accent); }
-    [hidden], .tab-panel[hidden] { display: none !important; }
+    .tab-panel[hidden] { display:none; }
     .event-controls { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
     .event-chart-stage { height:360px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); position:relative; background:#080c12; }
     .event-chart-toolbar { padding:10px 14px; border-top:1px solid var(--line); }
@@ -231,28 +239,6 @@
     .positive { color:var(--buy); }.negative { color:var(--sell); }
     @media(max-width:900px) { .config-grid { grid-template-columns:1fr 1fr; } }
     @media(max-width:900px) { .event-chart-stage { height:300px; } .event-chart-instrument { margin-left:0; } }
-
-    /* Nemotron Copilot Chat styles */
-    .chat-container { display: flex; flex-direction: column; height: 500px; background: #080c12; border: 1px solid var(--line); margin-top: 10px; }
-    .chat-logs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
-    .chat-message { max-width: 80%; padding: 10px 12px; border-radius: 4px; font-size: 11px; line-height: 1.5; }
-    .chat-message.user { align-self: flex-end; background: rgba(215, 168, 92, 0.15); border: 1px solid var(--accent); color: #fff; }
-    .chat-message.assistant { align-self: flex-start; background: #111822; border: 1px solid var(--line2); color: #dce4ed; }
-    .chat-message.system-status { align-self: center; background: rgba(0, 0, 0, 0.3); border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 10px; }
-    .msg-sender { font-weight: 850; text-transform: uppercase; font-size: 8px; letter-spacing: 0.05em; margin-bottom: 4px; color: var(--accent); }
-    .chat-message.user .msg-sender { color: #fff; text-align: right; }
-    .msg-content { white-space: pre-wrap; }
-    .chat-suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); background: #0c1118; }
-    .suggestion-chip { background: #131a24; border: 1px solid var(--line2); color: #9ab3cc; padding: 6px 10px; border-radius: 3px; font-size: 10px; cursor: pointer; transition: all 0.2s; }
-    .suggestion-chip:hover { border-color: var(--accent); color: #fff; background: rgba(215, 168, 92, 0.08); }
-    .chat-input-area { display: flex; padding: 12px 14px; border-top: 1px solid var(--line); background: #080c12; gap: 8px; align-items: center; }
-    #chatInput { flex: 1; background: #0e141d; border: 1px solid var(--line); color: #fff; padding: 10px 12px; border-radius: 3px; font-size: 11px; }
-    #chatInput:focus { border-color: var(--accent); outline: none; }
-    .voice-btn, .send-btn, .action-btn { background: #131a24; border: 1px solid var(--line2); color: #fff; padding: 8px 14px; border-radius: 3px; font-size: 11px; cursor: pointer; font-weight: 900; }
-    .voice-btn[aria-pressed="true"] { background: var(--accent); color: #000; border-color: var(--accent); }
-    .send-btn { background: var(--accent); color: #000; border-color: var(--accent); }
-    .send-btn:hover { background: #ffd07d; border-color: #ffd07d; }
-    .send-btn:disabled, .voice-btn:disabled, #chatInput:disabled { opacity: 0.5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -280,6 +266,15 @@
       </section>
 
       <form id="credentialForm" autocomplete="off" novalidate>
+        <div class="auth-gate locked" id="authGate">
+          <div class="auth-gate-row">
+            <span class="auth-gate-status" id="authGateStatus">Locked</span>
+            <input id="authTokenInput" type="password" autocomplete="off" placeholder="CTE access token" aria-label="CTE access token">
+            <button id="authUnlockButton" type="button">Unlock</button>
+            <button id="authLockButton" type="button">Lock</button>
+          </div>
+          <div class="automation-status" id="authGateMessage" role="status" aria-live="polite">Enter your access token to unlock this console.</div>
+        </div>
         <div class="credential-grid">
           <div class="field">
             <span>OANDA account</span>
@@ -323,6 +318,8 @@
           <label class="field"><span>Decision / execution</span><select id="engineDecisionMode"><option value="EVENT">Event Forecast</option><option value="MTF">MTF Forecast</option><option value="COMBINED">Combined Forecast</option></select></label>
           <label class="field"><span>Configuration source</span><select id="engineConfigurationSource"><option value="OPTIMIZED" selected>Pair × timeframe optimizer</option></select></label>
           <button id="saveEngineConfig" type="button">Save trading controls</button>
+          <label class="field"><span>Engine arm state</span><strong class="runtime-value" id="engineArmState">—</strong></label>
+          <button id="engineArmToggle" type="button" disabled>—</button>
           <div class="automation-status" id="automationStatus"></div>
         </div>
         <div class="decision-strip" id="decisionCandidateStrip" aria-label="Selectable next-trade alternatives">
@@ -365,7 +362,6 @@
       <button class="app-tab" id="analysisTab" role="tab" aria-selected="true" aria-controls="analysisPanel" type="button">Analytical Compound</button>
       <button class="app-tab" id="eventTab" role="tab" aria-selected="false" aria-controls="eventPanel" type="button">HTL Event Forecast</button>
       <button class="app-tab" id="performanceTab" role="tab" aria-selected="false" aria-controls="performancePanel" type="button">Configuration &amp; Performance</button>
-      <button class="app-tab" id="chatTab" role="tab" aria-selected="false" aria-controls="chatPanel" type="button">Nemotron Personal Agent</button>
     </nav>
 
     <main>
@@ -499,41 +495,6 @@
         <div class="performance-wrap"><table class="performance-table"><thead><tr><th>Strategy</th><th>Trades</th><th>W/L/Flat</th><th>Net pips</th><th>Avg</th><th>MFE/MAE</th><th>Max DD</th><th>Profit factor</th><th>Recovery factor</th></tr></thead><tbody id="macroPerformanceBody"><tr><td colspan="9">Load the analytical chart to calculate performance.</td></tr></tbody></table></div>
         <details class="data-details" id="optimizerRegistryDetails"><summary>Pair × Timeframe Optimizer Registry · <span id="optimizerServerStatus">0 / 280 datasets</span></summary><div class="performance-wrap"><table class="performance-table"><thead><tr><th>Pair</th><th>Timeframe</th><th>Strategy</th><th>Length</th><th>Filter</th><th>Trades</th><th>Net pips</th><th>Max DD</th><th>Score</th><th>Source</th><th>Completed candle</th><th>Computed</th></tr></thead><tbody id="optimizerRegistryBody"><tr><td colspan="12">No optimized datasets.</td></tr></tbody></table></div></details>
       </section>
-
-      <section class="panel tab-panel chat-panel" id="chatPanel" role="tabpanel" aria-labelledby="chatTab" hidden>
-        <div class="panel-head">
-          <div class="panel-title">
-            <h2>Nemotron Personal Agent Copilot</h2>
-            <p>Direct conversational access to your trading DO, live status, Oanda account, and configuration controls</p>
-          </div>
-          <div class="head-controls">
-            <button id="clearChat" type="button" class="action-btn">Clear History</button>
-          </div>
-        </div>
-
-        <div class="chat-container">
-          <div class="chat-logs" id="chatLogs">
-            <div class="chat-message assistant">
-              <div class="msg-sender">Nemotron 3 Super</div>
-              <div class="msg-content">Hello! I am your Personal Agent. I have full tool-access to read live account stats, inspect ledger logs, view optimizer configurations, and dynamically tune engine settings. How can I help you improve your bottom line today?</div>
-            </div>
-          </div>
-
-          <div class="chat-suggestions">
-            <button type="button" class="suggestion-chip">What is our overall system status?</button>
-            <button type="button" class="suggestion-chip">Fetch my latest Oanda account summary</button>
-            <button type="button" class="suggestion-chip">Show me the recent trading ledger logs</button>
-            <button type="button" class="suggestion-chip">Nemotron, switch our strategy to NAI on M15 and set the filter to 0.5</button>
-          </div>
-
-          <div class="chat-input-area">
-            <input type="text" id="chatInput" placeholder="Ask Nemotron anything or issue a command..." autocomplete="off">
-            <button id="voiceToggle" type="button" class="voice-btn" aria-pressed="false">Voice TTS off</button>
-            <button id="micToggle" type="button" class="voice-btn" aria-pressed="false" title="Speech to Text (Voice input)">🎤 Mic off</button>
-            <button id="sendChat" type="button" class="send-btn">Send</button>
-          </div>
-        </div>
-      </section>
     </main>
 
   </div>
@@ -644,6 +605,20 @@
   };
 
   const el = id => document.getElementById(id);
+  const ACCESS_TOKEN_KEY="cteAccessToken";
+  function storedAccessToken(){try{return sessionStorage.getItem(ACCESS_TOKEN_KEY)||"";}catch{return"";}}
+  function storeAccessToken(token){try{if(token)sessionStorage.setItem(ACCESS_TOKEN_KEY,token);else sessionStorage.removeItem(ACCESS_TOKEN_KEY);}catch{}}
+  function isUnlocked(){return Boolean(storedAccessToken());}
+  function authMessage(text){const node=document.getElementById("authGateMessage");if(node)node.textContent=text||"";}
+  function applyLockedState(message){storeAccessToken("");const gate=document.getElementById("authGate");if(gate){gate.classList.remove("unlocked");gate.classList.add("locked");}const status=document.getElementById("authGateStatus");if(status)status.textContent="Locked";const input=document.getElementById("authTokenInput");if(input)input.value="";const unlock=document.getElementById("authUnlockButton");if(unlock)unlock.disabled=false;const connectButton=document.getElementById("connectButton");if(connectButton)connectButton.disabled=true;authMessage(message||"Enter your access token to unlock this console.");}
+  function applyUnlockedState(){const gate=document.getElementById("authGate");if(gate){gate.classList.remove("locked");gate.classList.add("unlocked");}const status=document.getElementById("authGateStatus");if(status)status.textContent="Unlocked";const connectButton=document.getElementById("connectButton");if(connectButton)connectButton.disabled=false;authMessage("");}
+  function applyAuthState(){if(storedAccessToken())applyUnlockedState();else applyLockedState();}
+  async function unlock(){const input=document.getElementById("authTokenInput"),token=(input?.value||"").trim();if(!token){authMessage("Enter your access token first.");return;}const unlockButton=document.getElementById("authUnlockButton");if(unlockButton)unlockButton.disabled=true;authMessage("Validating access token…");try{storeAccessToken(token);const response=await apiFetch("/api/engine/status",{headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store"});if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error||`HTTP ${response.status}`);applyUnlockedState();}catch(error){applyLockedState(`Access token rejected · ${error.message||"authentication failed"}`);}finally{if(unlockButton)unlockButton.disabled=false;}}
+  function lock(){applyLockedState("Console locked. Re-enter your access token to unlock.");}
+  function apiFetch(path,init={}){const headers=new Headers(init.headers||{}),token=storedAccessToken();if(token)headers.set("Authorization",`Bearer ${token}`);return fetch(path,{...init,headers}).then(response=>{if(response.status===401){applyLockedState("Session token rejected · re-enter your access token.");}return response;});}
+  function renderArmState(armed){const toggle=document.getElementById("engineArmToggle"),readout=document.getElementById("engineArmState");const isArmed=armed!==false;if(readout)readout.textContent=isArmed?"ARMED":"DISARMED";if(toggle){toggle.textContent=isArmed?"Disarm engine":"Arm engine";toggle.disabled=false;}state.engineArmed=isArmed;}
+  async function toggleEngineArm(){const next=state.engineArmed===false,toggle=document.getElementById("engineArmToggle");if(toggle)toggle.disabled=true;try{const response=await apiFetch("/api/engine/arm",{method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({armed:next})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);renderArmState(payload.armed);const status=document.getElementById("automationStatus");if(status)status.textContent=`Engine ${payload.armed?"ARMED":"DISARMED"} · automated execution ${payload.armed?"enabled":"halted"}`;}catch(error){const status=document.getElementById("automationStatus");if(status)status.textContent=error.message||"Arm state change failed";}finally{if(toggle)toggle.disabled=false;}}
+
   const clamp = (value,min,max) => Math.max(min,Math.min(max,value));
   const finite = (value,fallback=0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
   const average = values => values.length ? values.reduce((sum,value)=>sum+value,0)/values.length : 0;
@@ -831,20 +806,20 @@
   const MAX_CANDLE_REQUESTS=1,MAX_BACKGROUND_CANDLE_REQUESTS=1,CANDLE_TIMEOUT_MS=25000;
   function foregroundCandleDemand(){return state.chartLoading||state.candleForegroundActive>0||state.candleQueue.some(job=>job.priority>=80);}
   function pumpCandleQueue(){while(state.candleQueue.length){state.candleQueue.sort((a,b)=>b.priority-a.priority||a.sequence-b.sequence);const next=state.candleQueue[0],foreground=next.priority>=80;if(foreground){if(state.candleActive>=MAX_CANDLE_REQUESTS)break;}else if(foregroundCandleDemand()||state.candleActive>=MAX_BACKGROUND_CANDLE_REQUESTS)break;const job=state.candleQueue.shift();if(job.signal?.aborted){job.reject(new DOMException("Aborted","AbortError"));continue;}state.candleActive++;if(foreground)state.candleForegroundActive++;fetchCandleJob(job).then(job.resolve,job.reject).finally(()=>{state.candleActive--;if(foreground)state.candleForegroundActive--;pumpCandleQueue();});}}
-  async function fetchCandleJob(job){let lastError=null;for(let attempt=0;attempt<3;attempt++){if(job.signal?.aborted)throw new DOMException("Aborted","AbortError");const controller=new AbortController(),relay=()=>controller.abort(),timer=setTimeout(()=>controller.abort(),CANDLE_TIMEOUT_MS);job.signal?.addEventListener("abort",relay,{once:true});state.candleStats.requested++;try{const response=await fetch(`/api/oanda/candles?instrument=${encodeURIComponent(job.instrument)}&granularity=${encodeURIComponent(job.timeframe)}&count=${encodeURIComponent(job.count)}`,{method:"GET",headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store",signal:controller.signal}),payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));if(!response.ok){const error=new Error(payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`);error.status=response.status;state.candleStats.statuses[response.status]=Number(state.candleStats.statuses[response.status]||0)+1;throw error;}state.candleStats.succeeded++;return payload;}catch(error){if(job.signal?.aborted)throw new DOMException("Aborted","AbortError");const timedOut=controller.signal.aborted;if(timedOut){state.candleStats.timeouts++;lastError=new Error(`OANDA candle request timed out · ${formatPair(job.instrument)} ${job.timeframe}`);lastError.status=504;}else lastError=error;const status=Number(lastError?.status)||0,retryable=timedOut||status===429||status>=500;if(!retryable||attempt===2){state.candleStats.failed++;throw lastError;}state.candleStats.retries++;await new Promise(resolve=>setTimeout(resolve,700*(2**attempt)+Math.floor(Math.random()*300)));}finally{clearTimeout(timer);job.signal?.removeEventListener("abort",relay);}}throw lastError||new Error("Candle request failed.");}
+  async function fetchCandleJob(job){let lastError=null;for(let attempt=0;attempt<3;attempt++){if(job.signal?.aborted)throw new DOMException("Aborted","AbortError");const controller=new AbortController(),relay=()=>controller.abort(),timer=setTimeout(()=>controller.abort(),CANDLE_TIMEOUT_MS);job.signal?.addEventListener("abort",relay,{once:true});state.candleStats.requested++;try{const response=await apiFetch(`/api/oanda/candles?instrument=${encodeURIComponent(job.instrument)}&granularity=${encodeURIComponent(job.timeframe)}&count=${encodeURIComponent(job.count)}`,{method:"GET",headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store",signal:controller.signal}),payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));if(!response.ok){const error=new Error(payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`);error.status=response.status;state.candleStats.statuses[response.status]=Number(state.candleStats.statuses[response.status]||0)+1;throw error;}state.candleStats.succeeded++;return payload;}catch(error){if(job.signal?.aborted)throw new DOMException("Aborted","AbortError");const timedOut=controller.signal.aborted;if(timedOut){state.candleStats.timeouts++;lastError=new Error(`OANDA candle request timed out · ${formatPair(job.instrument)} ${job.timeframe}`);lastError.status=504;}else lastError=error;const status=Number(lastError?.status)||0,retryable=timedOut||status===429||status>=500;if(!retryable||attempt===2){state.candleStats.failed++;throw lastError;}state.candleStats.retries++;await new Promise(resolve=>setTimeout(resolve,700*(2**attempt)+Math.floor(Math.random()*300)));}finally{clearTimeout(timer);job.signal?.removeEventListener("abort",relay);}}throw lastError||new Error("Candle request failed.");}
   function queueCandleRequest(instrument,timeframe,count,priority=0,signal=null){const key=`${instrument}|${timeframe}|${count}`;let request=state.candleInflight.get(key);if(!request){request=new Promise((resolve,reject)=>{state.candleQueue.push({instrument,timeframe,count,priority,sequence:state.candleSequence++,resolve,reject,signal});pumpCandleQueue();});state.candleInflight.set(key,request);request.then(()=>state.candleInflight.delete(key),()=>state.candleInflight.delete(key));}if(!signal)return request;if(signal.aborted)return Promise.reject(new DOMException("Aborted","AbortError"));return Promise.race([request,new Promise((_,reject)=>signal.addEventListener("abort",()=>reject(new DOMException("Aborted","AbortError")),{once:true}))]);}
   async function oanda(path,controller,priority=0) {
     const candle=String(path).match(/^\/v3\/instruments\/([A-Z]{3}_[A-Z]{3})\/candles\?(.*)$/),params=candle?new URLSearchParams(candle[2]):null;
     if(candle)return queueCandleRequest(candle[1],params.get("granularity")||"",Number(params.get("count")||650),priority,controller?.signal);
     const local=new AbortController(),relay=()=>local.abort(),timer=setTimeout(()=>local.abort(),CANDLE_TIMEOUT_MS);controller?.signal?.addEventListener("abort",relay,{once:true});
-    try{const response=await fetch(`/api/oanda/proxy?path=${encodeURIComponent(path)}`,{method:"GET",headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store",signal:local.signal}),payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));if(!response.ok)throw new Error(payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`);return payload;}
+    try{const response=await apiFetch(`/api/oanda/proxy?path=${encodeURIComponent(path)}`,{method:"GET",headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store",signal:local.signal}),payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));if(!response.ok)throw new Error(payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`);return payload;}
     catch(error){if(local.signal.aborted&&!controller?.signal?.aborted)throw new Error("OANDA request timed out.");throw error;}
     finally{clearTimeout(timer);controller?.signal?.removeEventListener("abort",relay);}
   }
 
   async function oandaPost(path,body) {
     if(!/\/orders$/.test(path))throw new Error("Manual order route is not permitted.");
-    const response=await fetch("/api/oanda/order",{method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)});
+    const response=await apiFetch("/api/oanda/order",{method:"POST",headers:{"Accept":"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)});
     const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
     if(!response.ok){const message=payload.errorMessage||payload.error||payload.message||`HTTP ${response.status}`;throw new Error(message);}
     return payload;
@@ -886,7 +861,7 @@
     if(!signature){el("positionsStreamStatus").textContent="No open positions";el("positionsStreamStatus").classList.remove("live");return;}
     const controller=new AbortController();state.positionStreamController=controller;
     try{
-      const response=await fetch(`/api/oanda/stream?instruments=${encodeURIComponent(signature)}`,{headers:{Accept:"application/octet-stream"},credentials:"same-origin",cache:"no-store",signal:controller.signal});
+      const response=await apiFetch(`/api/oanda/stream?instruments=${encodeURIComponent(signature)}`,{headers:{Accept:"application/octet-stream"},credentials:"same-origin",cache:"no-store",signal:controller.signal});
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       el("positionsStreamStatus").textContent="Live pricing stream";el("positionsStreamStatus").classList.add("live");
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="";
@@ -917,12 +892,12 @@
   function platformPreferencePayload(){return{selectedInstrument:state.selectedInstrument,selectedTimeframe:state.selectedTimeframe,selectedStrategy:state.selectedStrategy,selectedScheduleStrategy:state.selectedScheduleStrategy,activeFacility:state.activeFacility,visibleBars:state.visibleBars,rightIndent:state.rightIndent,crosshairEnabled:state.crosshairEnabled,eventPair:el("eventPair")?.value||state.selectedInstrument,eventTimeframe:el("eventTimeframe")?.value||state.selectedTimeframe,eventLength:clamp(Math.trunc(Number(el("eventLength")?.value)||10),3,200),eventStrategy:el("eventStrategy")?.value||"ASSET",eventVisibleBars:state.eventVisibleBars,eventRightIndent:state.eventRightIndent,eventCrosshairEnabled:state.eventCrosshairEnabled,microStartDate:preferenceDateValue("microStartDate"),microEndDate:preferenceDateValue("microEndDate"),minimumUnits:minimumUnitAmount()};}
   function setPreferenceControl(id,value){const control=el(id);if(control&&value!==undefined&&value!==null)control.value=String(value);}
   function applyPlatformPreferences(preferences={}){state.selectedInstrument=INSTRUMENTS.includes(preferences.selectedInstrument)?preferences.selectedInstrument:state.selectedInstrument;state.selectedTimeframe=TIMEFRAMES.includes(preferences.selectedTimeframe)?preferences.selectedTimeframe:state.selectedTimeframe;state.selectedStrategy=STRATEGIES.some(item=>item.id===preferences.selectedStrategy)?preferences.selectedStrategy:state.selectedStrategy;state.selectedScheduleStrategy=STRATEGIES.some(item=>item.id===preferences.selectedScheduleStrategy)?preferences.selectedScheduleStrategy:state.selectedScheduleStrategy;state.visibleBars=clamp(Math.trunc(Number(preferences.visibleBars))||state.visibleBars,30,300);state.rightIndent=clamp(Math.trunc(Number(preferences.rightIndent))||state.rightIndent,0,260);state.crosshairEnabled=preferences.crosshairEnabled!==false;state.eventVisibleBars=clamp(Math.trunc(Number(preferences.eventVisibleBars))||state.eventVisibleBars,30,300);state.eventRightIndent=clamp(Math.trunc(Number(preferences.eventRightIndent))||state.eventRightIndent,0,260);state.eventCrosshairEnabled=preferences.eventCrosshairEnabled!==false;state.activeFacility=["analysis","event","performance"].includes(preferences.activeFacility)?preferences.activeFacility:"analysis";setPreferenceControl("chartPair",state.selectedInstrument);setPreferenceControl("tradePair",state.selectedInstrument);setPreferenceControl("chartTimeframe",state.selectedTimeframe);setPreferenceControl("chartStrategy",state.selectedStrategy);setPreferenceControl("scheduleStrategy",state.selectedScheduleStrategy);setPreferenceControl("eventPair",INSTRUMENTS.includes(preferences.eventPair)?preferences.eventPair:state.selectedInstrument);setPreferenceControl("eventTimeframe",TIMEFRAMES.includes(preferences.eventTimeframe)?preferences.eventTimeframe:state.selectedTimeframe);setPreferenceControl("eventLength",preferences.eventLength||10);setPreferenceControl("eventStrategy",STRATEGIES.some(item=>item.id===preferences.eventStrategy)?preferences.eventStrategy:"ASSET");for(const [id,key] of [["microStartDate","microStartDate"],["microEndDate","microEndDate"]])setPreferenceControl(id,preferences[key]||"");setPreferenceControl("minimumUnits",preferences.minimumUnits||1000);synchronizeMinimumUnits(false);selectFacility(state.activeFacility,false);markSelectedRow();updateChartSummary();drawChart();}
-  async function loadPlatformPreferences(){if(state.preferencesLoaded)return;try{const response=await fetch("/api/platform/preferences",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),preferences=await response.json().catch(()=>({}));if(!response.ok)throw new Error(preferences.error||`HTTP ${response.status}`);applyPlatformPreferences(preferences);state.preferenceSyncStatus=`Synchronized · ${preferences.updatedAt?formatTime(preferences.updatedAt):"server"}`;}catch(error){state.preferenceSyncStatus=error.message||"Preference synchronization unavailable";}finally{state.preferencesLoaded=true;}}
-  function queuePlatformPreferenceSave(){if(!state.preferencesLoaded)return;clearTimeout(state.preferenceTimer);state.preferenceTimer=setTimeout(async()=>{try{const response=await fetch("/api/platform/preferences",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(platformPreferencePayload())}),preferences=await response.json().catch(()=>({}));if(!response.ok)throw new Error(preferences.error||`HTTP ${response.status}`);state.preferenceSyncStatus=`Synchronized · ${preferences.updatedAt?formatTime(preferences.updatedAt):"server"}`;}catch(error){state.preferenceSyncStatus=error.message||"Preference synchronization failed";}},500);}
+  async function loadPlatformPreferences(){if(state.preferencesLoaded)return;try{const response=await apiFetch("/api/platform/preferences",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),preferences=await response.json().catch(()=>({}));if(!response.ok)throw new Error(preferences.error||`HTTP ${response.status}`);applyPlatformPreferences(preferences);state.preferenceSyncStatus=`Synchronized · ${preferences.updatedAt?formatTime(preferences.updatedAt):"server"}`;}catch(error){state.preferenceSyncStatus=error.message||"Preference synchronization unavailable";}finally{state.preferencesLoaded=true;}}
+  function queuePlatformPreferenceSave(){if(!state.preferencesLoaded)return;clearTimeout(state.preferenceTimer);state.preferenceTimer=setTimeout(async()=>{try{const response=await apiFetch("/api/platform/preferences",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(platformPreferencePayload())}),preferences=await response.json().catch(()=>({}));if(!response.ok)throw new Error(preferences.error||`HTTP ${response.status}`);state.preferenceSyncStatus=`Synchronized · ${preferences.updatedAt?formatTime(preferences.updatedAt):"server"}`;}catch(error){state.preferenceSyncStatus=error.message||"Preference synchronization failed";}},500);}
 
-  async function loadEngineConfig(){const response=await fetch("/api/engine/config",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);}
+  async function loadEngineConfig(){const response=await apiFetch("/api/engine/config",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);}
 
-  async function saveEngineConfig(){const button=el("saveEngineConfig");button.disabled=true;el("automationStatus").textContent="Saving…";try{const body={timeframe:el("engineTimeframe").value,strategy:el("engineStrategy").value,confirmationStrategy:el("engineConfirmationStrategy").value,htlLength:clamp(Math.trunc(Number(el("engineHtlLength").value)||10),3,200),filter:clamp(Number(el("engineFilter").value)||0,0,10),decisionMode:el("engineDecisionMode").value,configurationSource:"OPTIMIZED"},response=await fetch("/api/engine/config",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);await loadTradingLedger();}catch(error){el("automationStatus").textContent=error.message||"Configuration failed";}finally{button.disabled=false;}}
+  async function saveEngineConfig(){const button=el("saveEngineConfig");button.disabled=true;el("automationStatus").textContent="Saving…";try{const body={timeframe:el("engineTimeframe").value,strategy:el("engineStrategy").value,confirmationStrategy:el("engineConfirmationStrategy").value,htlLength:clamp(Math.trunc(Number(el("engineHtlLength").value)||10),3,200),filter:clamp(Number(el("engineFilter").value)||0,0,10),decisionMode:el("engineDecisionMode").value,configurationSource:"OPTIMIZED"},response=await apiFetch("/api/engine/config",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);await loadTradingLedger();}catch(error){el("automationStatus").textContent=error.message||"Configuration failed";}finally{button.disabled=false;}}
 
   function minimumUnitAmount(){return Math.max(1,Math.trunc(Number((el("minimumUnits")?.value||"1000").replace(/\D/g,"")))||1000);}
   function synchronizeMinimumUnits(persist=true){const minimum=minimumUnitAmount(),control=el("minimumUnits");control.value=String(minimum);for(const id of ["tradeUnits","candidateUnits"]){const input=el(id),amount=Math.trunc(Number((input.value||"").replace(/\D/g,"")));input.min=String(minimum);if(!Number.isFinite(amount)||amount<minimum)input.value=String(minimum);}updateTradeButtons();renderDecisionCandidates();if(persist)queuePlatformPreferenceSave();}
@@ -938,13 +913,13 @@
 
   function renderTradingLedger(entries){const rows=Array.isArray(entries)?entries:[];state.tradingLedger=rows;el("downloadTradingLedger").disabled=!rows.length;const fmt=value=>value??"—";el("tradingLedgerBody").innerHTML=rows.map(item=>`<tr><td>${formatTime(item.time)}</td><td>${fmt(item.type)}</td><td>${item.pair?formatPair(item.pair):"—"}</td><td>${fmt(item.strategy)}</td><td class="${item.direction==="BUY"?"positive":item.direction==="SELL"?"negative":""}">${fmt(item.direction)}</td><td>${fmt(item.units)}</td><td>${fmt(item.price)}</td><td>${fmt(item.realizedPL)}</td><td>${fmt(item.message)}</td></tr>`).join("")||`<tr><td colspan="9">No engine records.</td></tr>`;const filtered=filterByDateRange(rows,"micro"),groups=new Map(STRATEGIES.map(item=>[item.id,{label:item.label,orders:0,closed:0,wins:0,losses:0,flat:0,pl:0,last:null}]));for(const item of [...filtered.rows].reverse()){const id=item.strategy||((item.type==="ORDER_FILLED"||item.type==="POSITION_CLOSED")?"ASSET":null),group=groups.get(id);if(!group)continue;if(item.type==="ORDER_FILLED")group.orders++;if(item.type==="POSITION_CLOSED"){group.closed++;const pl=Number(item.realizedPL);if(Number.isFinite(pl)){group.pl+=pl;if(pl>0)group.wins++;else if(pl<0)group.losses++;else group.flat++;}}if(item.pair)group.last=item;}el("microPerformanceScope").textContent=`${rangeLabel(filtered.range,"All retained engine records")} · ${filtered.rows.length} records`;el("microPerformanceBody").innerHTML=[...groups.values()].map(g=>`<tr><td>${g.label}</td><td>${g.orders||"—"}</td><td>${g.closed||"—"}</td><td>${g.closed?`${g.wins}/${g.losses}/${g.flat}`:"—"}</td><td class="${g.pl>0?"positive":g.pl<0?"negative":""}">${g.closed?g.pl.toFixed(2):"—"}</td><td>${g.last?.direction||"—"}</td><td>${g.last?.pair?formatPair(g.last.pair):"—"}</td><td>${g.last?formatTime(g.last.time):"—"}</td></tr>`).join("");}
   function downloadTradingLedger(){const rows=state.tradingLedger||[];if(!rows.length)return;const fields=[["Ledger ID","ledgerId"],["Time","time"],["Type","type"],["OANDA Type","transactionType"],["Pair","pair"],["Strategy","strategy"],["Confirmation Strategy","confirmationStrategy"],["Side","direction"],["Units","units"],["Price","price"],["Realized P/L","realizedPL"],["Financing","financing"],["Commission","commission"],["Account Balance","accountBalance"],["Transaction ID","transaction"],["Client Order ID","clientOrderId"],["Event ID","event"],["Decision Mode","decisionMode"],["Timeframe","timeframe"],["HTL Length","htlLength"],["Filter","filter"],["Configuration Source","configurationSource"],["Optimizer Score","optimizerScore"],["Optimizer Trades","optimizerTrades"],["Optimizer Net","optimizerNet"],["Optimizer Drawdown","optimizerDrawdown"],["Optimizer Win Rate","optimizerWinRate"],["Confirmation HTL Length","confirmationHtlLength"],["Confirmation Filter","confirmationFilter"],["Reason","reason"],["Message","message"]],csv=[fields.map(([label])=>label),...rows.map(item=>fields.map(([,key])=>item[key]??""))].map(row=>row.map(value=>`"${String(value).replaceAll('"','""')}"`).join(",")).join("\r\n"),url=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"})),link=document.createElement("a");link.href=url;link.download=`cte-compound-trading-ledger-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
-  async function loadTradingLedger(limit=state.ledgerLimit){state.ledgerLimit=limit;try{const response=await fetch(`/api/engine/ledger?limit=${encodeURIComponent(limit)}`,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(response.ok)renderTradingLedger(payload.ledger);}catch{}}
-  async function loadOptimizerRecords(){try{const response=await fetch("/api/engine/optimizer",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(!response.ok)return;state.autoConfigurations.clear();for(const [key,value] of Object.entries(payload.records||{}))state.autoConfigurations.set(key,value);renderOptimizerRegistry();}catch{}}
+  async function loadTradingLedger(limit=state.ledgerLimit){state.ledgerLimit=limit;try{const response=await apiFetch(`/api/engine/ledger?limit=${encodeURIComponent(limit)}`,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(response.ok)renderTradingLedger(payload.ledger);}catch{}}
+  async function loadOptimizerRecords(){try{const response=await apiFetch("/api/engine/optimizer",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(!response.ok)return;state.autoConfigurations.clear();for(const [key,value] of Object.entries(payload.records||{}))state.autoConfigurations.set(key,value);renderOptimizerRegistry();}catch{}}
   function renderNemotronStatus(ai={}){const last=ai.last||{},daily=ai.daily||{};state.nemotronRecommendedPair=last.selectedPair||null;el("nemotronModel").textContent=(ai.model||"Nemotron 3 Super").replace("@cf/nvidia/","");el("nemotronStatus").textContent=last.status||`${ai.binding?"Ready":"AI binding unavailable"}`;el("nemotronSelection").textContent=last.selectedPair?formatPair(last.selectedPair):"—";el("nemotronLatency").textContent=Number.isFinite(last.latencyMs)?`${last.latencyMs} ms`:"—";el("nemotronDaily").textContent=`${daily.invocations||0} invocations · ${daily.selections||0} selected · ${daily.fallbacks||0} fallback`;el("nemotronTotal").textContent=`${ai.totalInvocations||0} invocations · ${ai.totalSelections||0} selected · ${ai.totalFallbacks||0} fallback`;el("nemotronReason").textContent=last.time?`${formatTime(last.time)} · ${(last.candidates||[]).map(formatPair).join(", ")} · ${last.reason||"No reason returned"}`:"Nemotron recommends among eligible alternatives; it does not execute or override your selection.";renderDecisionCandidates();}
-  async function loadEngineStatus(){try{const response=await fetch("/api/engine/status",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),status=await response.json();if(!response.ok)return;el("optimizerServerStatus").textContent=`${status.optimizerCoverage||0} / ${status.optimizerTotal||280} datasets${status.optimizerLastDataset?` · last ${status.optimizerLastDataset.replace("_","/")}`:""}${status.optimizerLastError?` · ${status.optimizerLastError}`:""}`;renderNemotronStatus(status.ai);}catch{}}
+  async function loadEngineStatus(){try{const response=await apiFetch("/api/engine/status",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),status=await response.json();if(!response.ok)return;el("optimizerServerStatus").textContent=`${status.optimizerCoverage||0} / ${status.optimizerTotal||280} datasets${status.optimizerLastDataset?` · last ${status.optimizerLastDataset.replace("_","/")}`:""}${status.optimizerLastError?` · ${status.optimizerLastError}`:""}`;renderNemotronStatus(status.ai);renderArmState(status.armed);}catch{}}
 
   function diagnosticCards(entries){el("platformDiagnosticGrid").innerHTML=entries.map(item=>`<div class="diagnostic-card ${item.good===true?"good":item.good===false?"bad":""}"><span>${item.label}</span><strong>${item.value}</strong></div>`).join("");}
-  async function runPlatformDiagnostic(open=true){if(open)el("platformDiagnosticDetails").open=true;el("platformDiagnosticStatus").textContent="Scanning…";const started=performance.now();try{const response=await fetch(`/api/platform/diagnostic?instrument=${encodeURIComponent(state.selectedInstrument)}&granularity=${encodeURIComponent(state.selectedTimeframe)}`,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),server=await response.json().catch(()=>({}));if(!response.ok)throw new Error(server.error||`HTTP ${response.status}`);const browserLatency=Math.round(performance.now()-started),failures=state.scheduleFailures.size,telemetry=server.worker?.telemetry||{},deployment=server.deployment||{},entries=[{label:"Browser → Worker",value:`${browserLatency} ms`,good:browserLatency<5000},{label:"Worker deployment",value:deployment.versionTag||deployment.versionId||"metadata unavailable",good:Boolean(deployment.versionId)},{label:"Selected chart lane",value:`${state.candleActive} active · ${state.candleQueue.length} queued`,good:state.candleQueue.filter(job=>job.priority>=80).length===0},{label:"Schedule datasets",value:`${state.scheduleEvaluations.size} / 280 · ${failures} unresolved`,good:failures===0},{label:"Browser candle retries",value:`${state.candleStats.retries} retries · ${state.candleStats.timeouts} timeouts`,good:state.candleStats.timeouts===0},{label:"Worker OANDA queue",value:`${server.worker?.oandaActive??"—"} active · ${server.worker?.oandaQueued??"—"} queued`,good:Number(server.worker?.oandaQueued||0)<4},{label:"OANDA summary",value:`${server.oanda?.summaryLatencyMs??"—"} ms`,good:Number(server.oanda?.summaryLatencyMs)<5000},{label:"OANDA candles",value:`${server.oanda?.completedCandles??0} candles · ${server.oanda?.candleLatencyMs??"—"} ms`,good:Number(server.oanda?.completedCandles)>0},{label:"Engine",value:server.engine?.reachable?`Armed · ${server.engine.lastError||"no error"}`:"Unreachable",good:Boolean(server.engine?.reachable)&&!server.engine?.lastError},{label:"Optimizer",value:`${server.engine?.optimizerCoverage??0} / ${server.engine?.optimizerTotal??280} · ${server.engine?.optimizerLastError||"no error"}`,good:!server.engine?.optimizerLastError},{label:"Worker failures",value:`${telemetry.failures||0} failures · ${telemetry.timeouts||0} timeouts`,good:Number(telemetry.timeouts||0)===0},{label:"Cross-device state",value:state.preferenceSyncStatus||"Pending",good:/Synchronized/.test(state.preferenceSyncStatus||"")},{label:"JPY quote normalization",value:state.jpyReciprocalCorrections.size?[...state.jpyReciprocalCorrections].map(formatPair).join(", "):"Native OANDA quote scale",good:true},{label:"Jules clone proposal",value:server.cloneAssessment?.verdict||"structuredClone hot path absent",good:true}];state.diagnosticLast={server,entries,time:new Date().toISOString()};diagnosticCards(entries);el("platformDiagnosticStatus").textContent=`Completed ${new Date().toLocaleTimeString()} · ${failures?`${failures} unresolved datasets`:"all current checks reported"}`;}catch(error){diagnosticCards([{label:"Diagnostic failure",value:error.message||"Scan failed",good:false}]);el("platformDiagnosticStatus").textContent=error.message||"Diagnostic scan failed";}}
+  async function runPlatformDiagnostic(open=true){if(open)el("platformDiagnosticDetails").open=true;el("platformDiagnosticStatus").textContent="Scanning…";const started=performance.now();try{const response=await apiFetch(`/api/platform/diagnostic?instrument=${encodeURIComponent(state.selectedInstrument)}&granularity=${encodeURIComponent(state.selectedTimeframe)}`,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),server=await response.json().catch(()=>({}));if(!response.ok)throw new Error(server.error||`HTTP ${response.status}`);const browserLatency=Math.round(performance.now()-started),failures=state.scheduleFailures.size,telemetry=server.worker?.telemetry||{},deployment=server.deployment||{},entries=[{label:"Browser → Worker",value:`${browserLatency} ms`,good:browserLatency<5000},{label:"Worker deployment",value:deployment.versionTag||deployment.versionId||"metadata unavailable",good:Boolean(deployment.versionId)},{label:"Selected chart lane",value:`${state.candleActive} active · ${state.candleQueue.length} queued`,good:state.candleQueue.filter(job=>job.priority>=80).length===0},{label:"Schedule datasets",value:`${state.scheduleEvaluations.size} / 280 · ${failures} unresolved`,good:failures===0},{label:"Browser candle retries",value:`${state.candleStats.retries} retries · ${state.candleStats.timeouts} timeouts`,good:state.candleStats.timeouts===0},{label:"Worker OANDA queue",value:`${server.worker?.oandaActive??"—"} active · ${server.worker?.oandaQueued??"—"} queued`,good:Number(server.worker?.oandaQueued||0)<4},{label:"OANDA summary",value:`${server.oanda?.summaryLatencyMs??"—"} ms`,good:Number(server.oanda?.summaryLatencyMs)<5000},{label:"OANDA candles",value:`${server.oanda?.completedCandles??0} candles · ${server.oanda?.candleLatencyMs??"—"} ms`,good:Number(server.oanda?.completedCandles)>0},{label:"Engine",value:server.engine?.reachable?`Armed · ${server.engine.lastError||"no error"}`:"Unreachable",good:Boolean(server.engine?.reachable)&&!server.engine?.lastError},{label:"Optimizer",value:`${server.engine?.optimizerCoverage??0} / ${server.engine?.optimizerTotal??280} · ${server.engine?.optimizerLastError||"no error"}`,good:!server.engine?.optimizerLastError},{label:"Worker failures",value:`${telemetry.failures||0} failures · ${telemetry.timeouts||0} timeouts`,good:Number(telemetry.timeouts||0)===0},{label:"Cross-device state",value:state.preferenceSyncStatus||"Pending",good:/Synchronized/.test(state.preferenceSyncStatus||"")},{label:"JPY quote normalization",value:state.jpyReciprocalCorrections.size?[...state.jpyReciprocalCorrections].map(formatPair).join(", "):"Native OANDA quote scale",good:true},{label:"Jules clone proposal",value:server.cloneAssessment?.verdict||"structuredClone hot path absent",good:true}];state.diagnosticLast={server,entries,time:new Date().toISOString()};diagnosticCards(entries);el("platformDiagnosticStatus").textContent=`Completed ${new Date().toLocaleTimeString()} · ${failures?`${failures} unresolved datasets`:"all current checks reported"}`;}catch(error){diagnosticCards([{label:"Diagnostic failure",value:error.message||"Scan failed",good:false}]);el("platformDiagnosticStatus").textContent=error.message||"Diagnostic scan failed";}}
 
   function updateDateTime(){el("dateTime").textContent=new Intl.DateTimeFormat(undefined,{weekday:"short",year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",timeZoneName:"short"}).format(new Date());}
 
@@ -1001,12 +976,13 @@
 
   async function connect(event) {
     event?.preventDefault?.();
+    if(!isUnlocked()){setConnectionStatus("Unlock with your access token first.","error");return;}
     if(!state.preferencesLoaded)await loadPlatformPreferences();
     const button=el("connectButton"),wasConnected=state.connected;
     button.disabled=true;button.textContent="TESTING…";
     setConnectionStatus(wasConnected?"Testing live OANDA connection…":"Connecting to live OANDA…");
     try {
-      const response=await fetch("/api/oanda/connect",{headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store"});
+      const response=await apiFetch("/api/oanda/connect",{headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store"});
       const payload=await response.json().catch(()=>({error:`HTTP ${response.status}`}));
       if(!response.ok)throw new Error(payload.error||payload.message||`HTTP ${response.status}`);
       const accountId=payload.account?.id||"";
@@ -1526,112 +1502,10 @@
   async function refreshAdaptiveTimeframe(){if(!state.connected||state.adaptiveBusy||state.chartLoading||state.scheduleLoading||document.hidden)return;state.adaptiveBusy=true;const timeframe=TIMEFRAMES[state.adaptiveRotation++%TIMEFRAMES.length];try{await runPool(INSTRUMENTS,1,async pair=>{try{const payload=await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=180`),candles=completedCandles(payload,pair,timeframe),key=scheduleKey(pair,timeframe);state.scheduleCandles.set(key,candles);const cached=state.autoConfigurations.get(key);state.scheduleEvaluations.set(key,analyzeWithConfiguration(candles,cached?.config||STRATEGY_CONFIG,false));renderScheduleCell(pair,timeframe);}catch{}});el("scheduleStamp").textContent=`Adaptive refresh ${timeframe} · ${new Date().toLocaleTimeString()}`;queueAutomaticOptimization();renderMtfForecast();}finally{state.adaptiveBusy=false;}}
   function startAdaptiveMonitor(){clearInterval(state.adaptiveTimer);state.adaptiveTimer=setInterval(refreshAdaptiveTimeframe,300000);}
   function stopAdaptiveMonitor(){clearInterval(state.adaptiveTimer);state.adaptiveTimer=null;state.adaptiveBusy=false;state.optimizationQueue=[];}
-  function renderMacroPerformance(){const fmt=(value,digits=2)=>Number.isFinite(value)?Number(value).toFixed(digits):"—",record=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),authoritative=Boolean(record?.source==="COMPUTE_CONFIGURATION");if(!authoritative){el("macroPerformanceScope").textContent="Not computed · Run Compute Configuration to load the current completed OANDA candle history";el("macroPerformanceBody").innerHTML='<tr><td colspan="9">Compute Configuration will determine and report the actual first and last completed OANDA candles.</td></tr>';el("computeConfiguration").disabled=!state.connected;return;}const first=record.range?.firstCandle,last=record.range?.lastCandle,bars=Number(record.range?.bars)||0;el("macroPerformanceScope").textContent=`History started ${formatTime(first)} · ended ${formatTime(last)} · ${bars} completed candles · computed ${formatTime(record.computedAt)}`;el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const entry=record.config?.[strategy.id]||{},stats={...entry,...entry.grossPerformance};return `<tr><td>${strategy.label}</td><td>${stats.trades??"—"}</td><td>${Number.isFinite(stats.wins)?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${Number(stats.net)>=0?"positive":"negative"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;}).join("");el("computeConfiguration").disabled=!state.connected;}
+  function renderMacroPerformance(){const fmt=(value,digits=2)=>Number.isFinite(value)?Number(value).toFixed(digits):"—",record=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),authoritative=Boolean(record?.source==="COMPUTE_CONFIGURATION");if(!authoritative){el("macroPerformanceScope").textContent="Not computed · Run Compute Configuration to load the current completed OANDA candle history";el("macroPerformanceBody").innerHTML='<tr><td colspan="9">Compute Configuration will determine and report the actual first and last completed OANDA candles.</td></tr>';el("computeConfiguration").disabled=!state.connected;return;}const first=record.range?.firstCandle,last=record.range?.lastCandle,bars=Number(record.range?.bars)||0;el("macroPerformanceScope").textContent=`History started ${formatTime(first)} · ended ${formatTime(last)} · ${bars} completed candles · computed ${formatTime(record.computedAt)}`;el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const stats=record.config?.[strategy.id]||{};return `<tr><td>${strategy.label}</td><td>${stats.trades??"—"}</td><td>${Number.isFinite(stats.wins)?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${Number(stats.net)>=0?"positive":"negative"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;}).join("");el("computeConfiguration").disabled=!state.connected;}
   function applyConfiguration(){document.querySelectorAll('[data-config-length]').forEach(input=>{if(!input.disabled)STRATEGY_CONFIG[input.dataset.configLength].length=clamp(Math.round(Number(input.value)||50),3,200);});document.querySelectorAll('[data-config-filter]').forEach(input=>{const id=input.dataset.configFilter;STRATEGY_CONFIG[id].filter=clamp(Number(input.value)||0,0,id==='COMBO'?5:10);});el("eventLength").value=STRATEGY_CONFIG.ASSET.length;state.scheduleEvaluations.clear();for(const [key,candles] of state.scheduleCandles)try{state.scheduleEvaluations.set(key,analyzeCandles(candles,false));}catch{}if(state.chartCandles.length)state.chartAnalysis=analyzeCandles(state.chartCandles,true);renderSchedule();updateChartSummary();updateCompartments();drawChart();renderMacroPerformance();renderStrategyConfiguration();}
-  async function computeConfiguration(){const button=el("computeConfiguration");if(!state.connected)return;button.disabled=true;button.textContent="Computing…";el("macroPerformanceScope").textContent="Loading the current completed OANDA candle history and optimizing…";try{const response=await fetch("/api/engine/compute",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({pair:state.selectedInstrument,timeframe:state.selectedTimeframe})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?`${payload.stage||"compute"} · ${payload.error}`:`HTTP ${response.status}`);state.autoConfigurations.set(payload.key,payload.record);const resolved=payload.record.config;if(state.chartCandles.length){state.chartAnalysis=analyzeWithConfiguration(state.chartCandles,resolved,false);state.chartCausalIndicators=null;state.chartCausalSeries=[];void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolved,state.selectedStrategy);}renderStrategyConfiguration();renderMacroPerformance();renderOptimizerRegistry();renderSchedule();updateChartSummary();updateCompartments();drawChart();}catch(error){el("macroPerformanceScope").textContent=error.message||"Compute Configuration failed";el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">${error.message||"Compute Configuration failed"}</td></tr>`;}finally{button.textContent="Compute Configuration";button.disabled=!state.connected;}}
-  async function loadChatHistory() {
-    try {
-      const response = await fetch("/api/engine/chat", { credentials: "same-origin", cache: "no-store" });
-      if (!response.ok) return;
-      const payload = await response.json();
-      const logs = el("chatLogs");
-      logs.innerHTML = `
-        <div class="chat-message assistant">
-          <div class="msg-sender">Nemotron 3 Super</div>
-          <div class="msg-content">Hello! I am your Personal Agent. I have full tool-access to read live account stats, inspect ledger logs, view optimizer configurations, and dynamically tune engine settings. How can I help you improve your bottom line today?</div>
-        </div>
-      `;
-      if (Array.isArray(payload.history)) {
-        for (const item of payload.history) {
-          renderChatMessage(item.role, item.content);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load chat history:", err);
-    }
-  }
-
-  function renderChatMessage(role, content) {
-    const logs = el("chatLogs");
-    const div = document.createElement("div");
-    div.className = `chat-message ${role}`;
-
-    const sender = document.createElement("div");
-    sender.className = "msg-sender";
-    sender.textContent = role === "user" ? "You" : "Nemotron 3 Super";
-
-    const body = document.createElement("div");
-    body.className = "msg-content";
-    body.textContent = content;
-
-    div.appendChild(sender);
-    div.appendChild(body);
-    logs.appendChild(div);
-    logs.scrollTop = logs.scrollHeight;
-  }
-
-  async function submitChat() {
-    const input = el("chatInput");
-    const sendBtn = el("sendChat");
-    const text = input.value.trim();
-    if (!text) return;
-
-    input.value = "";
-    renderChatMessage("user", text);
-
-    input.disabled = true;
-    sendBtn.disabled = true;
-    sendBtn.textContent = "Thinking…";
-
-    try {
-      const voiceEnabled = el("voiceToggle").getAttribute("aria-pressed") === "true";
-      const response = await fetch("/api/engine/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        cache: "no-store",
-        body: JSON.stringify({ message: text, voice: voiceEnabled })
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        renderChatMessage("assistant", `Error: ${payload.error || "Request failed"}`);
-      } else {
-        renderChatMessage("assistant", payload.content);
-        if (payload.audio) {
-          const audioData = atob(payload.audio);
-          const arrayBuffer = new ArrayBuffer(audioData.length);
-          const view = new Uint8Array(arrayBuffer);
-          for (let i = 0; i < audioData.length; i++) {
-            view[i] = audioData.charCodeAt(i);
-          }
-          const blob = new Blob([arrayBuffer], { type: "audio/wav" });
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          audio.play().catch(e => console.error("Audio playback failed", e));
-        }
-      }
-    } catch (err) {
-      renderChatMessage("assistant", `Error: ${err.message || err}`);
-    } finally {
-      input.disabled = false;
-      sendBtn.disabled = false;
-      sendBtn.textContent = "Send";
-      input.focus();
-    }
-  }
-
-  async function clearChatHistory() {
-    if (!confirm("Are you sure you want to clear your conversation history?")) return;
-    try {
-      await fetch("/api/engine/chat", { method: "DELETE", credentials: "same-origin" });
-      loadChatHistory();
-    } catch (err) {
-      console.error("Failed to clear history:", err);
-    }
-  }
-
-  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','chat']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='chat'){void loadChatHistory();}if(name==='event'){state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(persist)queuePlatformPreferenceSave();}
+  async function computeConfiguration(){const button=el("computeConfiguration");if(!state.connected)return;button.disabled=true;button.textContent="Computing…";el("macroPerformanceScope").textContent="Loading the current completed OANDA candle history and optimizing…";try{const response=await apiFetch("/api/engine/compute",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({pair:state.selectedInstrument,timeframe:state.selectedTimeframe})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?`${payload.stage||"compute"} · ${payload.error}`:`HTTP ${response.status}`);state.autoConfigurations.set(payload.key,payload.record);const resolved=payload.record.config;if(state.chartCandles.length){state.chartAnalysis=analyzeWithConfiguration(state.chartCandles,resolved,false);state.chartCausalIndicators=null;state.chartCausalSeries=[];void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolved,state.selectedStrategy);}renderStrategyConfiguration();renderMacroPerformance();renderOptimizerRegistry();renderSchedule();updateChartSummary();updateCompartments();drawChart();}catch(error){el("macroPerformanceScope").textContent=error.message||"Compute Configuration failed";el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">${error.message||"Compute Configuration failed"}</td></tr>`;}finally{button.textContent="Compute Configuration";button.disabled=!state.connected;}}
+  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(persist)queuePlatformPreferenceSave();}
 
   function pointerPosition(event) { const rect=el("chart").getBoundingClientRect(); return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
 
@@ -1648,74 +1522,6 @@
     el("analysisTab").addEventListener("click",()=>selectFacility("analysis"));
     el("eventTab").addEventListener("click",()=>selectFacility("event"));
     el("performanceTab").addEventListener("click",()=>selectFacility("performance"));
-    el("chatTab").addEventListener("click",()=>selectFacility("chat"));
-    el("clearChat").addEventListener("click",clearChatHistory);
-    el("sendChat").addEventListener("click",submitChat);
-    el("chatInput").addEventListener("keydown",event=>{if(event.key==="Enter")submitChat();});
-    el("voiceToggle").addEventListener("click",event=>{const btn=event.currentTarget,active=btn.getAttribute("aria-pressed")==="true";btn.setAttribute("aria-pressed",String(!active));btn.textContent=!active?"Voice TTS on":"Voice TTS off";btn.classList.toggle("active",!active);});
-
-    // Speech-to-Text (Microphone Toggle) using Web Speech API
-    let recognition = null;
-    const hasSpeech = "webkitSpeechRecognition" in window || "SpeechRecognition" in window;
-    if (hasSpeech) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
-
-      recognition.onstart = () => {
-        const btn = el("micToggle");
-        btn.setAttribute("aria-pressed", "true");
-        btn.textContent = "🎤 Listening…";
-        btn.classList.add("active");
-      };
-
-      recognition.onend = () => {
-        const btn = el("micToggle");
-        btn.setAttribute("aria-pressed", "false");
-        btn.textContent = "🎤 Mic off";
-        btn.classList.remove("active");
-      };
-
-      recognition.onerror = event => {
-        console.error("Speech recognition error:", event.error);
-        if (recognition) {
-          try { recognition.stop(); } catch(e) {}
-        }
-      };
-
-      recognition.onresult = event => {
-        let finalTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          }
-        }
-        if (finalTranscript) {
-          const input = el("chatInput");
-          const space = input.value && !input.value.endsWith(" ") ? " " : "";
-          input.value += space + finalTranscript.trim();
-        }
-      };
-
-      el("micToggle").addEventListener("click", () => {
-        const pressed = el("micToggle").getAttribute("aria-pressed") === "true";
-        if (pressed) {
-          recognition.stop();
-        } else {
-          recognition.start();
-        }
-      });
-    } else {
-      const btn = el("micToggle");
-      if (btn) {
-        btn.disabled = true;
-        btn.title = "Speech recognition is not supported in this browser";
-      }
-    }
-
-    document.querySelectorAll(".suggestion-chip").forEach(chip=>{chip.addEventListener("click",event=>{el("chatInput").value=event.currentTarget.textContent;submitChat();});});
     el("applyConfiguration").addEventListener("click",applyConfiguration);
     el("computeConfiguration").addEventListener("click",computeConfiguration);
     el("loadEvents").addEventListener("click",loadEventForecast);
@@ -1751,6 +1557,10 @@
     el("candidateUnits").addEventListener("input",event=>{event.target.value=event.target.value.replace(/\D/g,"");renderDecisionCandidates();});
     el("executeDecisionCandidate").addEventListener("click",executeSelectedDecisionCandidate);
     el("disconnectButton").addEventListener("click",disconnect);
+    el("authUnlockButton").addEventListener("click",unlock);
+    el("authTokenInput").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();unlock();}});
+    el("authLockButton").addEventListener("click",lock);
+    el("engineArmToggle").addEventListener("click",toggleEngineArm);
     el("refreshSchedule").addEventListener("click",()=>loadSchedule("full"));
     el("refreshChart").addEventListener("click",()=>loadChart());
     el("scheduleStrategy").addEventListener("change",event=>{state.selectedScheduleStrategy=event.target.value;renderSchedule();renderMtfForecast();queuePlatformPreferenceSave();});
@@ -1795,7 +1605,9 @@
     window.addEventListener("resize",()=>{drawChart();if(state.eventData&&!el("eventPanel").hidden)eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
   }
 
-  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadTradingLedger(state.ledgerLimit);},15000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadEngineStatus();},30000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadOptimizerRecords();},120000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
+  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadTradingLedger(state.ledgerLimit);},15000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadEngineStatus();},30000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadOptimizerRecords();},120000);updateChartSummary(); updateCompartments(); drawChart(); applyAuthState(); void connect();
   </script>
+
+
 </body>
 </html>
