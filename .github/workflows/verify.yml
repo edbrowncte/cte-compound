@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -15,10 +15,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
           node-version: 24
+      - name: Apply Evaluation MAS migration on repair branch
+        if: github.head_ref == 'repair/evaluation-mas-zscore'
+        run: |
+          node scripts/apply-evaluation-mas-patch.mjs
+          if ! git diff --quiet -- public/index.html; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add public/index.html
+            git commit -m "fix: migrate Evaluation UI to canonical MAS IM statistics"
+            git push origin HEAD:repair/evaluation-mas-zscore
+          fi
       - name: Install dependencies
         run: npm ci
       - name: Generate Wrangler Types
