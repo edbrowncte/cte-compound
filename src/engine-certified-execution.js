@@ -234,12 +234,12 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       executionPolicy:EXECUTION_POLICY_VERSION,
       pendingReversals:Object.keys(state.pendingReversals||{}).length,
       reversalPolicy:"ALL_OPPOSING_EVENTS_INDEPENDENT_NEW_ENTRIES_NEMOTRON_RANKED",
-      reconciliationCadence:"EVERY_CRON_HEARTBEAT",
+      reconciliationCadence:"new-completed-candle-only",
     };
   }
 
   async loadPositions(token,accountId){
-    const payload=await callOanda(`/v3/accounts/${accountId}/positions`,token);
+    const payload=await callOanda(`/v3/accounts/${accountId}/openPositions`,token);
     return payload.positions||[];
   }
 
