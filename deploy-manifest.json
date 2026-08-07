@@ -1,0 +1,13 @@
+{
+  "worker": "cte-compound",
+  "version": 121,
+  "bindings": [
+    { "name": "OANDA_ENGINE", "type": "service" },
+    { "name": "HTL_ENGINE", "type": "durable_object_namespace", "class": "HtlEngine" },
+    { "name": "AI", "type": "ai" },
+    { "name": "ASSETS", "type": "assets" },
+    { "name": "OANDA_API_KEY", "type": "secret_text" },
+    { "name": "OANDA_ACCOUNT_ID", "type": "secret_text" }
+  ],
+  "cron": "* * * * *"
+}

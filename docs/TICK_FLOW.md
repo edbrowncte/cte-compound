@@ -96,9 +96,30 @@ flowchart TD
 
 ---
 
-## 3. Post-Mortem: Corrected Architectural Bugs
+## 3. Discrepancy Reconciliation & Deployment Layout
 
-This release fixes two critical issues that hindered trading execution stability and caused redundant trading behavior:
+### 3.1. Deployment Manifest
+The `cte-compound` Worker exposes specific edge bindings. Sibling workers on the account are out of scope, but the service bindings and Durable Objects exposed here are cataloged in `deploy-manifest.json`:
+* **Service Binding**: `OANDA_ENGINE` binds `cte-compound` directly to our multi-pair scan execution process for concurrency and rate-limiting mitigation.
+* **Durable Object Namespace**: `HTL_ENGINE` (class `HtlEngine`) maintains SQLite transactional persistence across ticks.
+* **Workers AI**: Bindings to `AI` route text selection to `@cf/nvidia/nemotron-3-120b-a12b` and voice synthesis to `@cf/myshell-ai/melotts`.
+
+### 3.2. Order Suppression Pathways (`NO_ORDER` Ledger Logs)
+When candidate signals occur, order execution on OANDA is strictly gated. If execution is bypassed, a `NO_ORDER` entry is written to the ledger for inference and telemetry across **four (4) distinct paths**:
+1. **No Margin Available**: If the live account NAV summary indicates `marginAvailable <= 0`, transaction dispatch is suppressed.
+2. **Existing Position Matches Event**: If OANDA position alignment matches the computed signal direction, redundant transaction submissions are avoided.
+3. **No Directional Units Available**: If market pricing or volume reports `unitsAvailable` is `0`, order submission is halted.
+4. **Minimum-Units Threshold Violation**: If available trade size falls below `minimumUnits` preference configured in `uiPreferences`, order is suppressed.
+
+### 3.3. Candidate Order Verification Subsystem (`__candidateTest`)
+`cte-compound` exports a structured `__candidateTest` handler that exposes verification helpers:
+* `normalizeCandidateOrder(candidate)`: Validates property formats.
+* `verifyCandidate(candidate)`: Executes mathematical cross sanity check against original indicators.
+* `calculationVersion` & `qualificationVersion`: Provides exact schema indicators for tracking strategy alignment.
+
+---
+
+## 4. Post-Mortem: Corrected Architectural Bugs
 
 ### Bug 1: Reconcile-Cadence Gate Mismatch (CSS/Execution Leak)
 * **Problem**: Originally, `reconcile()` (the function responsible for closing opposing positions) fired on **every 60-second cron tick** when the candle was unchanged, instead of once per completed candle. This led to excessive redundant OANDA requests and premature/repeated position closures inside the same candle timeframe.

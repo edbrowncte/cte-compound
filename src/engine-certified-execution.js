@@ -2,6 +2,7 @@ import { HtlEngine as CertifiedAnalyticsEngine } from "./engine.js";
 import { PAIRS, TIMEFRAMES, OPTIMIZER_VERSION, currentOptimizer, candles } from "./horizon-platform-engine.js";
 import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
 import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
+import { credentials } from "./engine-base.js";
 import {
   optimizedOptimizeNext,
   optimizedComputeConfiguration,
@@ -10,13 +11,6 @@ import {
 
 const API="https://api-fxtrade.oanda.com";
 const EXECUTION_POLICY_VERSION="CERTIFIED_MULTI_REVERSAL@1.0.0";
-
-function credentials(env){
-  const token=String(env.OANDA_API_KEY||"").trim();
-  const accountId=String(env.OANDA_ACCOUNT_ID||"").trim();
-  if(token.length<20||!accountId)throw new Error("OANDA secrets unavailable");
-  return{token,accountId};
-}
 
 async function callOanda(path,token,init={}){
   const controller=new AbortController();
