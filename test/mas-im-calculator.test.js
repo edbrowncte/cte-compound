@@ -57,12 +57,12 @@ test("IM/MAS is the raw composite ratio rather than IM Z divided by MAS Z",()=>{
   if(Math.abs(result.MAS_Z)>1e-9)assert.notEqual(result.IM_OVER_MAS,result.IM_Z/result.MAS_Z);
 });
 
-test("missing required timeframe data is unavailable instead of silently partial or synthetic",()=>{
+test("missing required timeframe data invalidates only composites that require it",()=>{
   const source=cache(1.2);
   delete source.W;
   const result=calculateMAS_IM_ZScores("EUR_USD","D",source);
-  assert.ok(Number.isNaN(result.MAS_Z));
-  assert.ok(Number.isNaN(result.IM_Z));
+  assert.ok(Number.isNaN(result.MAS_Z),"D MAS requires W");
+  assert.ok(Number.isFinite(result.IM_Z),"D IM uses M1 through D and should remain available without W");
 });
 
 test("insufficient history produces NaN rather than a fabricated or zero z-score",()=>{
