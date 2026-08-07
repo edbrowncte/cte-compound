@@ -232,27 +232,7 @@
     @media(max-width:900px) { .config-grid { grid-template-columns:1fr 1fr; } }
     @media(max-width:900px) { .event-chart-stage { height:300px; } .event-chart-instrument { margin-left:0; } }
 
-    /* Nemotron Copilot Chat styles */
-    .chat-container { display: flex; flex-direction: column; height: 500px; background: #080c12; border: 1px solid var(--line); margin-top: 10px; }
-    .chat-logs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
-    .chat-message { max-width: 80%; padding: 10px 12px; border-radius: 4px; font-size: 11px; line-height: 1.5; }
-    .chat-message.user { align-self: flex-end; background: rgba(215, 168, 92, 0.15); border: 1px solid var(--accent); color: #fff; }
-    .chat-message.assistant { align-self: flex-start; background: #111822; border: 1px solid var(--line2); color: #dce4ed; }
-    .chat-message.system-status { align-self: center; background: rgba(0, 0, 0, 0.3); border: 1px dashed var(--line); color: var(--muted); text-align: center; font-size: 10px; }
-    .msg-sender { font-weight: 850; text-transform: uppercase; font-size: 8px; letter-spacing: 0.05em; margin-bottom: 4px; color: var(--accent); }
-    .chat-message.user .msg-sender { color: #fff; text-align: right; }
-    .msg-content { white-space: pre-wrap; }
-    .chat-suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); background: #0c1118; }
-    .suggestion-chip { background: #131a24; border: 1px solid var(--line2); color: #9ab3cc; padding: 6px 10px; border-radius: 3px; font-size: 10px; cursor: pointer; transition: all 0.2s; }
-    .suggestion-chip:hover { border-color: var(--accent); color: #fff; background: rgba(215, 168, 92, 0.08); }
-    .chat-input-area { display: flex; padding: 12px 14px; border-top: 1px solid var(--line); background: #080c12; gap: 8px; align-items: center; }
-    #chatInput { flex: 1; background: #0e141d; border: 1px solid var(--line); color: #fff; padding: 10px 12px; border-radius: 3px; font-size: 11px; }
-    #chatInput:focus { border-color: var(--accent); outline: none; }
-    .voice-btn, .send-btn, .action-btn { background: #131a24; border: 1px solid var(--line2); color: #fff; padding: 8px 14px; border-radius: 3px; font-size: 11px; cursor: pointer; font-weight: 900; }
-    .voice-btn[aria-pressed="true"] { background: var(--accent); color: #000; border-color: var(--accent); }
-    .send-btn { background: var(--accent); color: #000; border-color: var(--accent); }
-    .send-btn:hover { background: #ffd07d; border-color: #ffd07d; }
-    .send-btn:disabled, .voice-btn:disabled, #chatInput:disabled { opacity: 0.5; cursor: not-allowed; }
+
   </style>
 </head>
 <body>
@@ -336,18 +316,7 @@
           <button id="executeDecisionCandidate" type="button" disabled>Execute selected trade</button>
           <div class="candidate-execution-status" id="candidateExecutionStatus" role="status" aria-live="polite"></div>
         </div>
-        <details class="data-details" id="nemotronDetails">
-          <summary>Nemotron Decision Orchestration</summary>
-          <div class="decision-strip">
-            <div class="decision-card"><span>Model</span><strong id="nemotronModel">Nemotron 3 Super</strong></div>
-            <div class="decision-card"><span>Status</span><strong id="nemotronStatus">Awaiting multi-candidate decision</strong></div>
-            <div class="decision-card"><span>Last selection</span><strong id="nemotronSelection">—</strong></div>
-            <div class="decision-card"><span>Latency</span><strong id="nemotronLatency">—</strong></div>
-            <div class="decision-card"><span>Today</span><strong id="nemotronDaily">0 invocations</strong></div>
-            <div class="decision-card"><span>Total</span><strong id="nemotronTotal">0 invocations</strong></div>
-          </div>
-          <div class="automation-status" id="nemotronReason">Nemotron runs only when multiple eligible trade candidates require adjudication.</div>
-        </details>
+
         <details class="data-details" id="tradingLedgerDetails">
           <summary>Trading Ledger</summary>
           <div class="head-controls"><button id="downloadTradingLedger" type="button" disabled>Download CSV</button></div>
@@ -365,7 +334,7 @@
       <button class="app-tab" id="analysisTab" role="tab" aria-selected="true" aria-controls="analysisPanel" type="button">Analytical Compound</button>
       <button class="app-tab" id="eventTab" role="tab" aria-selected="false" aria-controls="eventPanel" type="button">HTL Event Forecast</button>
       <button class="app-tab" id="performanceTab" role="tab" aria-selected="false" aria-controls="performancePanel" type="button">Configuration &amp; Performance</button>
-      <button class="app-tab" id="chatTab" role="tab" aria-selected="false" aria-controls="chatPanel" type="button">Nemotron Personal Agent</button>
+
     </nav>
 
     <main>
@@ -500,40 +469,7 @@
         <details class="data-details" id="optimizerRegistryDetails"><summary>Pair × Timeframe Optimizer Registry · <span id="optimizerServerStatus">0 / 280 datasets</span></summary><div class="performance-wrap"><table class="performance-table"><thead><tr><th>Pair</th><th>Timeframe</th><th>Strategy</th><th>Length</th><th>Filter</th><th>Trades</th><th>Net pips</th><th>Max DD</th><th>Score</th><th>Source</th><th>Completed candle</th><th>Computed</th></tr></thead><tbody id="optimizerRegistryBody"><tr><td colspan="12">No optimized datasets.</td></tr></tbody></table></div></details>
       </section>
 
-      <section class="panel tab-panel chat-panel" id="chatPanel" role="tabpanel" aria-labelledby="chatTab" hidden>
-        <div class="panel-head">
-          <div class="panel-title">
-            <h2>Nemotron Personal Agent Copilot</h2>
-            <p>Direct conversational access to your trading DO, live status, Oanda account, and configuration controls</p>
-          </div>
-          <div class="head-controls">
-            <button id="clearChat" type="button" class="action-btn">Clear History</button>
-          </div>
-        </div>
 
-        <div class="chat-container">
-          <div class="chat-logs" id="chatLogs">
-            <div class="chat-message assistant">
-              <div class="msg-sender">Nemotron 3 Super</div>
-              <div class="msg-content">Hello! I am your Personal Agent. I have full tool-access to read live account stats, inspect ledger logs, view optimizer configurations, and dynamically tune engine settings. How can I help you improve your bottom line today?</div>
-            </div>
-          </div>
-
-          <div class="chat-suggestions">
-            <button type="button" class="suggestion-chip">What is our overall system status?</button>
-            <button type="button" class="suggestion-chip">Fetch my latest Oanda account summary</button>
-            <button type="button" class="suggestion-chip">Show me the recent trading ledger logs</button>
-            <button type="button" class="suggestion-chip">Nemotron, switch our strategy to NAI on M15 and set the filter to 0.5</button>
-          </div>
-
-          <div class="chat-input-area">
-            <input type="text" id="chatInput" placeholder="Ask Nemotron anything or issue a command..." autocomplete="off">
-            <button id="voiceToggle" type="button" class="voice-btn" aria-pressed="false">Voice TTS off</button>
-            <button id="micToggle" type="button" class="voice-btn" aria-pressed="false" title="Speech to Text (Voice input)">🎤 Mic off</button>
-            <button id="sendChat" type="button" class="send-btn">Send</button>
-          </div>
-        </div>
-      </section>
     </main>
 
   </div>
@@ -640,7 +576,7 @@
     decisionCandidates:{A:null,B:null,C:null},
     selectedDecisionCandidate:null,
     candidateBusy:false,
-    nemotronRecommendedPair:null
+    NemotronRecommendedPair:null
   };
 
   const el = id => document.getElementById(id);
@@ -928,7 +864,7 @@
   function synchronizeMinimumUnits(persist=true){const minimum=minimumUnitAmount(),control=el("minimumUnits");control.value=String(minimum);for(const id of ["tradeUnits","candidateUnits"]){const input=el(id),amount=Math.trunc(Number((input.value||"").replace(/\D/g,"")));input.min=String(minimum);if(!Number.isFinite(amount)||amount<minimum)input.value=String(minimum);}updateTradeButtons();renderDecisionCandidates();if(persist)queuePlatformPreferenceSave();}
   function candidateUnitAmount(){return Math.trunc(Number((el("candidateUnits").value||"").replace(/\D/g,"")));}
   function openPositionPairs(){return new Set(state.openPositions.filter(position=>Number(position.long?.units||0)!==0||Number(position.short?.units||0)!==0).map(position=>position.instrument));}
-  function renderDecisionCandidates(){for(const key of ["A","B","C"]){const candidate=state.decisionCandidates[key],button=el(`candidate${key}`),selected=state.selectedDecisionCandidate===key,recommended=Boolean(candidate&&state.nemotronRecommendedPair===candidate.pair);button.disabled=!candidate||state.candidateBusy;button.classList.toggle("selected",selected);button.classList.toggle("recommended",recommended);button.setAttribute("aria-pressed",String(selected));button.querySelector("small").textContent=candidate?(recommended?"Nemotron recommendation · selectable":"Selectable alternative"):"No eligible alternative";}const selected=state.decisionCandidates[state.selectedDecisionCandidate],amount=candidateUnitAmount();el("selectedDecisionCandidate").textContent=selected?`${state.selectedDecisionCandidate} · ${formatPair(selected.pair)} · ${signalWord(selected.direction)} · ${formatPct(selected.confidence)}`:"—";el("executeDecisionCandidate").textContent=selected?`Execute ${signalWord(selected.direction)}`:"Execute selected trade";el("executeDecisionCandidate").disabled=!state.connected||state.candidateBusy||!selected||!Number.isFinite(amount)||amount<minimumUnitAmount();}
+  function renderDecisionCandidates(){for(const key of ["A","B","C"]){const candidate=state.decisionCandidates[key],button=el(`candidate${key}`),selected=state.selectedDecisionCandidate===key;button.disabled=!candidate||state.candidateBusy;button.classList.toggle("selected",selected);button.setAttribute("aria-pressed",String(selected));button.querySelector("small").textContent=candidate?"Selectable alternative":"No eligible alternative";}const selected=state.decisionCandidates[state.selectedDecisionCandidate],amount=candidateUnitAmount();el("selectedDecisionCandidate").textContent=selected?`${state.selectedDecisionCandidate} · ${formatPair(selected.pair)} · ${signalWord(selected.direction)} · ${formatPct(selected.confidence)}`:"—";el("executeDecisionCandidate").textContent=selected?`Execute ${signalWord(selected.direction)}`:"Execute selected trade";el("executeDecisionCandidate").disabled=!state.connected||state.candidateBusy||!selected||!Number.isFinite(amount)||amount<minimumUnitAmount();}
   function selectDecisionCandidate(key){if(!state.decisionCandidates[key]||state.candidateBusy)return;state.selectedDecisionCandidate=key;el("candidateExecutionStatus").textContent="";renderDecisionCandidates();}
   async function executeSelectedDecisionCandidate(){const key=state.selectedDecisionCandidate,candidate=state.decisionCandidates[key],amount=candidateUnitAmount();if(!state.connected||state.candidateBusy||!candidate||!Number.isFinite(amount)||amount<minimumUnitAmount())return;state.candidateBusy=true;renderDecisionCandidates();el("candidateExecutionStatus").textContent="Validating selected candidate against live OANDA state…";try{const accountId=el("oandaAccountId").value.trim(),positionsPayload=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/positions`),positions=(positionsPayload.positions||[]).filter(position=>Number(position.long?.units||0)!==0||Number(position.short?.units||0)!==0);state.openPositions=positions;renderOpenPositions();updateDecisionDisplays();if(positions.some(position=>position.instrument===candidate.pair))throw new Error(`${formatPair(candidate.pair)} is no longer available; candidates were refreshed.`);const pricing=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/pricing?instruments=${encodeURIComponent(candidate.pair)}&includeUnitsAvailable=true`),available=pricing.prices?.[0]?.unitsAvailable?.default,limit=Math.max(0,Math.trunc(Number(candidate.direction>0?available?.long:available?.short)||0));if(amount<minimumUnitAmount())throw new Error(`Requested units must be at least ${minimumUnitAmount().toLocaleString()}.`);if(amount>limit)throw new Error(`Requested ${amount.toLocaleString()} units exceeds ${signalWord(candidate.direction)} availability ${limit.toLocaleString()}.`);const units=candidate.direction>0?amount:-amount,payload=await oandaPost(`/v3/accounts/${encodeURIComponent(accountId)}/orders`,{order:{instrument:candidate.pair,units:String(units),type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT"}}),fill=payload.orderFillTransaction;el("candidateExecutionStatus").textContent=`${key} · ${signalWord(candidate.direction)} ${amount.toLocaleString()} ${formatPair(candidate.pair)} · ${fill?.price||"filled"} · transaction ${fill?.id||payload.lastTransactionID||"—"}`;state.selectedDecisionCandidate=null;await refreshOpenPositions();await loadTradingLedger();}catch(error){el("candidateExecutionStatus").textContent=error.message||"Selected candidate order failed.";}finally{state.candidateBusy=false;updateDecisionDisplays();renderDecisionCandidates();}}
 
@@ -940,8 +876,8 @@
   function downloadTradingLedger(){const rows=state.tradingLedger||[];if(!rows.length)return;const fields=[["Ledger ID","ledgerId"],["Time","time"],["Type","type"],["OANDA Type","transactionType"],["Pair","pair"],["Strategy","strategy"],["Confirmation Strategy","confirmationStrategy"],["Side","direction"],["Units","units"],["Price","price"],["Realized P/L","realizedPL"],["Financing","financing"],["Commission","commission"],["Account Balance","accountBalance"],["Transaction ID","transaction"],["Client Order ID","clientOrderId"],["Event ID","event"],["Decision Mode","decisionMode"],["Timeframe","timeframe"],["HTL Length","htlLength"],["Filter","filter"],["Configuration Source","configurationSource"],["Optimizer Score","optimizerScore"],["Optimizer Trades","optimizerTrades"],["Optimizer Net","optimizerNet"],["Optimizer Drawdown","optimizerDrawdown"],["Optimizer Win Rate","optimizerWinRate"],["Confirmation HTL Length","confirmationHtlLength"],["Confirmation Filter","confirmationFilter"],["Reason","reason"],["Message","message"]],csv=[fields.map(([label])=>label),...rows.map(item=>fields.map(([,key])=>item[key]??""))].map(row=>row.map(value=>`"${String(value).replaceAll('"','""')}"`).join(",")).join("\r\n"),url=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"})),link=document.createElement("a");link.href=url;link.download=`cte-compound-trading-ledger-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
   async function loadTradingLedger(limit=state.ledgerLimit){state.ledgerLimit=limit;try{const response=await fetch(`/api/engine/ledger?limit=${encodeURIComponent(limit)}`,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(response.ok)renderTradingLedger(payload.ledger);}catch{}}
   async function loadOptimizerRecords(){try{const response=await fetch("/api/engine/optimizer",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(!response.ok)return;state.autoConfigurations.clear();for(const [key,value] of Object.entries(payload.records||{}))state.autoConfigurations.set(key,value);renderOptimizerRegistry();}catch{}}
-  function renderNemotronStatus(ai={}){const last=ai.last||{},daily=ai.daily||{};state.nemotronRecommendedPair=last.selectedPair||null;el("nemotronModel").textContent=(ai.model||"Nemotron 3 Super").replace("@cf/nvidia/","");el("nemotronStatus").textContent=last.status||`${ai.binding?"Ready":"AI binding unavailable"}`;el("nemotronSelection").textContent=last.selectedPair?formatPair(last.selectedPair):"—";el("nemotronLatency").textContent=Number.isFinite(last.latencyMs)?`${last.latencyMs} ms`:"—";el("nemotronDaily").textContent=`${daily.invocations||0} invocations · ${daily.selections||0} selected · ${daily.fallbacks||0} fallback`;el("nemotronTotal").textContent=`${ai.totalInvocations||0} invocations · ${ai.totalSelections||0} selected · ${ai.totalFallbacks||0} fallback`;el("nemotronReason").textContent=last.time?`${formatTime(last.time)} · ${(last.candidates||[]).map(formatPair).join(", ")} · ${last.reason||"No reason returned"}`:"Nemotron recommends among eligible alternatives; it does not execute or override your selection.";renderDecisionCandidates();}
-  async function loadEngineStatus(){try{const response=await fetch("/api/engine/status",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),status=await response.json();if(!response.ok)return;el("optimizerServerStatus").textContent=`${status.optimizerCoverage||0} / ${status.optimizerTotal||280} datasets${status.optimizerLastDataset?` · last ${status.optimizerLastDataset.replace("_","/")}`:""}${status.optimizerLastError?` · ${status.optimizerLastError}`:""}`;renderNemotronStatus(status.ai);}catch{}}
+  function renderNemotronStatus(ai={}){const last=ai.last||{},daily=ai.daily||{};state.NemotronRecommendedPair=last.selectedPair||null;el("NemotronModel").textContent=(ai.model||"Nemotron 3 Super").replace("@cf/nvidia/","");el("NemotronStatus").textContent=last.status||`${ai.binding?"Ready":"AI binding unavailable"}`;el("NemotronSelection").textContent=last.selectedPair?formatPair(last.selectedPair):"—";el("NemotronLatency").textContent=Number.isFinite(last.latencyMs)?`${last.latencyMs} ms`:"—";el("NemotronDaily").textContent=`${daily.invocations||0} invocations · ${daily.selections||0} selected · ${daily.fallbacks||0} fallback`;el("NemotronTotal").textContent=`${ai.totalInvocations||0} invocations · ${ai.totalSelections||0} selected · ${ai.totalFallbacks||0} fallback`;el("NemotronReason").textContent=last.time?`${formatTime(last.time)} · ${(last.candidates||[]).map(formatPair).join(", ")} · ${last.reason||"No reason returned"}`:"Nemotron recommends among eligible alternatives; it does not execute or override your selection.";renderDecisionCandidates();}
+  async function loadEngineStatus(){try{const response=await fetch("/api/engine/status",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),status=await response.json();if(!response.ok)return;el("optimizerServerStatus").textContent=`${status.optimizerCoverage||0} / ${status.optimizerTotal||280} datasets${status.optimizerLastDataset?` · last ${status.optimizerLastDataset.replace("_","/")}`:""}${status.optimizerLastError?` · ${status.optimizerLastError}`:""}`;}catch{}}
 
   function diagnosticCards(entries){el("platformDiagnosticGrid").innerHTML=entries.map(item=>`<div class="diagnostic-card ${item.good===true?"good":item.good===false?"bad":""}"><span>${item.label}</span><strong>${item.value}</strong></div>`).join("");}
   async function runPlatformDiagnostic(open=true){if(open)el("platformDiagnosticDetails").open=true;el("platformDiagnosticStatus").textContent="Scanning…";const started=performance.now();try{const response=await fetch(`/api/platform/diagnostic?instrument=${encodeURIComponent(state.selectedInstrument)}&granularity=${encodeURIComponent(state.selectedTimeframe)}`,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),server=await response.json().catch(()=>({}));if(!response.ok)throw new Error(server.error||`HTTP ${response.status}`);const browserLatency=Math.round(performance.now()-started),failures=state.scheduleFailures.size,telemetry=server.worker?.telemetry||{},deployment=server.deployment||{},entries=[{label:"Browser → Worker",value:`${browserLatency} ms`,good:browserLatency<5000},{label:"Worker deployment",value:deployment.versionTag||deployment.versionId||"metadata unavailable",good:Boolean(deployment.versionId)},{label:"Selected chart lane",value:`${state.candleActive} active · ${state.candleQueue.length} queued`,good:state.candleQueue.filter(job=>job.priority>=80).length===0},{label:"Schedule datasets",value:`${state.scheduleEvaluations.size} / 280 · ${failures} unresolved`,good:failures===0},{label:"Browser candle retries",value:`${state.candleStats.retries} retries · ${state.candleStats.timeouts} timeouts`,good:state.candleStats.timeouts===0},{label:"Worker OANDA queue",value:`${server.worker?.oandaActive??"—"} active · ${server.worker?.oandaQueued??"—"} queued`,good:Number(server.worker?.oandaQueued||0)<4},{label:"OANDA summary",value:`${server.oanda?.summaryLatencyMs??"—"} ms`,good:Number(server.oanda?.summaryLatencyMs)<5000},{label:"OANDA candles",value:`${server.oanda?.completedCandles??0} candles · ${server.oanda?.candleLatencyMs??"—"} ms`,good:Number(server.oanda?.completedCandles)>0},{label:"Engine",value:server.engine?.reachable?`Armed · ${server.engine.lastError||"no error"}`:"Unreachable",good:Boolean(server.engine?.reachable)&&!server.engine?.lastError},{label:"Optimizer",value:`${server.engine?.optimizerCoverage??0} / ${server.engine?.optimizerTotal??280} · ${server.engine?.optimizerLastError||"no error"}`,good:!server.engine?.optimizerLastError},{label:"Worker failures",value:`${telemetry.failures||0} failures · ${telemetry.timeouts||0} timeouts`,good:Number(telemetry.timeouts||0)===0},{label:"Cross-device state",value:state.preferenceSyncStatus||"Pending",good:/Synchronized/.test(state.preferenceSyncStatus||"")},{label:"JPY quote normalization",value:state.jpyReciprocalCorrections.size?[...state.jpyReciprocalCorrections].map(formatPair).join(", "):"Native OANDA quote scale",good:true},{label:"Jules clone proposal",value:server.cloneAssessment?.verdict||"structuredClone hot path absent",good:true}];state.diagnosticLast={server,entries,time:new Date().toISOString()};diagnosticCards(entries);el("platformDiagnosticStatus").textContent=`Completed ${new Date().toLocaleTimeString()} · ${failures?`${failures} unresolved datasets`:"all current checks reported"}`;}catch(error){diagnosticCards([{label:"Diagnostic failure",value:error.message||"Scan failed",good:false}]);el("platformDiagnosticStatus").textContent=error.message||"Diagnostic scan failed";}}
@@ -1529,107 +1465,7 @@
   function renderMacroPerformance(){const fmt=(value,digits=2)=>Number.isFinite(value)?Number(value).toFixed(digits):"—",record=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),authoritative=Boolean(record?.source==="COMPUTE_CONFIGURATION");if(!authoritative){el("macroPerformanceScope").textContent="Not computed · Run Compute Configuration to load the current completed OANDA candle history";el("macroPerformanceBody").innerHTML='<tr><td colspan="9">Compute Configuration will determine and report the actual first and last completed OANDA candles.</td></tr>';el("computeConfiguration").disabled=!state.connected;return;}const first=record.range?.firstCandle,last=record.range?.lastCandle,bars=Number(record.range?.bars)||0;el("macroPerformanceScope").textContent=`History started ${formatTime(first)} · ended ${formatTime(last)} · ${bars} completed candles · computed ${formatTime(record.computedAt)}`;el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const entry=record.config?.[strategy.id]||{},stats={...entry,...entry.grossPerformance};return `<tr><td>${strategy.label}</td><td>${stats.trades??"—"}</td><td>${Number.isFinite(stats.wins)?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${Number(stats.net)>=0?"positive":"negative"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;}).join("");el("computeConfiguration").disabled=!state.connected;}
   function applyConfiguration(){document.querySelectorAll('[data-config-length]').forEach(input=>{if(!input.disabled)STRATEGY_CONFIG[input.dataset.configLength].length=clamp(Math.round(Number(input.value)||50),3,200);});document.querySelectorAll('[data-config-filter]').forEach(input=>{const id=input.dataset.configFilter;STRATEGY_CONFIG[id].filter=clamp(Number(input.value)||0,0,id==='COMBO'?5:10);});el("eventLength").value=STRATEGY_CONFIG.ASSET.length;state.scheduleEvaluations.clear();for(const [key,candles] of state.scheduleCandles)try{state.scheduleEvaluations.set(key,analyzeCandles(candles,false));}catch{}if(state.chartCandles.length)state.chartAnalysis=analyzeCandles(state.chartCandles,true);renderSchedule();updateChartSummary();updateCompartments();drawChart();renderMacroPerformance();renderStrategyConfiguration();}
   async function computeConfiguration(){const button=el("computeConfiguration");if(!state.connected)return;button.disabled=true;button.textContent="Computing…";el("macroPerformanceScope").textContent="Loading the current completed OANDA candle history and optimizing…";try{const response=await fetch("/api/engine/compute",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({pair:state.selectedInstrument,timeframe:state.selectedTimeframe})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?`${payload.stage||"compute"} · ${payload.error}`:`HTTP ${response.status}`);state.autoConfigurations.set(payload.key,payload.record);const resolved=payload.record.config;if(state.chartCandles.length){state.chartAnalysis=analyzeWithConfiguration(state.chartCandles,resolved,false);state.chartCausalIndicators=null;state.chartCausalSeries=[];void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolved,state.selectedStrategy);}renderStrategyConfiguration();renderMacroPerformance();renderOptimizerRegistry();renderSchedule();updateChartSummary();updateCompartments();drawChart();}catch(error){el("macroPerformanceScope").textContent=error.message||"Compute Configuration failed";el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">${error.message||"Compute Configuration failed"}</td></tr>`;}finally{button.textContent="Compute Configuration";button.disabled=!state.connected;}}
-  async function loadChatHistory() {
-    try {
-      const response = await fetch("/api/engine/chat", { credentials: "same-origin", cache: "no-store" });
-      if (!response.ok) return;
-      const payload = await response.json();
-      const logs = el("chatLogs");
-      logs.innerHTML = `
-        <div class="chat-message assistant">
-          <div class="msg-sender">Nemotron 3 Super</div>
-          <div class="msg-content">Hello! I am your Personal Agent. I have full tool-access to read live account stats, inspect ledger logs, view optimizer configurations, and dynamically tune engine settings. How can I help you improve your bottom line today?</div>
-        </div>
-      `;
-      if (Array.isArray(payload.history)) {
-        for (const item of payload.history) {
-          renderChatMessage(item.role, item.content);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load chat history:", err);
-    }
-  }
 
-  function renderChatMessage(role, content) {
-    const logs = el("chatLogs");
-    const div = document.createElement("div");
-    div.className = `chat-message ${role}`;
-
-    const sender = document.createElement("div");
-    sender.className = "msg-sender";
-    sender.textContent = role === "user" ? "You" : "Nemotron 3 Super";
-
-    const body = document.createElement("div");
-    body.className = "msg-content";
-    body.textContent = content;
-
-    div.appendChild(sender);
-    div.appendChild(body);
-    logs.appendChild(div);
-    logs.scrollTop = logs.scrollHeight;
-  }
-
-  async function submitChat() {
-    const input = el("chatInput");
-    const sendBtn = el("sendChat");
-    const text = input.value.trim();
-    if (!text) return;
-
-    input.value = "";
-    renderChatMessage("user", text);
-
-    input.disabled = true;
-    sendBtn.disabled = true;
-    sendBtn.textContent = "Thinking…";
-
-    try {
-      const voiceEnabled = el("voiceToggle").getAttribute("aria-pressed") === "true";
-      const response = await fetch("/api/engine/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        cache: "no-store",
-        body: JSON.stringify({ message: text, voice: voiceEnabled })
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        renderChatMessage("assistant", `Error: ${payload.error || "Request failed"}`);
-      } else {
-        renderChatMessage("assistant", payload.content);
-        if (payload.audio) {
-          const audioData = atob(payload.audio);
-          const arrayBuffer = new ArrayBuffer(audioData.length);
-          const view = new Uint8Array(arrayBuffer);
-          for (let i = 0; i < audioData.length; i++) {
-            view[i] = audioData.charCodeAt(i);
-          }
-          const blob = new Blob([arrayBuffer], { type: "audio/wav" });
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          audio.play().catch(e => console.error("Audio playback failed", e));
-        }
-      }
-    } catch (err) {
-      renderChatMessage("assistant", `Error: ${err.message || err}`);
-    } finally {
-      input.disabled = false;
-      sendBtn.disabled = false;
-      sendBtn.textContent = "Send";
-      input.focus();
-    }
-  }
-
-  async function clearChatHistory() {
-    if (!confirm("Are you sure you want to clear your conversation history?")) return;
-    try {
-      await fetch("/api/engine/chat", { method: "DELETE", credentials: "same-origin" });
-      loadChatHistory();
-    } catch (err) {
-      console.error("Failed to clear history:", err);
-    }
-  }
 
   function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','chat']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='chat'){void loadChatHistory();}if(name==='event'){state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(persist)queuePlatformPreferenceSave();}
 
@@ -1648,74 +1484,13 @@
     el("analysisTab").addEventListener("click",()=>selectFacility("analysis"));
     el("eventTab").addEventListener("click",()=>selectFacility("event"));
     el("performanceTab").addEventListener("click",()=>selectFacility("performance"));
-    el("chatTab").addEventListener("click",()=>selectFacility("chat"));
-    el("clearChat").addEventListener("click",clearChatHistory);
-    el("sendChat").addEventListener("click",submitChat);
-    el("chatInput").addEventListener("keydown",event=>{if(event.key==="Enter")submitChat();});
-    el("voiceToggle").addEventListener("click",event=>{const btn=event.currentTarget,active=btn.getAttribute("aria-pressed")==="true";btn.setAttribute("aria-pressed",String(!active));btn.textContent=!active?"Voice TTS on":"Voice TTS off";btn.classList.toggle("active",!active);});
 
-    // Speech-to-Text (Microphone Toggle) using Web Speech API
-    let recognition = null;
-    const hasSpeech = "webkitSpeechRecognition" in window || "SpeechRecognition" in window;
-    if (hasSpeech) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
 
-      recognition.onstart = () => {
-        const btn = el("micToggle");
-        btn.setAttribute("aria-pressed", "true");
-        btn.textContent = "🎤 Listening…";
-        btn.classList.add("active");
-      };
 
-      recognition.onend = () => {
-        const btn = el("micToggle");
-        btn.setAttribute("aria-pressed", "false");
-        btn.textContent = "🎤 Mic off";
-        btn.classList.remove("active");
-      };
 
-      recognition.onerror = event => {
-        console.error("Speech recognition error:", event.error);
-        if (recognition) {
-          try { recognition.stop(); } catch(e) {}
-        }
-      };
 
-      recognition.onresult = event => {
-        let finalTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          }
-        }
-        if (finalTranscript) {
-          const input = el("chatInput");
-          const space = input.value && !input.value.endsWith(" ") ? " " : "";
-          input.value += space + finalTranscript.trim();
-        }
-      };
 
-      el("micToggle").addEventListener("click", () => {
-        const pressed = el("micToggle").getAttribute("aria-pressed") === "true";
-        if (pressed) {
-          recognition.stop();
-        } else {
-          recognition.start();
-        }
-      });
-    } else {
-      const btn = el("micToggle");
-      if (btn) {
-        btn.disabled = true;
-        btn.title = "Speech recognition is not supported in this browser";
-      }
-    }
 
-    document.querySelectorAll(".suggestion-chip").forEach(chip=>{chip.addEventListener("click",event=>{el("chatInput").value=event.currentTarget.textContent;submitChat();});});
     el("applyConfiguration").addEventListener("click",applyConfiguration);
     el("computeConfiguration").addEventListener("click",computeConfiguration);
     el("loadEvents").addEventListener("click",loadEventForecast);

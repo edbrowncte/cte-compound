@@ -73,7 +73,7 @@ function compactCandidate(candidate){
     confidence:Number.isFinite(candidate.confidence)?candidate.confidence:null,
     count:Number.isFinite(candidate.count)?candidate.count:null,
     configuration:candidate.configuration||null,
-    nemotron:candidate.nemotron||null,
+    Nemotron:candidate.Nemotron||null,
   };
 }
 

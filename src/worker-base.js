@@ -192,9 +192,6 @@ export default {
         if(url.pathname==="/api/platform/diagnostic"&&request.method==="GET") return await handlePlatformDiagnostic(env,url);
         if(url.pathname==="/api/platform/preferences"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/preferences");
         if(url.pathname==="/api/platform/preferences"&&request.method==="PUT") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/preferences",{method:"PUT",headers:{"Content-Type":"application/json"},body:request.body}));
-        if(url.pathname==="/api/engine/chat"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/chat");
-        if(url.pathname==="/api/engine/chat"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:request.body}));
-        if(url.pathname==="/api/engine/chat"&&request.method==="DELETE") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/chat",{method:"DELETE"}));
         if(url.pathname==="/api/engine/status"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/status");
         if(url.pathname==="/api/engine/config"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/config");
         if(url.pathname==="/api/engine/config"&&request.method==="PUT") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:request.body}));
