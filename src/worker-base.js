@@ -201,6 +201,8 @@ export default {
         if(url.pathname==="/api/engine/ledger"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/ledger");
         if(url.pathname==="/api/control/selectedPairs"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/control/selectedPairs",{method:"POST",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/control/status"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/control/status");
+        if(url.pathname==="/api/evaluation/history"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/evaluation/history");
+        if(url.pathname==="/api/evaluation/log"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/evaluation/log",{method:"POST",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/oanda/order"&&request.method==="POST") return await handleManualOrder(request,env);
         if(url.pathname==="/api/oanda/proxy") return await handleProxy(request,env,url);
         if(url.pathname==="/api/oanda/candles"&&request.method==="GET") return await handleCandles(env,url);
