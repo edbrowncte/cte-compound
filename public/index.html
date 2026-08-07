@@ -232,6 +232,25 @@
     @media(max-width:900px) { .config-grid { grid-template-columns:1fr 1fr; } }
     @media(max-width:900px) { .event-chart-stage { height:300px; } .event-chart-instrument { margin-left:0; } }
 
+    .heartbeat-panel { grid-column:1/-1; border:1px solid var(--line); background:#0c1219; padding:10px 12px; margin-bottom:10px; border-radius:5px; }
+    .heartbeat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-top:5px; }
+    .heartbeat-item { display:flex; flex-direction:column; }
+    .heartbeat-item span { color:var(--muted); font-size:8px; text-transform:uppercase; letter-spacing:.08em; }
+    .heartbeat-item strong { margin-top:2px; font-size:10px; overflow-wrap:anywhere; }
+
+    .selector-panel { grid-column:1/-1; border:1px solid var(--line); background:#0c1219; padding:12px; margin-bottom:10px; border-radius:5px; }
+    .selector-title { font-size:12px; font-weight:850; text-transform:uppercase; letter-spacing:.06em; margin:0 0 10px; display:flex; align-items:center; justify-content:space-between; }
+    .selector-modes { display:flex; gap:15px; font-size:10px; margin-bottom:10px; flex-wrap:wrap; }
+    .selector-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+    @media(max-width:900px) { .selector-grid { grid-template-columns:1fr 1fr; } }
+    @media(max-width:500px) { .selector-grid { grid-template-columns:1fr; } }
+    .selector-item { display:flex; flex-direction:column; background:#121923; padding:6px 8px; border:1px solid var(--line2); border-radius:4px; font-size:9px; cursor:pointer; }
+    .selector-item.disabled { opacity:0.4; cursor:not-allowed; }
+    .selector-item-header { display:flex; align-items:center; gap:6px; font-weight:bold; }
+    .selector-item-header input { margin:0; cursor:inherit; }
+    .selector-item-stats { color:var(--muted); font-size:8px; margin-top:4px; }
+    .selector-item-tf { margin-top:4px; display:flex; align-items:center; gap:3px; }
+    .selector-item-tf select { font-size:8px; padding:2px; min-height:18px; background:#0b1017; border-color:var(--line2); color:var(--text); border-radius:3px; }
 
   </style>
 </head>
@@ -294,6 +313,34 @@
         </div>
       </section>
       <section class="automation-panel" id="automationPanel" hidden aria-label="Automated trading controls and decisions">
+        <!-- Engine Heartbeat Panel -->
+        <div class="heartbeat-panel" id="heartbeatPanel">
+          <div class="selector-title">Engine Heartbeat</div>
+          <div class="heartbeat-grid">
+            <div class="heartbeat-item"><span>Last Scan</span><strong id="hbLastScan">—</strong></div>
+            <div class="heartbeat-item"><span>Last Trade Attempt</span><strong id="hbLastTrade">—</strong></div>
+            <div class="heartbeat-item"><span>Last Result / No Order Reason</span><strong id="hbLastReason">—</strong></div>
+            <div class="heartbeat-item"><span>Open Positions</span><strong id="hbOpenPositions">—</strong></div>
+            <div class="heartbeat-item"><span>Mode</span><strong id="hbMode">—</strong></div>
+          </div>
+        </div>
+
+        <!-- Tradable Pair Selector Panel -->
+        <div class="selector-panel" id="selectorPanel">
+          <div class="selector-title">Tradable Pair Selector (28)</div>
+          <div class="selector-modes">
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+              <input type="radio" id="modeManualSelect" name="tradingMode" value="manual" checked>
+              <span>Manual Select Mode (user checks 1-2 pairs)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+              <input type="radio" id="modeAutoRotate" name="tradingMode" value="auto">
+              <span>Auto-Rotate Mode: Always trade Top 1 Most Profitable Pair (24h P/L from ledger)</span>
+            </label>
+          </div>
+          <div class="selector-grid" id="pairSelectorGrid"></div>
+        </div>
+
         <div class="automation-controls">
           <label class="field"><span>Trading timeframe</span><select id="engineTimeframe"></select></label>
           <label class="field"><span>Primary strategy</span><select id="engineStrategy"></select></label>
@@ -509,6 +556,10 @@
     positionStreamController:null,
     positionStreamSignature:"",
     liveRenderTimer:null,
+    selectedPairs:[],
+    manualSelectMode:true,
+    autoRotateMode:false,
+    manualPositions:{},
     engineConfig:{timeframe:"M15",htlLength:10,decisionMode:"EVENT",strategy:"ASSET",confirmationStrategy:"NONE",filter:0,configurationSource:"OPTIMIZED"},
     autoConfigurations:new Map(),
     optimizationQueue:[],
@@ -856,6 +907,175 @@
   async function loadPlatformPreferences(){if(state.preferencesLoaded)return;try{const response=await fetch("/api/platform/preferences",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),preferences=await response.json().catch(()=>({}));if(!response.ok)throw new Error(preferences.error||`HTTP ${response.status}`);applyPlatformPreferences(preferences);state.preferenceSyncStatus=`Synchronized · ${preferences.updatedAt?formatTime(preferences.updatedAt):"server"}`;}catch(error){state.preferenceSyncStatus=error.message||"Preference synchronization unavailable";}finally{state.preferencesLoaded=true;}}
   function queuePlatformPreferenceSave(){if(!state.preferencesLoaded)return;clearTimeout(state.preferenceTimer);state.preferenceTimer=setTimeout(async()=>{try{const response=await fetch("/api/platform/preferences",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(platformPreferencePayload())}),preferences=await response.json().catch(()=>({}));if(!response.ok)throw new Error(preferences.error||`HTTP ${response.status}`);state.preferenceSyncStatus=`Synchronized · ${preferences.updatedAt?formatTime(preferences.updatedAt):"server"}`;}catch(error){state.preferenceSyncStatus=error.message||"Preference synchronization failed";}},500);}
 
+  function buildPairSelector() {
+    const grid = el("pairSelectorGrid");
+    if (!grid) return;
+    grid.innerHTML = INSTRUMENTS.map(pair => {
+      return `
+        <div class="selector-item" id="selector-item-${pair}" data-pair="${pair}">
+          <label class="selector-item-header">
+            <input type="checkbox" id="selector-check-${pair}" class="pair-check" data-pair="${pair}">
+            <span>${formatPair(pair)}</span>
+          </label>
+          <div class="selector-item-stats" id="selector-stats-${pair}">P/L: -- | WR: --</div>
+          <div class="selector-item-tf">
+            <span style="font-size:7px; color:var(--muted);">TF:</span>
+            <select class="pair-tf-select" id="selector-tf-${pair}" data-pair="${pair}">
+              <option value="">Auto</option>
+              <option value="M1">M1</option>
+              <option value="M5">M5</option>
+              <option value="M15">M15</option>
+              <option value="M30">M30</option>
+              <option value="H1">H1</option>
+              <option value="H4">H4</option>
+              <option value="D">D</option>
+            </select>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    // Bind event listeners
+    grid.querySelectorAll(".pair-check").forEach(cb => {
+      cb.addEventListener("change", () => {
+        if (state.autoRotateMode) return;
+        saveSelectedPairs();
+      });
+    });
+    grid.querySelectorAll(".pair-tf-select").forEach(sel => {
+      sel.addEventListener("change", () => {
+        if (state.autoRotateMode) return;
+        saveSelectedPairs();
+      });
+    });
+  }
+
+  function updatePairSelectorStats() {
+    const ledger = state.tradingLedger || [];
+    for (const pair of INSTRUMENTS) {
+      const statsEl = el(`selector-stats-${pair}`);
+      if (!statsEl) continue;
+      const pairClosed = ledger.filter(item => item.pair === pair && item.type === "POSITION_CLOSED");
+      let totalPl = 0;
+      let wins = 0;
+      let totalTrades = 0;
+      for (const item of pairClosed) {
+        const pl = Number(item.realizedPL);
+        if (Number.isFinite(pl)) {
+          totalPl += pl;
+          totalTrades++;
+          if (pl > 0) wins++;
+        }
+      }
+      if (totalTrades === 0) {
+        statsEl.textContent = "P/L: -- | WR: --";
+      } else {
+        const plSign = totalPl >= 0 ? "+" : "";
+        statsEl.textContent = `P/L: ${plSign}$${totalPl.toFixed(2)} | WR: ${((wins / totalTrades) * 100).toFixed(0)}%`;
+      }
+    }
+  }
+
+  async function saveSelectedPairs() {
+    if (!state.connected) return;
+    const selectedPairs = [];
+    const manualPositions = {};
+    const checks = document.querySelectorAll(".pair-check");
+    checks.forEach(cb => {
+      const pair = cb.dataset.pair;
+      if (cb.checked) {
+        selectedPairs.push(pair);
+        const tfSelect = el(`selector-tf-${pair}`);
+        if (tfSelect && tfSelect.value) {
+          // Find the direction from live positions if any, default to 1 (LONG)
+          const pos = state.openPositions.find(p => p.instrument === pair);
+          let direction = 1;
+          if (pos) {
+            const longUnits = Number(pos.long?.units || 0);
+            const shortUnits = Math.abs(Number(pos.short?.units || 0));
+            if (shortUnits > 0) direction = -1;
+          }
+          manualPositions[pair] = { timeframe: tfSelect.value, direction, protected: true };
+        }
+      }
+    });
+
+    const payload = {
+      selectedPairs,
+      manualSelectMode: state.manualSelectMode,
+      autoRotateMode: state.autoRotateMode,
+      manualPositions
+    };
+
+    try {
+      const response = await fetch("/api/control/selectedPairs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      state.selectedPairs = data.selectedPairs || [];
+      state.manualSelectMode = data.manualSelectMode !== false;
+      state.autoRotateMode = Boolean(data.autoRotateMode);
+      state.manualPositions = data.manualPositions || {};
+      void loadControlStatus();
+    } catch (error) {
+      console.error("Failed to save selected pairs:", error);
+    }
+  }
+
+  async function loadControlStatus() {
+    if (!state.connected) return;
+    try {
+      const response = await fetch("/api/control/status", {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+        cache: "no-store"
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+
+      // Update local state
+      state.selectedPairs = data.selectedPairs || [];
+      state.manualSelectMode = data.mode === "manual-select" || data.mode === "manual";
+      state.autoRotateMode = data.mode === "auto-rotate" || data.mode === "auto";
+      state.manualPositions = data.manualPositions || {};
+
+      // Update UI components for Mode radio inputs
+      el("modeManualSelect").checked = !state.autoRotateMode;
+      el("modeAutoRotate").checked = state.autoRotateMode;
+
+      // Update checkbox / select state
+      const checks = document.querySelectorAll(".pair-check");
+      checks.forEach(cb => {
+        const pair = cb.dataset.pair;
+        cb.checked = state.selectedPairs.includes(pair);
+        cb.disabled = state.autoRotateMode;
+        const selectorItem = el(`selector-item-${pair}`);
+        if (selectorItem) {
+          selectorItem.classList.toggle("disabled", state.autoRotateMode);
+        }
+        const tfSelect = el(`selector-tf-${pair}`);
+        if (tfSelect) {
+          tfSelect.value = state.manualPositions[pair]?.timeframe || "";
+          tfSelect.disabled = state.autoRotateMode;
+        }
+      });
+
+      // Update Heartbeat UI panel
+      el("hbLastScan").textContent = data.lastScanAt ? formatTime(data.lastScanAt) : "—";
+      el("hbLastTrade").textContent = data.lastTradeAttemptAt ? formatTime(data.lastTradeAttemptAt) : "—";
+      el("hbLastReason").textContent = data.lastNoOrderReason || "—";
+      el("hbOpenPositions").textContent = String(data.openPositions || 0);
+      el("hbMode").textContent = data.mode || "—";
+    } catch (error) {
+      console.error("Failed to load control status:", error);
+    }
+  }
+
   async function loadEngineConfig(){const response=await fetch("/api/engine/config",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);}
 
   async function saveEngineConfig(){const button=el("saveEngineConfig");button.disabled=true;el("automationStatus").textContent="Saving…";try{const body={timeframe:el("engineTimeframe").value,strategy:el("engineStrategy").value,confirmationStrategy:el("engineConfirmationStrategy").value,htlLength:clamp(Math.trunc(Number(el("engineHtlLength").value)||10),3,200),filter:clamp(Number(el("engineFilter").value)||0,0,10),decisionMode:el("engineDecisionMode").value,configurationSource:"OPTIMIZED"},response=await fetch("/api/engine/config",{method:"PUT",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify(body)}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);await loadTradingLedger();}catch(error){el("automationStatus").textContent=error.message||"Configuration failed";}finally{button.disabled=false;}}
@@ -872,7 +1092,7 @@
   function filterByDateRange(rows,prefix,timeKey="time"){const range=dateRange(prefix);return{range,rows:range.valid?rows.filter(row=>{const value=Date.parse(row?.[timeKey]||0);return Number.isFinite(value)&&value>=range.startMs&&value<=range.endMs;}):[]};}
   function rangeLabel(range,fallback){if(!range.valid)return"Invalid date range";return range.start||range.end?`${range.start||"earliest"} — ${range.end||"latest"}`:fallback;}
 
-  function renderTradingLedger(entries){const rows=Array.isArray(entries)?entries:[];state.tradingLedger=rows;el("downloadTradingLedger").disabled=!rows.length;const fmt=value=>value??"—";el("tradingLedgerBody").innerHTML=rows.map(item=>`<tr><td>${formatTime(item.time)}</td><td>${fmt(item.type)}</td><td>${item.pair?formatPair(item.pair):"—"}</td><td>${fmt(item.strategy)}</td><td class="${item.direction==="BUY"?"positive":item.direction==="SELL"?"negative":""}">${fmt(item.direction)}</td><td>${fmt(item.units)}</td><td>${fmt(item.price)}</td><td>${fmt(item.realizedPL)}</td><td>${fmt(item.message)}</td></tr>`).join("")||`<tr><td colspan="9">No engine records.</td></tr>`;const filtered=filterByDateRange(rows,"micro"),groups=new Map(STRATEGIES.map(item=>[item.id,{label:item.label,orders:0,closed:0,wins:0,losses:0,flat:0,pl:0,last:null}]));for(const item of [...filtered.rows].reverse()){const id=item.strategy||((item.type==="ORDER_FILLED"||item.type==="POSITION_CLOSED")?"ASSET":null),group=groups.get(id);if(!group)continue;if(item.type==="ORDER_FILLED")group.orders++;if(item.type==="POSITION_CLOSED"){group.closed++;const pl=Number(item.realizedPL);if(Number.isFinite(pl)){group.pl+=pl;if(pl>0)group.wins++;else if(pl<0)group.losses++;else group.flat++;}}if(item.pair)group.last=item;}el("microPerformanceScope").textContent=`${rangeLabel(filtered.range,"All retained engine records")} · ${filtered.rows.length} records`;el("microPerformanceBody").innerHTML=[...groups.values()].map(g=>`<tr><td>${g.label}</td><td>${g.orders||"—"}</td><td>${g.closed||"—"}</td><td>${g.closed?`${g.wins}/${g.losses}/${g.flat}`:"—"}</td><td class="${g.pl>0?"positive":g.pl<0?"negative":""}">${g.closed?g.pl.toFixed(2):"—"}</td><td>${g.last?.direction||"—"}</td><td>${g.last?.pair?formatPair(g.last.pair):"—"}</td><td>${g.last?formatTime(g.last.time):"—"}</td></tr>`).join("");}
+  function renderTradingLedger(entries){const rows=Array.isArray(entries)?entries:[];state.tradingLedger=rows;el("downloadTradingLedger").disabled=!rows.length;const fmt=value=>value??"—";el("tradingLedgerBody").innerHTML=rows.map(item=>`<tr><td>${formatTime(item.time)}</td><td>${fmt(item.type)}</td><td>${item.pair?formatPair(item.pair):"—"}</td><td>${fmt(item.strategy)}</td><td class="${item.direction==="BUY"?"positive":item.direction==="SELL"?"negative":""}">${fmt(item.direction)}</td><td>${fmt(item.units)}</td><td>${fmt(item.price)}</td><td>${fmt(item.realizedPL)}</td><td>${fmt(item.message)}</td></tr>`).join("")||`<tr><td colspan="9">No engine records.</td></tr>`;const filtered=filterByDateRange(rows,"micro"),groups=new Map(STRATEGIES.map(item=>[item.id,{label:item.label,orders:0,closed:0,wins:0,losses:0,flat:0,pl:0,last:null}]));for(const item of [...filtered.rows].reverse()){const id=item.strategy||((item.type==="ORDER_FILLED"||item.type==="POSITION_CLOSED")?"ASSET":null),group=groups.get(id);if(!group)continue;if(item.type==="ORDER_FILLED")group.orders++;if(item.type==="POSITION_CLOSED"){group.closed++;const pl=Number(item.realizedPL);if(Number.isFinite(pl)){group.pl+=pl;if(pl>0)group.wins++;else if(pl<0)group.losses++;else group.flat++;}}if(item.pair)group.last=item;}el("microPerformanceScope").textContent=`${rangeLabel(filtered.range,"All retained engine records")} · ${filtered.rows.length} records`;el("microPerformanceBody").innerHTML=[...groups.values()].map(g=>`<tr><td>${g.label}</td><td>${g.orders||"—"}</td><td>${g.closed||"—"}</td><td>${g.closed?`${g.wins}/${g.losses}/${g.flat}`:"—"}</td><td class="${g.pl>0?"positive":g.pl<0?"negative":""}">${g.closed?g.pl.toFixed(2):"—"}</td><td>${g.last?.direction||"—"}</td><td>${g.last?.pair?formatPair(g.last.pair):"—"}</td><td>${g.last?formatTime(g.last.time):"—"}</td></tr>`).join("");try{updatePairSelectorStats();}catch(e){console.error(e);}}
   function downloadTradingLedger(){const rows=state.tradingLedger||[];if(!rows.length)return;const fields=[["Ledger ID","ledgerId"],["Time","time"],["Type","type"],["OANDA Type","transactionType"],["Pair","pair"],["Strategy","strategy"],["Confirmation Strategy","confirmationStrategy"],["Side","direction"],["Units","units"],["Price","price"],["Realized P/L","realizedPL"],["Financing","financing"],["Commission","commission"],["Account Balance","accountBalance"],["Transaction ID","transaction"],["Client Order ID","clientOrderId"],["Event ID","event"],["Decision Mode","decisionMode"],["Timeframe","timeframe"],["HTL Length","htlLength"],["Filter","filter"],["Configuration Source","configurationSource"],["Optimizer Score","optimizerScore"],["Optimizer Trades","optimizerTrades"],["Optimizer Net","optimizerNet"],["Optimizer Drawdown","optimizerDrawdown"],["Optimizer Win Rate","optimizerWinRate"],["Confirmation HTL Length","confirmationHtlLength"],["Confirmation Filter","confirmationFilter"],["Reason","reason"],["Message","message"]],csv=[fields.map(([label])=>label),...rows.map(item=>fields.map(([,key])=>item[key]??""))].map(row=>row.map(value=>`"${String(value).replaceAll('"','""')}"`).join(",")).join("\r\n"),url=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"})),link=document.createElement("a");link.href=url;link.download=`cte-compound-trading-ledger-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url);}
   async function loadTradingLedger(limit=state.ledgerLimit){state.ledgerLimit=limit;try{const response=await fetch(`/api/engine/ledger?limit=${encodeURIComponent(limit)}`,{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(response.ok)renderTradingLedger(payload.ledger);}catch{}}
   async function loadOptimizerRecords(){try{const response=await fetch("/api/engine/optimizer",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json();if(!response.ok)return;state.autoConfigurations.clear();for(const [key,value] of Object.entries(payload.records||{}))state.autoConfigurations.set(key,value);renderOptimizerRegistry();}catch{}}
@@ -955,7 +1175,7 @@
       el("accountFacts").hidden=false;el("positionsPanel").hidden=false;el("automationPanel").hidden=false;
       setConnectionStatus("Live OANDA connected · completed midpoint candles only","connected");
       startPositionMonitor();
-      await Promise.all([loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";}),loadOptimizerRecords()]);
+      await Promise.all([loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";}),loadOptimizerRecords(),loadControlStatus().catch(() => {})]);
       void loadTradingLedger();void loadEngineStatus();
       await loadTradeCapacity();await loadChart();void loadSchedule("focused");setTimeout(()=>{if(state.connected&&!state.chartLoading)void runPlatformDiagnostic(false);},5000);
     } catch (error) {
@@ -1525,6 +1745,16 @@
     el("decisionCandidateStrip").addEventListener("click",event=>{const button=event.target.closest("[data-candidate]");if(button)selectDecisionCandidate(button.dataset.candidate);});
     el("candidateUnits").addEventListener("input",event=>{event.target.value=event.target.value.replace(/\D/g,"");renderDecisionCandidates();});
     el("executeDecisionCandidate").addEventListener("click",executeSelectedDecisionCandidate);
+    el("modeManualSelect").addEventListener("change", () => {
+      state.manualSelectMode = true;
+      state.autoRotateMode = false;
+      saveSelectedPairs();
+    });
+    el("modeAutoRotate").addEventListener("change", () => {
+      state.manualSelectMode = false;
+      state.autoRotateMode = true;
+      saveSelectedPairs();
+    });
     el("disconnectButton").addEventListener("click",disconnect);
     el("refreshSchedule").addEventListener("click",()=>loadSchedule("full"));
     el("refreshChart").addEventListener("click",()=>loadChart());
@@ -1570,7 +1800,7 @@
     window.addEventListener("resize",()=>{drawChart();if(state.eventData&&!el("eventPanel").hidden)eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
   }
 
-  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadTradingLedger(state.ledgerLimit);},15000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadEngineStatus();},30000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadOptimizerRecords();},120000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
+  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); buildPairSelector(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadTradingLedger(state.ledgerLimit);},15000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadEngineStatus();},30000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadControlStatus();},10000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadOptimizerRecords();},120000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
   </script>
 </body>
 </html>

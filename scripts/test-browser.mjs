@@ -27,6 +27,8 @@ const dom=new JSDOM(source,{url:origin,runScripts:"dangerously",pretendToBeVisua
   window.fetch=async(input,init={})=>{
     const url=new URL(String(input),origin),path=url.pathname;
     if(path==="/api/platform/preferences")return json({selectedInstrument:"EUR_USD",selectedTimeframe:"M15",selectedStrategy:"ASSET",selectedScheduleStrategy:"ASSET",activeFacility:"analysis",visibleBars:120,rightIndent:72,crosshairEnabled:true,eventPair:"EUR_USD",eventTimeframe:"M15",eventLength:10,eventStrategy:"ASSET",eventVisibleBars:120,eventRightIndent:72,eventCrosshairEnabled:true,microStartDate:"",microEndDate:"",minimumUnits:1000,updatedAt:"2026-08-04T18:00:00Z"});
+    if(path==="/api/control/status")return json({lastScanAt:null,lastTradeAttemptAt:null,lastNoOrderReason:null,openPositions:0,selectedPairs:[],mode:"all",manualPositions:{}});
+    if(path==="/api/control/selectedPairs")return json({ok:true,selectedPairs:[],manualSelectMode:true,autoRotateMode:false,manualPositions:{}});
     if(path==="/api/oanda/connect")return json({account:{id:"001-001-1234567-001",alias:"LIVE",currency:"USD",balance:"1000",NAV:"1000",marginAvailable:"900"},live:true});
     if(path==="/api/engine/config")return json({timeframe:"M15",htlLength:10,decisionMode:"EVENT",strategy:"ASSET",confirmationStrategy:"NONE",filter:0,configurationSource:"OPTIMIZED"});
     if(path==="/api/engine/optimizer")return json({records:{}});

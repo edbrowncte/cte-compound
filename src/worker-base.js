@@ -199,6 +199,8 @@ export default {
         if(url.pathname==="/api/engine/compute"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/compute",{method:"POST",headers:{"Content-Type":"application/json"},body:request.body}));
         if(url.pathname==="/api/engine/optimizer"&&request.method==="PUT") return json({error:"Optimizer records are server-managed."},405,{Allow:"GET"});
         if(url.pathname==="/api/engine/ledger"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/ledger");
+        if(url.pathname==="/api/control/selectedPairs"&&request.method==="POST") return await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/control/selectedPairs",{method:"POST",headers:{"Content-Type":"application/json"},body:request.body}));
+        if(url.pathname==="/api/control/status"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/control/status");
         if(url.pathname==="/api/oanda/order"&&request.method==="POST") return await handleManualOrder(request,env);
         if(url.pathname==="/api/oanda/proxy") return await handleProxy(request,env,url);
         if(url.pathname==="/api/oanda/candles"&&request.method==="GET") return await handleCandles(env,url);
