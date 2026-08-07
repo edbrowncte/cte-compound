@@ -13,7 +13,8 @@ const required=[
   [/claimReversals/,"pre-execution reversal claims"],
   [/processPendingReversals/,"restart recovery"],
   [/excludedPairs/,"reversal exclusion from generic reconciliation"],
-  [/await this\.reconcile\(state\.requirements/,"same-candle heartbeat reconciliation"],
+  [/state\.reconciledCandle!==lastCandle/,"completed-candle reconciliation gate"],
+  [/reconciliationCadence:"new-completed-candle-only"/,"truthful reconciliation cadence status"],
   [/const selected=await this\.choose\(newEntries\)/,"Nemotron limited to new entries"],
   [/Configured OANDA account/,"exact configured account enforcement"],
 ];
@@ -24,4 +25,4 @@ for(const[pattern,label]of required){
 if(/class HtlEngine extends/.test(execution)&&!/from "\.\/engine\.js"/.test(execution))throw new Error("Execution layer must extend the certified analytical engine entry point");
 if(!/SIX_INDEPENDENT_REGISTERED_HORIZON_STATE_MACHINES/.test(analytics))throw new Error("Certified six-strategy analytical contract is missing");
 if(/BLOCKED_PENDING_USER_DEPLOYMENT_APPROVAL/.test(execution))throw new Error("Private execution must not be deployment-blocked");
-console.log("Certified analytical inheritance, armed execution, multi-reversal recovery, and heartbeat reconciliation boundaries verified.");
+console.log("Certified analytical inheritance, armed execution, multi-reversal recovery, and completed-candle reconciliation boundaries verified.");
