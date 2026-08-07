@@ -101,7 +101,10 @@ async function candlesForRange(pair,token,timeframe,startDate,endDate){const sta
 
 async function notify(env,entry){
   const text=`CTE ${entry.type}: ${entry.pair||"system"} ${entry.direction||""} ${entry.message||""}`.trim();
-  if(env.SENDGRID_API_KEY&&env.ALERT_EMAIL_TO&&env.ALERT_EMAIL_FROM)await fetch("https://api.sendgrid.com/v3/mail/send",{method:"POST",headers:{Authorization:`Bearer ${env.SENDGRID_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({personalizations:[{to:[{email:env.ALERT_EMAIL_TO]}]}],from:{email:env.ALERT_EMAIL_FROM},subject:"CTE Compound",content:[{type:"text/plain",value:text}]})}).catch(()=>{});
+  if(env.SENDGRID_API_KEY&&env.ALERT_EMAIL_TO&&env.ALERT_EMAIL_FROM){
+    const payload={personalizations:[{to:[{email:env.ALERT_EMAIL_TO}]}],from:{email:env.ALERT_EMAIL_FROM},subject:"CTE Compound",content:[{type:"text/plain",value:text}]};
+    await fetch("https://api.sendgrid.com/v3/mail/send",{method:"POST",headers:{Authorization:`Bearer ${env.SENDGRID_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify(payload)}).catch(()=>{});
+  }
   if(env.TWILIO_ACCOUNT_SID&&env.TWILIO_AUTH_TOKEN&&env.TWILIO_FROM&&env.SMS_TO){const body=new URLSearchParams({To:env.SMS_TO,From:env.TWILIO_FROM,Body:text});await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,{method:"POST",headers:{Authorization:`Basic ${btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)}`,"Content-Type":"application/x-www-form-urlencoded"},body}).catch(()=>{});}
 }
 
@@ -122,14 +125,14 @@ export class HtlEngine{
     let churnWarning=null;
     if(fingerprintChanged){
       const now=Date.now(),windowMs=15*60*1000,previousChangeAt=Date.parse(state.lastConfigChangeAt||""),recent=(Array.isArray(state.configChangeTimes)?state.configChangeTimes:[]).map(value=>Date.parse(value)).filter(value=>Number.isFinite(value)&&now-value<windowMs);
-      if(Number.isFinite(previousChangeAt)&&now-previousChangeAt<windowMs)recent.push(previousChangeAt);
+      if(Number.isFinite(previousChangeAt)&&now-previousChangeAt<windowMs&&!recent.some(value=>value===previousChangeAt))recent.push(previousChangeAt);
       recent.push(now);
-      const unique=[...new Set(recent)].sort((left,right)=>left-right).slice(-32);
-      state.configChangeTimes=unique.map(value=>new Date(value).toISOString());
-      state.configChurnCount=unique.length;
+      const rolling=recent.sort((left,right)=>left-right).slice(-32);
+      state.configChangeTimes=rolling.map(value=>new Date(value).toISOString());
+      state.configChurnCount=rolling.length;
       state.lastConfigChangeAt=new Date(now).toISOString();
-      if(unique.length>1)churnWarning={type:"CONFIGURATION_CHURN_WARNING",strategy:next.strategy,callerIp,callerAgent,configChurnCount:unique.length,windowMinutes:15,sendNotification:true,message:`Rapid repeated configuration changes detected: ${unique.length} changes within the 15-minute window.`};
-      state.events={};state.directions=null;state.requirements=null;state.lastCandle=null;state.mtf={};state.mtfDecisionDirections={};state.mtfRotation=0;state.mtfFingerprint=nextFingerprint;state.initialized=false;
+      if(rolling.length>1)churnWarning={type:"CONFIGURATION_CHURN_WARNING",strategy:next.strategy,callerIp,callerAgent,configChurnCount:rolling.length,windowMinutes:15,sendNotification:true,message:`Rapid repeated configuration changes detected: ${rolling.length} changes within the 15-minute window.`};
+      state.events={};state.directions=null;state.requirements=null;state.lastCandle=null;state.mtf={};state.mtfDecisionDirections={};state.mtfRotation=0;state.mtfFingerprint=nextFingerprint;state.initialized=false;state.reconciledCandle=null;
     }
     state.config=next;
     await this.ctx.storage.put("state",state);
