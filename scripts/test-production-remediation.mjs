@@ -95,11 +95,9 @@ const edgeRequest=new Request("https://cte-compound.example/api/engine/config",{
   headers:{
     Origin:"https://cte-compound.example",
     "Sec-Fetch-Site":"same-origin",
-    "Content-Type":"application/json",
     "CF-Connecting-IP":"192.0.2.15",
     "User-Agent":"production-diagnostic/3.0"
-  },
-  body:JSON.stringify({timeframe:"M15"})
+  }
 });
 const edgeResponse=await baseWorker.fetch(edgeRequest,env);
 assert.equal(edgeResponse.status,200);
