@@ -3,6 +3,7 @@ import {readFile} from "node:fs/promises";
 import {JSDOM,VirtualConsole} from "jsdom";
 
 const origin="https://cte.example";
+const originalFetch=globalThis.fetch;
 const masImSource=await readFile(new URL("../public/mas-im-calculator.js",import.meta.url),"utf8");
 const source=(await readFile(new URL("../public/index.html",import.meta.url),"utf8"))
   .replace('<script src="/mas-im-calculator.js"></script>',`<script>${masImSource}</script>`)
