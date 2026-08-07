@@ -3,7 +3,9 @@ import {readFile} from "node:fs/promises";
 import {JSDOM,VirtualConsole} from "jsdom";
 
 const origin="https://cte.example";
+const masImSource=await readFile(new URL("../public/mas-im-calculator.js",import.meta.url),"utf8");
 const source=(await readFile(new URL("../public/index.html",import.meta.url),"utf8"))
+  .replace('<script src="/mas-im-calculator.js"></script>',`<script>${masImSource}</script>`)
   .replace("CANDLE_TIMEOUT_MS=25000","CANDLE_TIMEOUT_MS=40")
   .replace(/;\s*void connect\(\);\s*<\/script>/,";</script>");
 
@@ -98,4 +100,5 @@ try{
   console.log("DOM connection, Refresh chart, normalized candle compatibility, schedule, event refresh, timeout, abort, and minimum-unit behavior verified.");
 }finally{
   document.getElementById("disconnectButton")?.click();dom.window.close();
+  globalThis.fetch=originalFetch;
 }
