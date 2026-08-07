@@ -96,6 +96,7 @@ function proxyPath(raw,accountId,method) {
     new RegExp(`^/v3/accounts/${account}/summary$`),
     new RegExp(`^/v3/accounts/${account}/pricing\\?`),
     new RegExp(`^/v3/accounts/${account}/positions$`),
+    new RegExp(`^/v3/accounts/${account}/openPositions$`),
     /^\/v3\/instruments\/[A-Z]{3}_[A-Z]{3}\/candles\?/
   ];
   const allowed=method==="GET"&&getRules.some(rule=>rule.test(path));
