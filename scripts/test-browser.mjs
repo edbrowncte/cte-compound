@@ -41,7 +41,7 @@ const dom=new JSDOM(source,{url:origin,runScripts:"dangerously",pretendToBeVisua
     if(path==="/api/oanda/stream")return{ok:true,status:200,body:{getReader:()=>({read:()=>new Promise(()=>{})})}};
     if(path==="/api/oanda/proxy"){
       const upstream=decodeURIComponent(url.searchParams.get("path")||"");
-      if(upstream.endsWith("/positions"))return json({positions:[]});
+      if(upstream.endsWith("/openPositions"))return json({positions:[]});
       if(upstream.includes("/pricing?"))return json({prices:[{type:"PRICE",instrument:"EUR_USD",bids:[{price:"1.1"}],asks:[{price:"1.1002"}],unitsAvailable:{default:{long:"5000",short:"5000"}}}]});
       if(upstream.endsWith("/summary"))return json({account:{id:"001-001-1234567-001",alias:"LIVE",currency:"USD",balance:"1000",NAV:"1000",marginAvailable:"900"}});
       return json({});
@@ -66,7 +66,7 @@ const {window}=dom,document=window.document;
 try{
   document.getElementById("connectButton").click();
   await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.getElementById("metricTime").textContent!=="—","initial live chart");
-  assert.equal(document.getElementById("minimumUnits").value,"1000");
+  assert.equal(document.getElementById("minimumUnits").value,"1000");await waitFor(()=>document.getElementById("NemotronStatus").textContent==="Ready","Nemotron status rendering");
   document.getElementById("tradeUnits").value="999";document.getElementById("tradeUnits").dispatchEvent(new window.Event("input",{bubbles:true}));assert.equal(document.getElementById("tradeBuy").disabled,true);
 
   candleShape="normalized";candleRequests.length=0;document.getElementById("refreshChart").click();

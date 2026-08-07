@@ -185,7 +185,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         lastScanAt:state.lastScanAt||null,
         lastTradeAttemptAt:state.lastTradeAttemptAt||null,
         lastNoOrderReason:state.lastNoOrderReason||null,
-        openPositions:state.openPositionsCount||0,
+        openPositions:Number.isFinite(Number(summary.openPositionCount))?Number(summary.openPositionCount):(state.openPositionsCount||0),
         selectedPairs:state.selectedPairs||[],
         mode:state.autoRotateMode?"auto-rotate":state.manualSelectMode?"manual-select":"all",
         tradingMode:state.tradingMode||"MANUAL_1_PAIR",
