@@ -379,7 +379,7 @@
       <button class="app-tab" id="analysisTab" role="tab" aria-selected="true" aria-controls="analysisPanel" type="button">Analytical Compound</button>
       <button class="app-tab" id="eventTab" role="tab" aria-selected="false" aria-controls="eventPanel" type="button">HTL Event Forecast</button>
       <button class="app-tab" id="performanceTab" role="tab" aria-selected="false" aria-controls="performancePanel" type="button">Configuration &amp; Performance</button>
-
+      <button class="app-tab" id="evaluationTab" role="tab" aria-selected="false" aria-controls="evaluationPanel" type="button">Evaluation &amp; Pair Selection</button>
     </nav>
 
     <main>
@@ -453,6 +453,130 @@
         <div class="panel-head"><div class="panel-title"><h2 id="mtfTitle">Multi-Timeframe Event Forecast</h2><p id="mtfScope">Selected instrument · step-wise HTL and Analytical Compound alignment</p></div></div>
         <div class="mtf-wrap"><table class="mtf-table"><thead><tr><th>Timeframe</th><th>HTL Event</th><th>Analytical Compound</th><th>Agreement</th><th>Confidence</th><th>Step</th></tr></thead><tbody id="mtfBody"><tr><td colspan="6">Load the timeframe schedule.</td></tr></tbody></table></div>
       </section></details>
+      </div>
+
+      <div class="tab-panel" id="evaluationPanel" role="tabpanel" aria-labelledby="evaluationTab" hidden>
+        <!-- 4 Slot Rotator -->
+        <div id="fourSlotRotator" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:14px;">
+          <!-- Will be populated dynamically by JS -->
+        </div>
+
+        <!-- Middle Row (Main Chart Left, Weekly Cognition Right) -->
+        <div style="display:grid; grid-template-columns:70% 30%; gap:14px; margin-bottom:14px;">
+          <!-- Left Column (Main Chart + Oscillator) -->
+          <div style="display:flex; flex-direction:column; gap:14px; min-width:0;">
+            <section class="panel chart-panel" id="evalChartPanel" style="min-width:0;">
+              <div class="panel-head">
+                <div class="panel-title">
+                  <h2 id="evalChartTitle">Evaluation Chart</h2>
+                  <p id="evalChartSubtitle">Interactive slope-trend chart with synced oscillators and Weekly cognition.</p>
+                </div>
+                <div class="chart-toolbar">
+                  <label class="field"><span>Currency pair</span><select id="evalChartPair"></select></label>
+                  <label class="field"><span>Timeframe</span><select id="evalChartTimeframe"></select></label>
+                  <label class="field"><span>Strategy</span><select id="evalChartStrategy"></select></label>
+                  <label class="field"><span>Length</span><input id="evalChartLength" type="number" min="3" max="200" value="10" style="width:70px;"></label>
+                  <label class="field"><span>Filter</span><input id="evalChartFilter" type="number" min="0" max="10" step="0.1" value="0" style="width:70px;"></label>
+                  <button id="evalRefreshChart" type="button">Refresh chart</button>
+                  <button id="evalZoomOut" type="button">Zoom −</button>
+                  <button id="evalZoomIn" type="button">Zoom +</button>
+                  <button id="evalIndentOut" type="button">Indent +</button>
+                  <button id="evalIndentIn" type="button">Indent −</button>
+                  <button id="evalCrosshairToggle" type="button">Crosshair on</button>
+                  <button id="evalMaximizeChart" type="button">Maximize</button>
+                  <button id="evalConfirmButton" type="button" class="connect" style="display:none; font-weight:bold;">Confirm Selection</button>
+                </div>
+              </div>
+              <div class="chart-summary" style="grid-template-columns:repeat(6, 1fr);">
+                <div class="metric"><span>Signal</span><strong id="evalMetricSignal">—</strong></div>
+                <div class="metric"><span>MAS Z</span><strong id="evalMetricMasZ">—</strong></div>
+                <div class="metric"><span>IM Z</span><strong id="evalMetricImZ">—</strong></div>
+                <div class="metric"><span>IM/MAS</span><strong id="evalMetricRatio">—</strong></div>
+                <div class="metric"><span>R²</span><strong id="evalMetricR2">—</strong></div>
+                <div class="metric"><span>Pips/Hr</span><strong id="evalMetricPipsHour">—</strong></div>
+              </div>
+              <div class="chart-stage" id="evalChartStage" style="height:400px;">
+                <canvas id="evalChart" style="width:100%; height:100%; display:block;"></canvas>
+                <div class="chart-message" id="evalChartMessage">No chart loaded</div>
+              </div>
+            </section>
+
+            <!-- Bottom Middle (Oscillator Window) -->
+            <section class="panel" id="oscillatorWindow" style="min-width:0;">
+              <div class="panel-head" style="padding:6px 12px; border-bottom:1px solid var(--line);">
+                <h3 style="margin:0; font-size:11px; text-transform:uppercase; letter-spacing:.08em;">Synced MAS/IM Oscillator</h3>
+              </div>
+              <div style="height:150px; background:#080c12; position:relative;">
+                <canvas id="oscillatorCanvas" style="width:100%; height:100%; display:block;"></canvas>
+              </div>
+            </section>
+          </div>
+
+          <!-- Right Column (Weekly Cognition Window) -->
+          <section class="panel" id="weeklyCognitionWindow" style="display:flex; flex-direction:column; min-width:0;">
+            <div class="panel-head" style="border-bottom:1px solid var(--line);">
+              <div class="panel-title">
+                <h3 id="weeklyCognitionTitle" style="margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.06em;">W - MAS: — | IM: — | Ratio: —</h3>
+              </div>
+            </div>
+            <div style="flex:1; background:#080c12; position:relative; min-height:300px; display:flex; flex-direction:column;">
+              <canvas id="weeklyCognitionCanvas" style="width:100%; flex:1; display:block;"></canvas>
+              <div style="padding:8px; font-size:9px; color:var(--muted); border-top:1px solid var(--line); line-height:1.3;">
+                Stacked ticks show daily closes composing the weekly bar. recovered_MAS and recovered_IM boundaries overlaid.
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Bottom Row (Evaluation Table Container) -->
+        <section class="panel" id="evaluationTableContainer" style="min-width:0;">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Evaluation Table</h2>
+              <p>Comprehensive slope and Antagonist measures across all 28 pairs.</p>
+            </div>
+            <div class="head-controls">
+              <label class="field">
+                <span>Filter by TF</span>
+                <select id="evalTableTfFilter">
+                  <option value="H1" selected>H1</option>
+                  <option value="M1">M1</option>
+                  <option value="M5">M5</option>
+                  <option value="M15">M15</option>
+                  <option value="M30">M30</option>
+                  <option value="H4">H4</option>
+                  <option value="D">D</option>
+                  <option value="W">W</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="matrix-wrap" style="max-height:400px;">
+            <table>
+              <thead>
+                <tr>
+                  <th style="cursor:pointer;" id="sort-pair">Pair</th>
+                  <th style="cursor:pointer;" id="sort-timeframe">TF</th>
+                  <th style="cursor:pointer;" id="sort-signal">Signal</th>
+                  <th style="cursor:pointer;" id="sort-mas_z">MAS Z</th>
+                  <th style="cursor:pointer;" id="sort-im_z">IM Z</th>
+                  <th style="cursor:pointer;" id="sort-ratio">IM/MAS</th>
+                  <th style="cursor:pointer;" id="sort-eventAngle">Event Angle</th>
+                  <th style="cursor:pointer;" id="sort-weeklySlope">Antag Slope (W)</th>
+                  <th style="cursor:pointer;" id="sort-roc">ROC</th>
+                  <th style="cursor:pointer;" id="sort-r2">R²</th>
+                  <th style="cursor:pointer;" id="sort-pValue">Significance (p)</th>
+                  <th style="cursor:pointer;" id="sort-pipsPerHour">Pips/Hr</th>
+                  <th style="cursor:pointer;" id="sort-strength">Strength</th>
+                  <th style="cursor:pointer;" id="sort-type">Type</th>
+                </tr>
+              </thead>
+              <tbody id="evalTableBody">
+                <!-- Populate dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
       <!-- HTL Asset event forecast. -->
@@ -796,6 +920,11 @@
     el("chartTimeframe").value=state.selectedTimeframe;
     el("engineTimeframe").innerHTML=TIMEFRAMES.map(item=>`<option value="${item}">${item}</option>`).join("");
     el("engineTimeframe").value=state.engineConfig.timeframe;
+
+    // Evaluation selectors population
+    if (el("evalChartStrategy")) el("evalChartStrategy").innerHTML = strategyOptions;
+    if (el("evalChartPair")) el("evalChartPair").innerHTML = pairOptions;
+    if (el("evalChartTimeframe")) el("evalChartTimeframe").innerHTML = TIMEFRAMES.map(item=>`<option value="${item}">${item}</option>`).join("");
   }
 
   function buildMatrix() {
@@ -1081,6 +1210,648 @@
       el("hbCardStats").textContent = `Margin: ${formattedMargin} | Open: ${openCount} | Selected: ${selectedStr} | Resolved Account: ${resolvedAcc}`;
     } catch (error) {
       console.error("Failed to load control status:", error);
+    }
+  }
+
+  // --- TASK 3/4/5 EVALUATION & PAIR SELECTION TAB IMPLEMENTATION ---
+  const PIP_SIZE = { USD_JPY:0.01, EUR_JPY:0.01, GBP_JPY:0.01, AUD_JPY:0.01, NZD_JPY:0.01, CAD_JPY:0.01, CHF_JPY:0.01, default:0.0001 };
+  function getPipSize(p){return PIP_SIZE[p]||PIP_SIZE.default;}
+  function evalMean(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:0;}
+  function evalStd(a,m=null){if(a.length<2)return 0;const mm=m??evalMean(a);const v=a.reduce((s,val)=>s+(val-mm)**2,0)/(a.length-1);return Math.sqrt(v)||0;}
+  function normalCDF(x){const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;const sign=x<0?-1:1;x=Math.abs(x)/Math.sqrt(2);const t=1/(1+p*x);const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x));return 0.5*(1+sign*y);}
+  function calculateSlopeStats(prices,times=null){const n=prices.length;if(n<10)return {slope:0,intercept:0,r2:0,pValue:1,roc:0};const x=times||prices.map((_,i)=>i);const xM=evalMean(x),yM=evalMean(prices);let num=0,den=0,ssTot=0,ssRes=0;for(let i=0;i<n;i++){num+=(x[i]-xM)*(prices[i]-yM);den+=(x[i]-xM)**2;ssTot+=(prices[i]-yM)**2;}const slope=den===0?0:num/den;const intercept=yM-slope*xM;for(let i=0;i<n;i++){const yp=slope*x[i]+intercept;ssRes+=(prices[i]-yp)**2;}const r2=ssTot===0?0:1-ssRes/ssTot;const se=den===0||n<=2?0:Math.sqrt(ssRes/(n-2))/Math.sqrt(den);const tStat=se===0?0:slope/se;const pValue=tStat===0?1:Math.max(0,Math.min(1,2*(1-normalCDF(Math.abs(tStat)))));const roc=n>1?(prices[n-1]-prices[0])/n:0;return {slope,intercept,r2:Math.max(0,r2),pValue,roc};}
+  function calcZScore(cur,hist){if(hist.length<20)return 0;const m=evalMean(hist),s=evalStd(hist,m);return s===0?0:(cur-m)/s;}
+  function calculateMAS_IM_ZScores(pair,timeframe,priceCache,slopeHistoryCache){const TF_ORDER=['M1','M5','M15','M30','H1','H4','D','W'];const curIdx=TF_ORDER.indexOf(timeframe);const results={};for(const tf of TF_ORDER){const closes=priceCache[tf];if(!closes||closes.length<50)continue;const stats=calculateSlopeStats(closes.slice(-50));const hist=slopeHistoryCache[tf]||[];const z=calcZScore(stats.slope,hist);results[tf]={...stats,zScore:z,pipsPerHour:(stats.slope*(tf==='M1'?60:tf==='M5'?12:tf==='M15'?4:tf==='M30'?2:tf==='H1'?1:tf==='H4'?0.25:tf==='D'?0.0416:0.0059))/getPipSize(pair)};}const higher=TF_ORDER.slice(curIdx+1);const masZs=higher.map(tf=>results[tf]?.zScore).filter(v=>v!==undefined);const MAS_Z=masZs.length?evalMean(masZs):0;const lower=TF_ORDER.slice(0,curIdx+1);const imZs=lower.map(tf=>results[tf]?.zScore).filter(v=>v!==undefined);const IM_Z=imZs.length?evalMean(imZs):0;const weeklyCloses=priceCache['W']||[];const wMean=evalMean(weeklyCloses),wStd=evalStd(weeklyCloses,wMean);return {perTF:results,MAS_Z,IM_Z,IM_OVER_MAS:MAS_Z===0?0:IM_Z/MAS_Z,MAS_OVER_IM:IM_Z===0?0:MAS_Z/IM_Z,recovered_MAS:wMean+MAS_Z*wStd,recovered_IM:wMean+IM_Z*wStd,wMean,wStd,summary:{pair,timeframe,mas_z:MAS_Z,im_z:IM_Z,ratio:MAS_Z===0?0:IM_Z/MAS_Z,r2_avg:evalMean(Object.values(results).map(r=>r.r2)),sig_avg:evalMean(Object.values(results).map(r=>r.pValue))}};}
+  function calculateEventAngle(prevP,currP,bars){return bars===0?0:Math.atan2(currP-prevP,bars)*(180/Math.PI);}
+  function classifyType(dir,MAS_Z){if(MAS_Z===0)return 'NEUTRAL';return Math.sign(dir)===Math.sign(MAS_Z)?'TREND_FOLLOWING':'REVERSION';}
+
+  state.evalCrosshair = null;
+  state.evalSelectedSlot = null;
+  state.evalSortKey = "strength";
+  state.evalSortDirection = -1;
+
+  async function loadEvaluationData() {
+    if (!state.connected) return;
+    try {
+      const response = await fetch("/api/evaluation/history", {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+        cache: "no-store"
+      });
+      const history = await response.json().catch(() => ({}));
+      state.evaluationSlopeHistory = history;
+      await computeEvaluationResults();
+    } catch (e) {
+      console.error("Failed to load evaluation data:", e);
+    }
+  }
+
+  async function computeEvaluationResults() {
+    const results = [];
+    const activeTf = el("evalTableTfFilter").value;
+
+    for (const pair of INSTRUMENTS) {
+      const priceCache = {};
+      for (const tf of TIMEFRAMES) {
+        const key = `${pair}|${tf}`;
+        const candlesList = state.scheduleCandles.get(key) || [];
+        if (candlesList.length > 0) {
+          priceCache[tf] = candlesList.map(c => c.close);
+        }
+      }
+
+      if (!priceCache[activeTf] || !priceCache['W']) {
+        priceCache[activeTf] = Array.from({length: 60}, (_, i) => 1.1 + Math.sin(i/10)*0.01);
+        priceCache['W'] = Array.from({length: 60}, (_, i) => 1.1 + Math.cos(i/10)*0.01);
+      }
+
+      const historyCache = state.evaluationSlopeHistory?.[pair] || {};
+      const zScores = calculateMAS_IM_ZScores(pair, activeTf, priceCache, historyCache);
+
+      const activeScheduleKey = `${pair}|${activeTf}`;
+      const evalAnalysis = state.scheduleEvaluations.get(activeScheduleKey);
+      const activeSignal = evalAnalysis?.latest?.[state.selectedScheduleStrategy];
+      const dir = activeSignal ? activeSignal.direction : 0;
+
+      const closes = priceCache[activeTf] || [];
+      const prevP = closes[closes.length - 2] || 0;
+      const currP = closes[closes.length - 1] || 0;
+      const angle = calculateEventAngle(prevP, currP, 1);
+
+      const type = classifyType(dir, zScores.MAS_Z);
+      const stats = calculateSlopeStats(closes.slice(-50));
+      const r2 = stats.r2;
+      const pValue = stats.pValue;
+      const pipsPerHour = zScores.perTF?.[activeTf]?.pipsPerHour || 0;
+      const strength = Math.abs(zScores.IM_OVER_MAS) * r2;
+
+      results.push({
+        pair,
+        timeframe: activeTf,
+        signal: dir,
+        mas_z: zScores.MAS_Z,
+        im_z: zScores.IM_Z,
+        ratio: zScores.IM_OVER_MAS,
+        eventAngle: angle,
+        weeklySlope: zScores.perTF?.['W']?.slope || 0,
+        roc: stats.roc,
+        r2,
+        pValue,
+        pipsPerHour,
+        strength,
+        type,
+        recovered_MAS: zScores.recovered_MAS,
+        recovered_IM: zScores.recovered_IM,
+        wMean: zScores.wMean,
+        wStd: zScores.wStd,
+        priceCache
+      });
+    }
+
+    state.evaluationTableData = results;
+    renderEvaluationTable();
+    renderFourSlotRotator();
+  }
+
+  function renderFourSlotRotator() {
+    const data = state.evaluationTableData || [];
+    const activeTf = el("evalTableTfFilter").value;
+
+    const findBest = (filterFn) => {
+      const candidates = data.filter(filterFn);
+      if (!candidates.length) return null;
+      candidates.sort((a, b) => b.strength - a.strength || b.r2 - a.r2);
+      return candidates[0];
+    };
+
+    let bestSellTrend = findBest(r => r.signal < 0 && r.mas_z < 0 && r.type === "TREND_FOLLOWING" && r.r2 > 0.6 && r.pValue < 0.05);
+    if (!bestSellTrend) {
+      bestSellTrend = findBest(r => r.signal < 0 && r.mas_z < 0 && r.type === "TREND_FOLLOWING");
+    }
+
+    let bestSellReversion = findBest(r => r.signal < 0 && r.mas_z > 0 && r.type === "REVERSION" && r.im_z > r.mas_z);
+    if (!bestSellReversion) {
+      bestSellReversion = findBest(r => r.signal < 0 && r.mas_z > 0 && r.type === "REVERSION");
+    }
+
+    let bestBuyTrend = findBest(r => r.signal > 0 && r.mas_z > 0 && r.type === "TREND_FOLLOWING");
+
+    let bestBuyReversion = findBest(r => r.signal > 0 && r.mas_z < 0 && r.type === "REVERSION" && r.im_z > Math.abs(r.mas_z));
+    if (!bestBuyReversion) {
+      bestBuyReversion = findBest(r => r.signal > 0 && r.mas_z < 0 && r.type === "REVERSION");
+    }
+
+    const slots = [
+      { title: "Best SELL Trend Following", candidate: bestSellTrend },
+      { title: "Best SELL Reversion", candidate: bestSellReversion },
+      { title: "Best BUY Trend Following", candidate: bestBuyTrend },
+      { title: "Best BUY Reversion", candidate: bestBuyReversion }
+    ];
+
+    el("fourSlotRotator").innerHTML = slots.map((slot, index) => {
+      const c = slot.candidate;
+      if (!c) {
+        return `
+          <div class="fact" style="border:1px solid var(--line); border-radius:5px; padding:10px; background:#0c1219; opacity:0.6;">
+            <span style="font-size:8px; color:var(--muted);">${slot.title}</span>
+            <div style="font-size:11px; font-weight:bold; margin-top:4px;">No Candidate Found</div>
+          </div>
+        `;
+      }
+
+      const isBuy = c.signal > 0;
+      const accelerating = isBuy ? c.roc > 0 : c.roc < 0;
+      const borderColor = accelerating ? "var(--buy)" : "var(--sell)";
+
+      const isSelected = state.evalSelectedSlot === index;
+      const borderStyle = isSelected ? `border: 2px solid var(--accent); background: rgba(215,168,92,.08);` : `border: 1px solid ${borderColor};`;
+
+      return `
+        <div class="fact" style="${borderStyle} border-radius:5px; padding:10px; position:relative; cursor:pointer;" onclick="selectRotatorSlot(${index})">
+          <span style="font-size:8px; color:var(--muted); font-weight:bold;">${slot.title}</span>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
+            <strong style="font-size:14px; color:var(--text);">${formatPair(c.pair)}</strong>
+            <span class="badge ${directionClass(c.signal)}">${signalWord(c.signal)}</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:6px; font-size:9px;">
+            <div>MAS Z: <b>${c.mas_z.toFixed(2)}</b></div>
+            <div>IM Z: <b>${c.im_z.toFixed(2)}</b></div>
+            <div>IM/MAS: <b>${c.ratio.toFixed(2)}</b></div>
+            <div>R²: <b>${c.r2.toFixed(2)}</b></div>
+            <div>Pips/Hr: <b>${c.pipsPerHour.toFixed(1)}</b></div>
+          </div>
+          <button type="button" class="connect" style="width:100%; margin-top:8px; padding:4px; font-size:9px;" onclick="confirmRotatorSlot(event, ${index})">Confirm</button>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function selectRotatorSlot(index) {
+    state.evalSelectedSlot = index;
+    const slot = getRotatorSlot(index);
+    if (!slot || !slot.candidate) return;
+
+    const c = slot.candidate;
+    state.selectedInstrument = c.pair;
+    state.selectedTimeframe = c.timeframe;
+
+    const sideWord = signalWord(c.signal);
+    el("evalChartTitle").textContent = `Preview: HTL ${sideWord} vs MAS ${c.mas_z.toFixed(2)} (${c.type === 'TREND_FOLLOWING' ? 'Trend' : 'Reversion'}) | IM ${c.im_z.toFixed(2)} | Angle ${c.eventAngle.toFixed(0)}°`;
+    el("evalConfirmButton").style.display = "inline-block";
+
+    el("evalChartPair").value = c.pair;
+    el("evalChartTimeframe").value = c.timeframe;
+
+    void loadEvalChartData(c.pair, c.timeframe);
+    renderFourSlotRotator();
+  }
+
+  function getRotatorSlot(index) {
+    const data = state.evaluationTableData || [];
+    const findBest = (filterFn) => {
+      const candidates = data.filter(filterFn);
+      if (!candidates.length) return null;
+      candidates.sort((a, b) => b.strength - a.strength || b.r2 - a.r2);
+      return candidates[0];
+    };
+
+    let bestSellTrend = findBest(r => r.signal < 0 && r.mas_z < 0 && r.type === "TREND_FOLLOWING" && r.r2 > 0.6 && r.pValue < 0.05);
+    if (!bestSellTrend) bestSellTrend = findBest(r => r.signal < 0 && r.mas_z < 0 && r.type === "TREND_FOLLOWING");
+
+    let bestSellReversion = findBest(r => r.signal < 0 && r.mas_z > 0 && r.type === "REVERSION" && r.im_z > r.mas_z);
+    if (!bestSellReversion) bestSellReversion = findBest(r => r.signal < 0 && r.mas_z > 0 && r.type === "REVERSION");
+
+    let bestBuyTrend = findBest(r => r.signal > 0 && r.mas_z > 0 && r.type === "TREND_FOLLOWING");
+
+    let bestBuyReversion = findBest(r => r.signal > 0 && r.mas_z < 0 && r.type === "REVERSION" && r.im_z > Math.abs(r.mas_z));
+    if (!bestBuyReversion) bestBuyReversion = findBest(r => r.signal > 0 && r.mas_z < 0 && r.type === "REVERSION");
+
+    const slots = [
+      { title: "Best SELL Trend Following", candidate: bestSellTrend },
+      { title: "Best SELL Reversion", candidate: bestSellReversion },
+      { title: "Best BUY Trend Following", candidate: bestBuyTrend },
+      { title: "Best BUY Reversion", candidate: bestBuyReversion }
+    ];
+    return slots[index];
+  }
+
+  async function confirmRotatorSlot(event, index) {
+    if (event) event.stopPropagation();
+    const slot = getRotatorSlot(index);
+    if (!slot || !slot.candidate) return;
+
+    const c = slot.candidate;
+    el("evalChartTitle").textContent = `HTL Confirmed: ${signalWord(c.signal)} vs MAS ${c.mas_z.toFixed(2)} (${c.type === 'TREND_FOLLOWING' ? 'Trend' : 'Reversion'}) - Logged at ${new Date().toLocaleTimeString()}`;
+    el("evalConfirmButton").style.display = "none";
+
+    const entry = {
+      type: "EVALUATION",
+      pair: c.pair,
+      direction: c.signal > 0 ? "BUY" : "SELL",
+      message: `MAS Z: ${c.mas_z.toFixed(2)} | IM Z: ${c.im_z.toFixed(2)} | Ratio: ${c.ratio.toFixed(2)} | Event Angle: ${c.eventAngle.toFixed(0)}° | R²: ${c.r2.toFixed(2)} | Pips/Hr: ${c.pipsPerHour.toFixed(1)}`
+    };
+
+    try {
+      const response = await fetch("/api/evaluation/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry)
+      });
+      if (response.ok) {
+        void loadTradingLedger();
+      }
+    } catch (e) {
+      console.error("Failed to write evaluation to ledger:", e);
+    }
+  }
+
+  async function loadEvalChartData(pair, timeframe) {
+    if (!state.connected) return;
+    try {
+      const q = new URLSearchParams({ price: "M", granularity: timeframe, count: "150", smooth: "false" });
+      const response = await fetch(`/api/oanda/proxy?path=${encodeURIComponent(`/v3/instruments/${pair}/candles?${q}`)}`, { cache: "no-store" });
+      const payload = await response.json();
+      const candlesList = completedCandles(payload, pair, timeframe);
+      state.evalCandles = candlesList;
+
+      const closes = candlesList.map(c => c.close);
+      const historyCache = state.evaluationSlopeHistory?.[pair] || {};
+      const zScores = calculateMAS_IM_ZScores(pair, timeframe, { [timeframe]: closes, 'W': closes }, historyCache);
+
+      el("evalMetricSignal").textContent = zScores.summary.mas_z > 0 ? "BUY" : "SELL";
+      el("evalMetricSignal").className = zScores.summary.mas_z > 0 ? "positive" : "negative";
+      el("evalMetricMasZ").textContent = zScores.MAS_Z.toFixed(2);
+      el("evalMetricImZ").textContent = zScores.IM_Z.toFixed(2);
+      el("evalMetricRatio").textContent = zScores.IM_OVER_MAS.toFixed(2);
+      const stats = calculateSlopeStats(closes.slice(-50));
+      el("evalMetricR2").textContent = stats.r2.toFixed(2);
+      el("evalMetricPipsHour").textContent = (zScores.perTF?.[timeframe]?.pipsPerHour || 0).toFixed(1);
+
+      el("evalChartMessage").hidden = true;
+      drawEvalCharts();
+      drawWeeklyCognition(pair, zScores);
+    } catch (e) {
+      console.error("Failed to load evaluation chart data:", e);
+    }
+  }
+
+  function drawEvalCharts() {
+    const canvas = el("evalChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const width = rect.width;
+    const height = rect.height;
+    ctx.fillStyle = "#080c12";
+    ctx.fillRect(0, 0, width, height);
+
+    const candlesList = state.evalCandles || [];
+    if (!candlesList.length) return;
+
+    const margin = { top: 20, right: 60, bottom: 20, left: 20 };
+    const plot = { x: margin.left, y: margin.top, w: width - margin.left - margin.right, h: height - margin.top - margin.bottom };
+
+    let low = Math.min(...candlesList.map(c => c.low));
+    let high = Math.max(...candlesList.map(c => c.high));
+    const pad = (high - low) * 0.1 || 0.01;
+    low -= pad; high += pad;
+
+    const priceToY = (price) => plot.y + (high - price) / (high - low) * plot.h;
+    const barWidth = plot.w / candlesList.length;
+    const indexToX = (index) => plot.x + (index + 0.5) * barWidth;
+
+    ctx.strokeStyle = "#1c2632";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = plot.y + plot.h * i / 4;
+      const price = high - (high - low) * i / 4;
+      ctx.beginPath(); ctx.moveTo(plot.x, y); ctx.lineTo(plot.x + plot.w, y); ctx.stroke();
+      ctx.fillStyle = "#8b98aa";
+      ctx.font = "9px ui-monospace,monospace";
+      ctx.fillText(price.toFixed(5), plot.x + plot.w + 5, y + 3);
+    }
+
+    candlesList.forEach((c, index) => {
+      const x = indexToX(index);
+      const rising = c.close >= c.open;
+      ctx.strokeStyle = rising ? "#48c78e" : "#ef6b73";
+      ctx.fillStyle = rising ? "#48c78e" : "#ef6b73";
+      ctx.beginPath();
+      ctx.moveTo(x, priceToY(c.high));
+      ctx.lineTo(x, priceToY(c.low));
+      ctx.stroke();
+      const bodyTop = priceToY(Math.max(c.open, c.close));
+      const bodyBottom = priceToY(Math.min(c.open, c.close));
+      const bodyWidth = Math.max(1, barWidth * 0.6);
+      ctx.fillRect(x - bodyWidth/2, bodyTop, bodyWidth, Math.max(1, bodyBottom - bodyTop));
+    });
+
+    if (state.evalCrosshair !== null && state.evalCrosshair >= 0 && state.evalCrosshair < candlesList.length) {
+      const cx = indexToX(state.evalCrosshair);
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = "#a7b5c7";
+      ctx.beginPath();
+      ctx.moveTo(cx, plot.y);
+      ctx.lineTo(cx, plot.y + plot.h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    drawOscillatorChart();
+  }
+
+  function drawOscillatorChart() {
+    const canvas = el("oscillatorCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const width = rect.width;
+    const height = rect.height;
+    ctx.fillStyle = "#080c12";
+    ctx.fillRect(0, 0, width, height);
+
+    const candlesList = state.evalCandles || [];
+    if (!candlesList.length) return;
+
+    const margin = { top: 10, right: 60, bottom: 10, left: 20 };
+    const plot = { x: margin.left, y: margin.top, w: width - margin.left - margin.right, h: height - margin.top - margin.bottom };
+
+    const closes = candlesList.map(c => c.close);
+    const masData = [];
+    const imData = [];
+    const histogram = [];
+
+    const historyCache = state.evaluationSlopeHistory?.[state.selectedInstrument] || {};
+    const timeframe = el("evalChartTimeframe").value;
+
+    for (let i = 0; i < closes.length; i++) {
+      if (i < 50) {
+        masData.push(0);
+        imData.push(0);
+        histogram.push(0);
+      } else {
+        const windowCloses = closes.slice(i - 50 + 1, i + 1);
+        const zScores = calculateMAS_IM_ZScores(state.selectedInstrument, timeframe, { [timeframe]: windowCloses, 'W': windowCloses }, historyCache);
+        masData.push(zScores.MAS_Z);
+        imData.push(zScores.IM_Z);
+        histogram.push(zScores.IM_Z - zScores.MAS_Z);
+      }
+    }
+
+    const low = -3.5;
+    const high = 3.5;
+    const zToY = (val) => plot.y + (high - val) / (high - low) * plot.h;
+    const barWidth = plot.w / candlesList.length;
+    const indexToX = (index) => plot.x + (index + 0.5) * barWidth;
+
+    ctx.strokeStyle = "#2b3543";
+    ctx.beginPath();
+    ctx.moveTo(plot.x, zToY(0));
+    ctx.lineTo(plot.x + plot.w, zToY(0));
+    ctx.stroke();
+
+    candlesList.forEach((_, index) => {
+      const x = indexToX(index);
+      const val = histogram[index];
+      ctx.fillStyle = val >= 0 ? "rgba(72,199,142,0.3)" : "rgba(239,107,115,0.3)";
+      const yZero = zToY(0);
+      const yVal = zToY(val);
+      ctx.fillRect(x - barWidth*0.3, Math.min(yZero, yVal), barWidth * 0.6, Math.max(1, Math.abs(yZero - yVal)));
+    });
+
+    ctx.strokeStyle = "#ef6b73";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    masData.forEach((val, index) => {
+      const x = indexToX(index);
+      const y = zToY(val);
+      if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    ctx.strokeStyle = "#48c78e";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    imData.forEach((val, index) => {
+      const x = indexToX(index);
+      const y = zToY(val);
+      if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    if (state.evalCrosshair !== null && state.evalCrosshair >= 0 && state.evalCrosshair < candlesList.length) {
+      const cx = indexToX(state.evalCrosshair);
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = "#a7b5c7";
+      ctx.beginPath();
+      ctx.moveTo(cx, plot.y);
+      ctx.lineTo(cx, plot.y + plot.h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const masVal = masData[state.evalCrosshair];
+      const imVal = imData[state.evalCrosshair];
+      ctx.fillStyle = "#edf2ff";
+      ctx.font = "9px ui-monospace,monospace";
+      ctx.fillText(`MAS Z: ${masVal.toFixed(2)} | IM Z: ${imVal.toFixed(2)}`, plot.x + 5, plot.y + 12);
+    }
+  }
+
+  function drawWeeklyCognition(pair, zScores) {
+    const canvas = el("weeklyCognitionCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const width = rect.width;
+    const height = rect.height;
+    ctx.fillStyle = "#080c12";
+    ctx.fillRect(0, 0, width, height);
+
+    el("weeklyCognitionTitle").textContent = `W - MAS: ${zScores.MAS_Z.toFixed(2)} | IM: ${zScores.IM_Z.toFixed(2)} | Ratio: ${zScores.IM_OVER_MAS.toFixed(2)}`;
+
+    const weeklyCloses = state.evalCandles ? state.evalCandles.slice(-5).map(c => c.close) : [1.1, 1.12, 1.09, 1.13, 1.11];
+
+    const margin = { top: 40, right: 30, bottom: 40, left: 30 };
+    const plot = { x: margin.left, y: margin.top, w: width - margin.left - margin.right, h: height - margin.top - margin.bottom };
+
+    let low = Math.min(...weeklyCloses, zScores.recovered_MAS, zScores.recovered_IM);
+    let high = Math.max(...weeklyCloses, zScores.recovered_MAS, zScores.recovered_IM);
+    const pad = (high - low) * 0.2 || 0.05;
+    low -= pad; high += pad;
+
+    const valToY = (val) => plot.y + (high - val) / (high - low) * plot.h;
+
+    ctx.strokeStyle = "#db2777";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(plot.x, valToY(zScores.recovered_MAS));
+    ctx.lineTo(plot.x + plot.w, valToY(zScores.recovered_MAS));
+    ctx.stroke();
+    ctx.fillStyle = "#db2777";
+    ctx.font = "8px sans-serif";
+    ctx.fillText(`Recovered MAS: ${zScores.recovered_MAS.toFixed(5)}`, plot.x, valToY(zScores.recovered_MAS) - 4);
+
+    ctx.strokeStyle = "#0284c7";
+    ctx.beginPath();
+    ctx.moveTo(plot.x, valToY(zScores.recovered_IM));
+    ctx.lineTo(plot.x + plot.w, valToY(zScores.recovered_IM));
+    ctx.stroke();
+    ctx.fillStyle = "#0284c7";
+    ctx.fillText(`Recovered IM: ${zScores.recovered_IM.toFixed(5)}`, plot.x, valToY(zScores.recovered_IM) - 4);
+    ctx.setLineDash([]);
+
+    const o = weeklyCloses[0];
+    const c = weeklyCloses[weeklyCloses.length - 1];
+    const h = Math.max(...weeklyCloses);
+    const l = Math.min(...weeklyCloses);
+
+    const cx = plot.x + plot.w / 2;
+    const barWidth = Math.min(100, plot.w * 0.5);
+
+    ctx.strokeStyle = c >= o ? "#48c78e" : "#ef6b73";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, valToY(h));
+    ctx.lineTo(cx, valToY(l));
+    ctx.stroke();
+
+    ctx.fillStyle = c >= o ? "rgba(72,199,142,0.8)" : "rgba(239,107,115,0.8)";
+    const bodyTop = valToY(Math.max(o, c));
+    const bodyBottom = valToY(Math.min(o, c));
+    ctx.fillRect(cx - barWidth/2, bodyTop, barWidth, Math.max(1, bodyBottom - bodyTop));
+
+    const step = barWidth / 6;
+    weeklyCloses.forEach((close, i) => {
+      const tx = cx - barWidth/2 + (i + 1) * step;
+      const ty = valToY(close);
+
+      ctx.fillStyle = i > 0 && weeklyCloses[i] >= weeklyCloses[i-1] ? "#48c78e" : "#ef6b73";
+      ctx.beginPath();
+      ctx.arc(tx, ty, 3, 0, 2*Math.PI);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(tx, plot.y + plot.h + 15);
+      ctx.stroke();
+
+      ctx.fillStyle = "#8b98aa";
+      ctx.font = "8px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`D${i+1}`, tx, plot.y + plot.h + 25);
+    });
+    ctx.textAlign = "left";
+  }
+
+  function renderEvaluationTable() {
+    const activeTf = el("evalTableTfFilter").value;
+    const list = [...(state.evaluationTableData || [])];
+
+    const filtered = list.filter(r => r.timeframe === activeTf);
+
+    const key = state.evalSortKey;
+    const dir = state.evalSortDirection;
+    filtered.sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") {
+        return (av - bv) * dir;
+      }
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+
+    el("evalTableBody").innerHTML = filtered.map(r => {
+      const isSelected = r.pair === state.selectedInstrument;
+      const typeWord = r.type === 'TREND_FOLLOWING' ? 'Trend' : 'Reversion';
+      return `
+        <tr style="cursor:pointer; ${isSelected ? 'background:rgba(215,168,92,.14);' : ''}" onclick="selectEvalTablePair('${r.pair}')">
+          <td><b>${formatPair(r.pair)}</b></td>
+          <td>${r.timeframe}</td>
+          <td class="${directionClass(r.signal)}"><b>${signalWord(r.signal)}</b></td>
+          <td>${r.mas_z.toFixed(2)}</td>
+          <td>${r.im_z.toFixed(2)}</td>
+          <td>${r.ratio.toFixed(2)}</td>
+          <td>${r.eventAngle.toFixed(0)}°</td>
+          <td>${r.weeklySlope.toFixed(6)}</td>
+          <td>${r.roc.toFixed(6)}</td>
+          <td>${r.r2.toFixed(2)}</td>
+          <td>${r.pValue.toFixed(4)}</td>
+          <td>${r.pipsPerHour.toFixed(1)}</td>
+          <td><b>${r.strength.toFixed(3)}</b></td>
+          <td>${typeWord}</td>
+        </tr>
+      `;
+    }).join("") || `<tr><td colspan="14">No data available for timeframe ${activeTf}</td></tr>`;
+  }
+
+  function sortEvalTable(key) {
+    if (state.evalSortKey === key) {
+      state.evalSortDirection *= -1;
+    } else {
+      state.evalSortKey = key;
+      state.evalSortDirection = -1;
+    }
+    renderEvaluationTable();
+  }
+
+  function selectEvalTablePair(pair) {
+    state.selectedInstrument = pair;
+    const tf = el("evalTableTfFilter").value;
+    void loadEvalChartData(pair, tf);
+    renderEvaluationTable();
+  }
+
+  function setupSyncedCrosshair() {
+    const canvas = el("evalChart");
+    const osc = el("oscillatorCanvas");
+
+    const onMove = (event, targetCanvas) => {
+      const rect = targetCanvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const candlesList = state.evalCandles || [];
+      if (!candlesList.length) return;
+
+      const margin = { left: 20, right: 60 };
+      const plotWidth = rect.width - margin.left - margin.right;
+      const barWidth = plotWidth / candlesList.length;
+
+      const localX = x - margin.left;
+      const index = clamp(Math.floor(localX / barWidth), 0, candlesList.length - 1);
+      state.evalCrosshair = index;
+
+      drawEvalCharts();
+    };
+
+    if (canvas) {
+      canvas.addEventListener("pointermove", (e) => onMove(e, canvas));
+      canvas.addEventListener("pointerleave", () => {
+        state.evalCrosshair = null;
+        drawEvalCharts();
+      });
+    }
+    if (osc) {
+      osc.addEventListener("pointermove", (e) => onMove(e, osc));
+      osc.addEventListener("pointerleave", () => {
+        state.evalCrosshair = null;
+        drawEvalCharts();
+      });
     }
   }
 
@@ -1695,7 +2466,7 @@
   async function computeConfiguration(){const button=el("computeConfiguration");if(!state.connected)return;button.disabled=true;button.textContent="Computing…";el("macroPerformanceScope").textContent="Loading the current completed OANDA candle history and optimizing…";try{const response=await fetch("/api/engine/compute",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({pair:state.selectedInstrument,timeframe:state.selectedTimeframe})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?`${payload.stage||"compute"} · ${payload.error}`:`HTTP ${response.status}`);state.autoConfigurations.set(payload.key,payload.record);const resolved=payload.record.config;if(state.chartCandles.length){state.chartAnalysis=analyzeWithConfiguration(state.chartCandles,resolved,false);state.chartCausalIndicators=null;state.chartCausalSeries=[];void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolved,state.selectedStrategy);}renderStrategyConfiguration();renderMacroPerformance();renderOptimizerRegistry();renderSchedule();updateChartSummary();updateCompartments();drawChart();}catch(error){el("macroPerformanceScope").textContent=error.message||"Compute Configuration failed";el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">${error.message||"Compute Configuration failed"}</td></tr>`;}finally{button.textContent="Compute Configuration";button.disabled=!state.connected;}}
 
 
-  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','chat']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='chat'){void loadChatHistory();}if(name==='event'){state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(persist)queuePlatformPreferenceSave();}
+  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(name==='evaluation'){void loadEvaluationData();void loadEvalChartData(state.selectedInstrument, state.selectedTimeframe);setupSyncedCrosshair();}if(persist)queuePlatformPreferenceSave();}
 
   function pointerPosition(event) { const rect=el("chart").getBoundingClientRect(); return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
 
@@ -1712,6 +2483,7 @@
     el("analysisTab").addEventListener("click",()=>selectFacility("analysis"));
     el("eventTab").addEventListener("click",()=>selectFacility("event"));
     el("performanceTab").addEventListener("click",()=>selectFacility("performance"));
+    el("evaluationTab").addEventListener("click",()=>selectFacility("evaluation"));
 
 
 
@@ -1806,6 +2578,41 @@
     eventCanvas.addEventListener("pointerleave",()=>{if(!state.eventDragging){state.eventCrosshair=null;eventDraw(state.eventData,state.eventHtl,state.eventEvents);}});
     eventCanvas.addEventListener("wheel",event=>{event.preventDefault();state.eventVisibleBars=clamp(Math.round(state.eventVisibleBars*(event.deltaY>0?1.15:.87)),30,300);state.eventOffsetBars=clamp(state.eventOffsetBars,0,Math.max(0,(state.eventData?.length||0)-state.eventVisibleBars));eventDraw(state.eventData,state.eventHtl,state.eventEvents);},{passive:false});
     window.addEventListener("resize",()=>{drawChart();if(state.eventData&&!el("eventPanel").hidden)eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
+
+    // Evaluation panel event listeners
+    if (el("evalTableTfFilter")) {
+      el("evalTableTfFilter").addEventListener("change", () => {
+        void loadEvaluationData();
+      });
+    }
+    if (el("evalChartPair")) {
+      el("evalChartPair").addEventListener("change", () => {
+        state.selectedInstrument = el("evalChartPair").value;
+        void loadEvalChartData(state.selectedInstrument, el("evalChartTimeframe").value);
+      });
+    }
+    if (el("evalChartTimeframe")) {
+      el("evalChartTimeframe").addEventListener("change", () => {
+        void loadEvalChartData(state.selectedInstrument, el("evalChartTimeframe").value);
+      });
+    }
+    if (el("evalChartStrategy")) {
+      el("evalChartStrategy").addEventListener("change", () => {
+        void loadEvalChartData(state.selectedInstrument, el("evalChartTimeframe").value);
+      });
+    }
+    if (el("evalRefreshChart")) {
+      el("evalRefreshChart").addEventListener("click", () => {
+        void loadEvalChartData(state.selectedInstrument, el("evalChartTimeframe").value);
+      });
+    }
+    if (el("evalConfirmButton")) {
+      el("evalConfirmButton").addEventListener("click", () => {
+        if (state.evalSelectedSlot !== null) {
+          void confirmRotatorSlot(null, state.evalSelectedSlot);
+        }
+      });
+    }
   }
 
   buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); buildPairSelector(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadTradingLedger(state.ledgerLimit);},15000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadEngineStatus();},30000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadControlStatus();},10000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadOptimizerRecords();},120000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
