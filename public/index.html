@@ -522,7 +522,7 @@
             <div style="flex:1; background:#080c12; position:relative; min-height:300px; display:flex; flex-direction:column;">
               <canvas id="weeklyCognitionCanvas" style="width:100%; flex:1; display:block;"></canvas>
               <div style="padding:8px; font-size:9px; color:var(--muted); border-top:1px solid var(--line); line-height:1.3;">
-                Stacked ticks show daily closes composing the weekly bar. recovered_MAS and recovered_IM boundaries overlaid.
+                Weekly closes are price-space context only. MAS and IM are scale-free log-slope composites; their z-scores are not projected back into price space.
               </div>
             </div>
           </section>
@@ -643,6 +643,7 @@
 
   </div>
 
+  <script src="/mas-im-calculator.js"></script>
   <script>
   "use strict";
 
@@ -1238,104 +1239,34 @@
     }
   }
 
-  // --- TASK 3/4/5 EVALUATION & PAIR SELECTION TAB IMPLEMENTATION ---
-  function getDeterministicSeries(pair, length = 60, basePrice = 1.1) {
-    let hash = 0;
-    for (let i = 0; i < pair.length; i++) {
-      hash = pair.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    let seed = Math.abs(hash);
-    const lcg = () => {
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      return seed / 4294967296;
-    };
-    const series = [];
-    let current = basePrice + lcg() * 0.2;
-    for (let i = 0; i < length; i++) {
-      current += (lcg() - 0.5) * 0.002;
-      series.push(current);
-    }
-    return series;
-  }
-
-  const PIP_SIZE = { USD_JPY:0.01, EUR_JPY:0.01, GBP_JPY:0.01, AUD_JPY:0.01, NZD_JPY:0.01, CAD_JPY:0.01, CHF_JPY:0.01, default:0.0001 };
-  function getPipSize(p){return PIP_SIZE[p]||PIP_SIZE.default;}
-  function evalMean(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:0;}
-  function evalStd(a,m=null){if(a.length<2)return 0;const mm=m??evalMean(a);const v=a.reduce((s,val)=>s+(val-mm)**2,0)/(a.length-1);return Math.sqrt(v)||0;}
-  function normalCDF(x){const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;const sign=x<0?-1:1;x=Math.abs(x)/Math.sqrt(2);const t=1/(1+p*x);const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x));return 0.5*(1+sign*y);}
-  function calculateSlopeStats(prices,times=null){const n=prices.length;if(n<10)return {slope:0,intercept:0,r2:0,pValue:1,roc:0};const x=times||prices.map((_,i)=>i);const xM=evalMean(x),yM=evalMean(prices);let num=0,den=0,ssTot=0,ssRes=0;for(let i=0;i<n;i++){num+=(x[i]-xM)*(prices[i]-yM);den+=(x[i]-xM)**2;ssTot+=(prices[i]-yM)**2;}const slope=den===0?0:num/den;const intercept=yM-slope*xM;for(let i=0;i<n;i++){const yp=slope*x[i]+intercept;ssRes+=(prices[i]-yp)**2;}const r2=ssTot===0?0:1-ssRes/ssTot;const se=den===0||n<=2?0:Math.sqrt(ssRes/(n-2))/Math.sqrt(den);const tStat=se===0?0:slope/se;const pValue=tStat===0?1:Math.max(0,Math.min(1,2*(1-normalCDF(Math.abs(tStat)))));const roc=n>1?(prices[n-1]-prices[0])/n:0;return {slope,intercept,r2:Math.max(0,r2),pValue,roc};}
-  function calcZScore(cur,hist){if(hist.length<20)return 0;const m=evalMean(hist),s=evalStd(hist,m);return s===0?0:(cur-m)/s;}
-  function calculateMAS_IM_ZScores(pair,timeframe,priceCache,slopeHistoryCache){
-    const TF_ORDER=['M1','M5','M15','M30','H1','H4','D','W'];
-    const curIdx=TF_ORDER.indexOf(timeframe);
-    const results={};
-    for(const tf of TF_ORDER){
-      const closes=priceCache[tf];
-      if(!closes||closes.length<50)continue;
-      const stats=calculateSlopeStats(closes.slice(-50));
-      let hist=slopeHistoryCache[tf]||[];
-      if (hist.length < 20) {
-        let hash = 0;
-        for (let i = 0; i < pair.length; i++) {
-          hash = pair.charCodeAt(i) + ((hash << 5) - hash) + tf.charCodeAt(0);
-        }
-        let seed = Math.abs(hash);
-        const lcg = () => {
-          seed = (seed * 1664525 + 1013904223) % 4294967296;
-          return seed / 4294967296;
-        };
-        hist = Array.from({length: 30}, () => (lcg() - 0.5) * 0.001);
-      }
-      const z=calcZScore(stats.slope,hist);
-      results[tf]={...stats,zScore:z,pipsPerHour:(stats.slope*(tf==='M1'?60:tf==='M5'?12:tf==='M15'?4:tf==='M30'?2:tf==='H1'?1:tf==='H4'?0.25:tf==='D'?0.0416:0.0059))/getPipSize(pair)};
-    }
-    const higher=TF_ORDER.slice(curIdx+1);
-    const masZs=higher.map(tf=>results[tf]?.zScore).filter(v=>v!==undefined);
-    const MAS_Z=masZs.length?evalMean(masZs):0;
-    const lower=TF_ORDER.slice(0,curIdx+1);
-    const imZs=lower.map(tf=>results[tf]?.zScore).filter(v=>v!==undefined);
-    const IM_Z=imZs.length?evalMean(imZs):0;
-    const weeklyCloses=priceCache['W']||[];
-    const wMean=evalMean(weeklyCloses),wStd=evalStd(weeklyCloses,wMean);
-    return {perTF:results,MAS_Z,IM_Z,IM_OVER_MAS:MAS_Z===0?0:IM_Z/MAS_Z,MAS_OVER_IM:IM_Z===0?0:MAS_Z/IM_Z,recovered_MAS:wMean+MAS_Z*wStd,recovered_IM:wMean+IM_Z*wStd,wMean,wStd,summary:{pair,timeframe,mas_z:MAS_Z,im_z:IM_Z,ratio:MAS_Z===0?0:IM_Z/MAS_Z,r2_avg:evalMean(Object.values(results).map(r=>r.r2)),sig_avg:evalMean(Object.values(results).map(r=>r.pValue))}};
-  }
-  function calculateEventAngle(prevP,currP,bars){return bars===0?0:Math.atan2(currP-prevP,bars)*(180/Math.PI);}
-  function classifyType(dir,MAS_Z){if(MAS_Z===0)return 'NEUTRAL';return Math.sign(dir)===Math.sign(MAS_Z)?'TREND_FOLLOWING':'REVERSION';}
+  // --- EVALUATION & PAIR SELECTION TAB IMPLEMENTATION ---
+  // MAS/IM mathematics are canonicalized in /mas-im-calculator.js and shared with the engine.
+  const { MAS_IM_TIMEFRAMES, calculateSlopeStats, calculateMAS_IM_ZScores, calculateEventAngle, classifyType } = CTEMASIM;
 
   async function loadEvaluationData() {
     if (!state.connected) return;
-    try {
-      const response = await fetch("/api/evaluation/history", {
-        headers: { Accept: "application/json" },
-        credentials: "same-origin",
-        cache: "no-store"
-      });
-      const history = await response.json().catch(() => ({}));
-      state.evaluationSlopeHistory = history;
-      await computeEvaluationResults();
-    } catch (e) {
-      console.error("Failed to load evaluation data:", e);
-    }
+    await preloadEvaluationTimeframe(el("evalTableTfFilter").value);
   }
 
-  async function preloadEvaluationTimeframe(activeTf) {
-    if (!state.connected) return;
-    const pairsToFetch = [];
-    for (const pair of INSTRUMENTS) {
-      const key = `${pair}|${activeTf}`;
-      const wKey = `${pair}|W`;
-      if (!state.scheduleCandles.has(key)) {
-        pairsToFetch.push({ pair, tf: activeTf });
-      }
-      if (!state.scheduleCandles.has(wKey)) {
-        pairsToFetch.push({ pair, tf: 'W' });
-      }
+  function evaluationPriceCache(pair) {
+    const cache = {};
+    for (const tf of MAS_IM_TIMEFRAMES) {
+      const candlesList = state.scheduleCandles.get(`${pair}|${tf}`) || [];
+      if (candlesList.length) cache[tf] = candlesList;
     }
-    if (!pairsToFetch.length) return;
+    return cache;
+  }
 
-    await runPool(pairsToFetch, 4, async (item) => {
+  function evaluationFramesReady(priceCache) {
+    return MAS_IM_TIMEFRAMES.every(tf => Array.isArray(priceCache[tf]) && priceCache[tf].length >= 70);
+  }
+
+  async function ensureEvaluationPairFrames(pair) {
+    const missing = MAS_IM_TIMEFRAMES.filter(tf => (state.scheduleCandles.get(`${pair}|${tf}`) || []).length < 180);
+    if (!missing.length) return evaluationPriceCache(pair);
+    await runPool(missing.map(tf => ({ pair, tf })), 3, async item => {
       try {
-        const q = new URLSearchParams({ price: "M", granularity: item.tf, count: "180" });
+        const q = new URLSearchParams({ price: "M", granularity: item.tf, count: "180", smooth: "false" });
         const payload = await oanda(`/v3/instruments/${item.pair}/candles?${q}`, null, 10);
         const candlesList = completedCandles(payload, item.pair, item.tf);
         if (candlesList.length) {
@@ -1344,11 +1275,39 @@
           const optimized = state.autoConfigurations.get(key)?.config;
           state.scheduleEvaluations.set(key, analyzeWithConfiguration(candlesList, optimized || STRATEGY_CONFIG, false));
         }
-      } catch (e) {
-        // ignore
+      } catch (error) {
+        console.error(`Evaluation frame load failed for ${item.pair} ${item.tf}:`, error);
       }
     });
+    return evaluationPriceCache(pair);
+  }
 
+  async function preloadEvaluationTimeframe(activeTf) {
+    if (!state.connected) return;
+    const jobs = [];
+    for (const pair of INSTRUMENTS) {
+      for (const tf of MAS_IM_TIMEFRAMES) {
+        if ((state.scheduleCandles.get(`${pair}|${tf}`) || []).length < 180) jobs.push({ pair, tf });
+      }
+    }
+    if (jobs.length) {
+      await runPool(jobs, 3, async item => {
+        try {
+          const q = new URLSearchParams({ price: "M", granularity: item.tf, count: "180", smooth: "false" });
+          const payload = await oanda(`/v3/instruments/${item.pair}/candles?${q}`, null, 10);
+          const candlesList = completedCandles(payload, item.pair, item.tf);
+          if (candlesList.length) {
+            const key = `${item.pair}|${item.tf}`;
+            state.scheduleCandles.set(key, candlesList);
+            const optimized = state.autoConfigurations.get(key)?.config;
+            state.scheduleEvaluations.set(key, analyzeWithConfiguration(candlesList, optimized || STRATEGY_CONFIG, false));
+          }
+        } catch (error) {
+          console.error(`Evaluation preload failed for ${item.pair} ${item.tf}:`, error);
+        }
+      });
+    }
+    void activeTf;
     await computeEvaluationResults();
   }
 
@@ -1357,80 +1316,29 @@
     const activeTf = el("evalTableTfFilter").value;
 
     for (const pair of INSTRUMENTS) {
-      const priceCache = {};
-      for (const tf of TIMEFRAMES) {
-        const key = `${pair}|${tf}`;
-        const candlesList = state.scheduleCandles.get(key) || [];
-        if (candlesList.length > 0) {
-          priceCache[tf] = candlesList.map(c => c.close);
-        }
-      }
-
-      if (!priceCache[activeTf] || !priceCache['W'] || priceCache[activeTf].length < 10 || priceCache['W'].length < 10) {
-        results.push({
-          pair,
-          timeframe: activeTf,
-          signal: 0,
-          mas_z: NaN,
-          im_z: NaN,
-          ratio: NaN,
-          eventAngle: NaN,
-          weeklySlope: NaN,
-          roc: NaN,
-          r2: NaN,
-          pValue: NaN,
-          pipsPerHour: NaN,
-          strength: NaN,
-          type: 'NEUTRAL',
-          recovered_MAS: NaN,
-          recovered_IM: NaN,
-          wMean: NaN,
-          wStd: NaN,
-          priceCache
-        });
+      const priceCache = evaluationPriceCache(pair);
+      if (!evaluationFramesReady(priceCache)) {
+        results.push({pair,timeframe:activeTf,signal:0,mas_z:NaN,im_z:NaN,mas:NaN,im:NaN,ratio:NaN,eventAngle:NaN,weeklySlope:NaN,roc:NaN,r2:NaN,pValue:NaN,pipsPerHour:NaN,strength:NaN,type:"NEUTRAL",priceCache});
         continue;
       }
 
-      const historyCache = state.evaluationSlopeHistory?.[pair] || {};
-      const zScores = calculateMAS_IM_ZScores(pair, activeTf, priceCache, historyCache);
-
+      const metrics = calculateMAS_IM_ZScores(pair, activeTf, priceCache);
+      const activeCandles = priceCache[activeTf] || [];
+      const closes = activeCandles.map(candle => candle.close);
       const activeScheduleKey = `${pair}|${activeTf}`;
       const evalAnalysis = state.scheduleEvaluations.get(activeScheduleKey);
       const activeSignal = evalAnalysis?.latest?.[state.selectedScheduleStrategy];
-      const dir = activeSignal ? activeSignal.direction : (zScores.MAS_Z > 0.5 ? 1 : zScores.MAS_Z < -0.5 ? -1 : 0);
-
-      const closes = priceCache[activeTf] || [];
-      const prevP = closes[closes.length - 2] || 0;
-      const currP = closes[closes.length - 1] || 0;
-      const angle = calculateEventAngle(prevP, currP, 1);
-
-      const type = classifyType(dir, zScores.MAS_Z);
-      const stats = calculateSlopeStats(closes.slice(-50));
-      const r2 = stats.r2;
-      const pValue = stats.pValue;
-      const pipsPerHour = zScores.perTF?.[activeTf]?.pipsPerHour || 0;
-      const strength = Math.abs(zScores.IM_OVER_MAS) * r2;
+      const dir = activeSignal?.direction || (Number.isFinite(metrics.MAS_Z) ? Math.sign(metrics.MAS_Z) : 0);
+      const prevP = closes.at(-2), currP = closes.at(-1);
+      const angle = Number.isFinite(prevP) && Number.isFinite(currP) ? calculateEventAngle(prevP, currP, 1) : NaN;
+      const stats = closes.length >= 50 ? calculateSlopeStats(closes.slice(-50)) : {r2:NaN,pValue:NaN,roc:NaN};
+      const pipsPerHour = metrics.perTF?.[activeTf]?.pipsPerHour;
+      const strength = Number.isFinite(metrics.MAS_Z) && Number.isFinite(metrics.IM_Z) && Number.isFinite(stats.r2) ? .5 * (Math.abs(metrics.MAS_Z) + Math.abs(metrics.IM_Z)) * stats.r2 : NaN;
 
       results.push({
-        pair,
-        timeframe: activeTf,
-        signal: dir,
-        mas_z: zScores.MAS_Z,
-        im_z: zScores.IM_Z,
-        ratio: zScores.IM_OVER_MAS,
-        eventAngle: angle,
-        weeklySlope: zScores.perTF?.['W']?.slope || 0,
-        roc: stats.roc,
-        r2,
-        pValue,
-        pipsPerHour,
-        strength,
-        type,
-        recovered_MAS: zScores.recovered_MAS,
-        recovered_IM: zScores.recovered_IM,
-        wMean: zScores.wMean,
-        wStd: zScores.wStd,
-        priceCache
+        pair,timeframe:activeTf,signal:dir,mas_z:metrics.MAS_Z,im_z:metrics.IM_Z,mas:metrics.MAS,im:metrics.IM,ratio:metrics.IM_OVER_MAS,
+        eventAngle:angle,weeklySlope:metrics.perTF?.W?.slope ?? NaN,roc:stats.roc,r2:stats.r2,pValue:stats.pValue,pipsPerHour,strength,
+        type:classifyType(dir,metrics.MAS_Z),priceCache,historyMode:metrics.historyMode
       });
     }
 
@@ -1594,30 +1502,27 @@
   async function loadEvalChartData(pair, timeframe) {
     if (!state.connected) return;
     try {
-      const q = new URLSearchParams({ price: "M", granularity: timeframe, count: "150", smooth: "false" });
-      const response = await fetch(`/api/oanda/proxy?path=${encodeURIComponent(`/v3/instruments/${pair}/candles?${q}`)}`, { cache: "no-store" });
-      const payload = await response.json();
-      const candlesList = completedCandles(payload, pair, timeframe);
+      const priceCache = await ensureEvaluationPairFrames(pair);
+      const candlesList = priceCache[timeframe] || [];
       state.evalCandles = candlesList;
-
-      const closes = candlesList.map(c => c.close);
-      const historyCache = state.evaluationSlopeHistory?.[pair] || {};
-      const zScores = calculateMAS_IM_ZScores(pair, timeframe, { [timeframe]: closes, 'W': closes }, historyCache);
-
-      el("evalMetricSignal").textContent = zScores.summary.mas_z > 0 ? "BUY" : "SELL";
-      el("evalMetricSignal").className = zScores.summary.mas_z > 0 ? "positive" : "negative";
-      el("evalMetricMasZ").textContent = zScores.MAS_Z.toFixed(2);
-      el("evalMetricImZ").textContent = zScores.IM_Z.toFixed(2);
-      el("evalMetricRatio").textContent = zScores.IM_OVER_MAS.toFixed(2);
-      const stats = calculateSlopeStats(closes.slice(-50));
-      el("evalMetricR2").textContent = stats.r2.toFixed(2);
-      el("evalMetricPipsHour").textContent = (zScores.perTF?.[timeframe]?.pipsPerHour || 0).toFixed(1);
-
-      el("evalChartMessage").hidden = true;
+      const metrics = evaluationFramesReady(priceCache) ? calculateMAS_IM_ZScores(pair, timeframe, priceCache) : null;
+      state.evalMasImMetrics = metrics;
+      const activeScheduleKey = `${pair}|${timeframe}`;
+      const activeSignal = state.scheduleEvaluations.get(activeScheduleKey)?.latest?.[state.selectedScheduleStrategy]?.direction || 0;
+      const metricSignal = activeSignal || (Number.isFinite(metrics?.MAS_Z) ? Math.sign(metrics.MAS_Z) : 0);
+      el("evalMetricSignal").textContent = signalWord(metricSignal);
+      el("evalMetricSignal").className = directionClass(metricSignal);
+      el("evalMetricMasZ").textContent = Number.isFinite(metrics?.MAS_Z) ? metrics.MAS_Z.toFixed(2) : "—";
+      el("evalMetricImZ").textContent = Number.isFinite(metrics?.IM_Z) ? metrics.IM_Z.toFixed(2) : "—";
+      el("evalMetricRatio").textContent = Number.isFinite(metrics?.IM_OVER_MAS) ? metrics.IM_OVER_MAS.toFixed(2) : "—";
+      const closes = candlesList.map(candle => candle.close), stats = closes.length >= 50 ? calculateSlopeStats(closes.slice(-50)) : {r2:NaN};
+      el("evalMetricR2").textContent = Number.isFinite(stats.r2) ? stats.r2.toFixed(2) : "—";
+      el("evalMetricPipsHour").textContent = Number.isFinite(metrics?.perTF?.[timeframe]?.pipsPerHour) ? metrics.perTF[timeframe].pipsPerHour.toFixed(1) : "—";
+      el("evalChartMessage").hidden = candlesList.length > 0;
       drawEvalCharts();
-      drawWeeklyCognition(pair, zScores);
-    } catch (e) {
-      console.error("Failed to load evaluation chart data:", e);
+      drawWeeklyCognition(pair, metrics);
+    } catch (error) {
+      console.error("Failed to load evaluation chart data:", error);
     }
   }
 
@@ -1758,222 +1663,36 @@
   function drawOscillatorChart() {
     const canvas = el("oscillatorCanvas");
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const width = Math.max(100, rect.width || canvas.clientWidth || canvas.parentNode?.clientWidth || 0);
-    const height = Math.max(50, rect.height || canvas.clientHeight || canvas.parentNode?.clientHeight || 0);
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#080c12";
-    ctx.fillRect(0, 0, width, height);
-
-    const visible = visibleEvalSlice();
-    if (!visible.candles.length) return;
-
-    const selectedStrategy = el("evalChartStrategy")?.value || "ASSET";
-    const lengthInput = el("evalChartLength") ? clamp(Math.round(Number(el("evalChartLength").value) || 10), 3, 200) : 10;
-    const filterInput = el("evalChartFilter") ? clamp(Number(el("evalChartFilter").value) || 0, 0, 10) : 0;
-    const currentConfig = { length: lengthInput, filter: filterInput };
-
-    const indicators = prepareIndicators(state.evalCandles, currentConfig);
-    const indicatorSet = CHART_INDICATORS[selectedStrategy] || CHART_INDICATORS.ASSET;
-
-    const count = Math.min(state.evalVisibleBars, state.evalCandles.length);
-    const maxOffset = Math.max(0, state.evalCandles.length - count);
-    const offset = clamp(state.evalOffsetBars, 0, maxOffset);
-    const visibleEnd = state.evalCandles.length - offset;
-    const visibleStart = Math.max(0, visibleEnd - count);
-    const visibleCandles = state.evalCandles.slice(visibleStart, visibleEnd);
-
-    const rightAxisWidth = 60 + state.evalRightIndent;
-    const margin = { top: 10, right: rightAxisWidth, bottom: 10, left: 40 };
-    const plot = { x: margin.left, y: margin.top, w: width - margin.left - margin.right, h: height - margin.top - margin.bottom };
-
-    const closes = (state.evalCandles || []).map(c => c.close);
-    const masDataFull = [];
-    const imDataFull = [];
-    const histogramFull = [];
-
-    const historyCache = state.evaluationSlopeHistory?.[state.selectedInstrument] || {};
-    const timeframe = el("evalChartTimeframe")?.value || "H1";
-
-    for (let i = 0; i < closes.length; i++) {
-      if (i < 50) {
-        masDataFull.push(0);
-        imDataFull.push(0);
-        histogramFull.push(0);
-      } else {
-        const windowCloses = closes.slice(i - 50 + 1, i + 1);
-        const zScores = calculateMAS_IM_ZScores(state.selectedInstrument, timeframe, { [timeframe]: windowCloses, 'W': windowCloses }, historyCache);
-        masDataFull.push(zScores.MAS_Z);
-        imDataFull.push(zScores.IM_Z);
-        histogramFull.push(zScores.IM_Z - zScores.MAS_Z);
-      }
-    }
-
-    const masData = masDataFull.slice(visible.start, visible.end);
-    const imData = imDataFull.slice(visible.start, visible.end);
-    const histogram = histogramFull.slice(visible.start, visible.end);
-
-    const low = -3.5;
-    const high = 3.5;
-    const zToY = (val) => plot.y + (high - val) / (high - low) * plot.h;
-    const barWidth = plot.w / visibleCandles.length;
-    const indexToX = (index) => plot.x + (index + 0.5) * barWidth;
-
-    const gridEndX = width - 60;
-    ctx.strokeStyle = "#2b3543";
-    ctx.beginPath();
-    ctx.moveTo(plot.x, zToY(0));
-    ctx.lineTo(gridEndX, zToY(0));
-    ctx.stroke();
-
-    for (let index = visibleStart; index < visibleEnd; index++) {
-      const x = indexToX(index - visibleStart);
-      const val = histogram[index] || 0;
-      ctx.fillStyle = val >= 0 ? "rgba(72,199,142,0.3)" : "rgba(239,107,115,0.3)";
-      const yZero = zToY(0);
-      const yVal = zToY(val);
-      ctx.fillRect(x - barWidth*0.3, Math.min(yZero, yVal), barWidth * 0.6, Math.max(1, Math.abs(yZero - yVal)));
-    }
-
-    ctx.strokeStyle = "#ef6b73";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    let isFirstMas = true;
-    for (let index = visibleStart; index < visibleEnd; index++) {
-      const x = indexToX(index - visibleStart);
-      const y = zToY(masData[index] || 0);
-      if (isFirstMas) { ctx.moveTo(x, y); isFirstMas = false; } else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    ctx.strokeStyle = "#48c78e";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    let isFirstIm = true;
-    for (let index = visibleStart; index < visibleEnd; index++) {
-      const x = indexToX(index - visibleStart);
-      const y = zToY(imData[index] || 0);
-      if (isFirstIm) { ctx.moveTo(x, y); isFirstIm = false; } else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    for (const [key,,color] of indicatorSet.osc) {
-      drawIndicatorLine(ctx, indicators[key], visibleStart, visibleEnd, indexToX, zToY, color, 1.8);
-    }
-
-    if (state.evalCrosshairEnabled && state.evalCrosshair !== null && state.evalCrosshair >= 0 && state.evalCrosshair < visibleCandles.length) {
-      const cx = indexToX(state.evalCrosshair);
-      ctx.setLineDash([3, 3]);
-      ctx.strokeStyle = "#a7b5c7";
-      ctx.beginPath();
-      ctx.moveTo(cx, plot.y);
-      ctx.lineTo(cx, plot.y + plot.h);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      const absIndex = visibleStart + state.evalCrosshair;
-      const masVal = masData[absIndex] || 0;
-      const imVal = imData[absIndex] || 0;
-      ctx.fillStyle = "#edf2ff";
-      ctx.font = "9px ui-monospace,monospace";
-      ctx.fillText(`MAS Z: ${masVal.toFixed(2)} | IM Z: ${imVal.toFixed(2)}`, plot.x + 5, plot.y + 12);
-    }
+    const ctx = canvas.getContext("2d"), rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    const width = Math.max(100, rect.width || canvas.clientWidth || canvas.parentNode?.clientWidth || 0), height = Math.max(100, rect.height || canvas.clientHeight || canvas.parentNode?.clientHeight || 0);
+    canvas.width = width * dpr; canvas.height = height * dpr; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle = "#080c12"; ctx.fillRect(0,0,width,height);
+    const visible = visibleEvalSlice(), metrics = state.evalMasImMetrics;
+    if (!visible.candles.length || !metrics) return;
+    const selectedStrategy = el("evalChartStrategy")?.value || "ASSET", lengthInput = el("evalChartLength") ? clamp(Math.round(Number(el("evalChartLength").value) || 10),3,200) : 10, filterInput = el("evalChartFilter") ? clamp(Number(el("evalChartFilter").value) || 0,0,10) : 0, indicators = prepareIndicators(state.evalCandles,{length:lengthInput,filter:filterInput}), indicatorSet = CHART_INDICATORS[selectedStrategy] || CHART_INDICATORS.ASSET;
+    const count = Math.min(state.evalVisibleBars,state.evalCandles.length), maxOffset = Math.max(0,state.evalCandles.length-count), offset = clamp(state.evalOffsetBars,0,maxOffset), visibleEnd = state.evalCandles.length-offset, visibleStart = Math.max(0,visibleEnd-count), visibleCandles = state.evalCandles.slice(visibleStart,visibleEnd), margin={top:10,right:60+state.evalRightIndent,bottom:10,left:40}, plot={x:margin.left,y:margin.top,w:width-margin.left-margin.right,h:height-margin.top-margin.bottom};
+    const alignSeries = source => { const out = new Array(state.evalCandles.length).fill(NaN), start = Math.max(0,out.length-source.length); for(let index=0;index<source.length&&start+index<out.length;index++) out[start+index]=source[index]; return out; };
+    const masData = alignSeries(metrics.MAS_Z_SERIES || []), imData = alignSeries(metrics.IM_Z_SERIES || []), histogram = masData.map((value,index)=>Number.isFinite(value)&&Number.isFinite(imData[index])?imData[index]-value:NaN), visibleValues=[...masData.slice(visibleStart,visibleEnd),...imData.slice(visibleStart,visibleEnd),...histogram.slice(visibleStart,visibleEnd)].filter(Number.isFinite), zMax=Math.max(3.5,...visibleValues.map(value=>Math.abs(value)))*1.08, zToY=value=>plot.y+(zMax-value)/(zMax*2)*plot.h, barWidth=plot.w/Math.max(1,visibleCandles.length), indexToX=index=>plot.x+(index+.5)*barWidth, gridEndX=width-60;
+    ctx.strokeStyle="#2b3543";ctx.beginPath();ctx.moveTo(plot.x,zToY(0));ctx.lineTo(gridEndX,zToY(0));ctx.stroke();
+    for(let index=visibleStart;index<visibleEnd;index++){const value=histogram[index];if(!Number.isFinite(value))continue;const x=indexToX(index-visibleStart),zero=zToY(0),y=zToY(value);ctx.fillStyle=value>=0?"rgba(72,199,142,0.3)":"rgba(239,107,115,0.3)";ctx.fillRect(x-barWidth*.3,Math.min(zero,y),barWidth*.6,Math.max(1,Math.abs(zero-y)));}
+    const drawSeries=(values,color)=>{ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();let started=false;for(let index=visibleStart;index<visibleEnd;index++){const value=values[index];if(!Number.isFinite(value)){started=false;continue;}const x=indexToX(index-visibleStart),y=zToY(value);if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);}ctx.stroke();};
+    drawSeries(masData,"#ef6b73"); drawSeries(imData,"#48c78e");
+    for (const [key,,color] of indicatorSet.osc) drawIndicatorLine(ctx,indicators[key],visibleStart,visibleEnd,indexToX,zToY,color,1.8);
+    if(state.evalCrosshairEnabled&&state.evalCrosshair!==null&&state.evalCrosshair>=0&&state.evalCrosshair<visibleCandles.length){const cx=indexToX(state.evalCrosshair);ctx.setLineDash([3,3]);ctx.strokeStyle="#a7b5c7";ctx.beginPath();ctx.moveTo(cx,plot.y);ctx.lineTo(cx,plot.y+plot.h);ctx.stroke();ctx.setLineDash([]);const absIndex=visibleStart+state.evalCrosshair,masVal=masData[absIndex],imVal=imData[absIndex];ctx.fillStyle="#edf2ff";ctx.font="9px ui-monospace,monospace";ctx.fillText(`MAS Z: ${Number.isFinite(masVal)?masVal.toFixed(2):"—"} | IM Z: ${Number.isFinite(imVal)?imVal.toFixed(2):"—"}`,plot.x+5,plot.y+12);}
   }
 
-  function drawWeeklyCognition(pair, zScores) {
+  function drawWeeklyCognition(pair, metrics) {
     const canvas = el("weeklyCognitionCanvas");
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const width = Math.max(100, rect.width || canvas.clientWidth || canvas.parentNode?.clientWidth || 0);
-    const height = Math.max(100, rect.height || canvas.clientHeight || canvas.parentNode?.clientHeight || 0);
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#080c12";
-    ctx.fillRect(0, 0, width, height);
-
-    el("weeklyCognitionTitle").textContent = `W - MAS: ${zScores.MAS_Z.toFixed(2)} | IM: ${zScores.IM_Z.toFixed(2)} | Ratio: ${zScores.IM_OVER_MAS.toFixed(2)}`;
-
-    const weeklyCloses = state.evalCandles ? state.evalCandles.slice(-5).map(c => c.close) : [1.1, 1.12, 1.09, 1.13, 1.11];
-
-    const margin = { top: 40, right: 30, bottom: 40, left: 30 };
-    const plot = { x: margin.left, y: margin.top, w: width - margin.left - margin.right, h: height - margin.top - margin.bottom };
-
-    let low = Math.min(...weeklyCloses, zScores.recovered_MAS, zScores.recovered_IM);
-    let high = Math.max(...weeklyCloses, zScores.recovered_MAS, zScores.recovered_IM);
-    const pad = (high - low) * 0.2 || 0.05;
-    low -= pad; high += pad;
-
-    const valToY = (val) => plot.y + (high - val) / (high - low) * plot.h;
-
-    ctx.strokeStyle = "#db2777";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(plot.x, valToY(zScores.recovered_MAS));
-    ctx.lineTo(plot.x + plot.w, valToY(zScores.recovered_MAS));
-    ctx.stroke();
-    ctx.fillStyle = "#db2777";
-    ctx.font = "8px sans-serif";
-    ctx.fillText(`Recovered MAS: ${zScores.recovered_MAS.toFixed(5)}`, plot.x, valToY(zScores.recovered_MAS) - 4);
-
-    ctx.strokeStyle = "#0284c7";
-    ctx.beginPath();
-    ctx.moveTo(plot.x, valToY(zScores.recovered_IM));
-    ctx.lineTo(plot.x + plot.w, valToY(zScores.recovered_IM));
-    ctx.stroke();
-    ctx.fillStyle = "#0284c7";
-    ctx.fillText(`Recovered IM: ${zScores.recovered_IM.toFixed(5)}`, plot.x, valToY(zScores.recovered_IM) - 4);
-    ctx.setLineDash([]);
-
-    const o = weeklyCloses[0];
-    const c = weeklyCloses[weeklyCloses.length - 1];
-    const h = Math.max(...weeklyCloses);
-    const l = Math.min(...weeklyCloses);
-
-    const cx = plot.x + plot.w / 2;
-    const barWidth = Math.min(100, plot.w * 0.5);
-
-    ctx.strokeStyle = c >= o ? "#48c78e" : "#ef6b73";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, valToY(h));
-    ctx.lineTo(cx, valToY(l));
-    ctx.stroke();
-
-    ctx.fillStyle = c >= o ? "rgba(72,199,142,0.8)" : "rgba(239,107,115,0.8)";
-    const bodyTop = valToY(Math.max(o, c));
-    const bodyBottom = valToY(Math.min(o, c));
-    ctx.fillRect(cx - barWidth/2, bodyTop, barWidth, Math.max(1, bodyBottom - bodyTop));
-
-    const step = barWidth / 6;
-    weeklyCloses.forEach((close, i) => {
-      const tx = cx - barWidth/2 + (i + 1) * step;
-      const ty = valToY(close);
-
-      ctx.fillStyle = i > 0 && weeklyCloses[i] >= weeklyCloses[i-1] ? "#48c78e" : "#ef6b73";
-      ctx.beginPath();
-      ctx.arc(tx, ty, 3, 0, 2*Math.PI);
-      ctx.fill();
-
-      ctx.strokeStyle = "rgba(255,255,255,0.15)";
-      ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(tx, plot.y + plot.h + 15);
-      ctx.stroke();
-
-      ctx.fillStyle = "#8b98aa";
-      ctx.font = "8px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(`D${i+1}`, tx, plot.y + plot.h + 25);
-    });
-    ctx.textAlign = "left";
+    const ctx=canvas.getContext("2d"),rect=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1,width=Math.max(100,rect.width||canvas.clientWidth||canvas.parentNode?.clientWidth||0),height=Math.max(100,rect.height||canvas.clientHeight||canvas.parentNode?.clientHeight||0);
+    canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#080c12";ctx.fillRect(0,0,width,height);
+    const fmt=value=>Number.isFinite(value)?value.toFixed(2):"—",sci=value=>Number.isFinite(value)?value.toExponential(3):"—";
+    el("weeklyCognitionTitle").textContent=`W · MAS Z: ${fmt(metrics?.MAS_Z)} | IM Z: ${fmt(metrics?.IM_Z)} | IM/MAS: ${fmt(metrics?.IM_OVER_MAS)}`;
+    const weeklyCandles=state.scheduleCandles.get(`${pair}|W`)||[],weeklyCloses=weeklyCandles.slice(-8).map(candle=>candle.close).filter(Number.isFinite);
+    if(!weeklyCloses.length)return;
+    const margin={top:48,right:30,bottom:40,left:30},plot={x:margin.left,y:margin.top,w:width-margin.left-margin.right,h:height-margin.top-margin.bottom},low0=Math.min(...weeklyCloses),high0=Math.max(...weeklyCloses),pad=(high0-low0)*.2||Math.abs(high0)*.002||.01,low=low0-pad,high=high0+pad,valToY=value=>plot.y+(high-value)/(high-low)*plot.h;
+    ctx.fillStyle="#8b98aa";ctx.font="8px ui-monospace,monospace";ctx.fillText(`MAS ${sci(metrics?.MAS)} log/hr · IM ${sci(metrics?.IM)} log/hr`,plot.x,20);ctx.fillText("Z uses causal same-lag multiscale composite history; no price-space recovery.",plot.x,33);
+    ctx.strokeStyle="#415267";ctx.lineWidth=1;ctx.beginPath();weeklyCloses.forEach((close,index)=>{const x=plot.x+(index/(Math.max(1,weeklyCloses.length-1)))*plot.w,y=valToY(close);if(index===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
+    weeklyCloses.forEach((close,index)=>{const x=plot.x+(index/(Math.max(1,weeklyCloses.length-1)))*plot.w,y=valToY(close);ctx.fillStyle=index>0&&close>=weeklyCloses[index-1]?"#48c78e":"#ef6b73";ctx.beginPath();ctx.arc(x,y,3,0,2*Math.PI);ctx.fill();ctx.fillStyle="#8b98aa";ctx.textAlign="center";ctx.fillText(`W${index+1}`,x,plot.y+plot.h+22);});ctx.textAlign="left";
   }
 
   function renderEvaluationTable() {
