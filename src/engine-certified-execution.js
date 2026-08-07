@@ -142,18 +142,24 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       state.selectedPairs=body.selectedPairs||[];
       state.manualSelectMode=body.manualSelectMode!==false;
       state.autoRotateMode=Boolean(body.autoRotateMode);
-      state.manualPositions = {};
-      const nowMs = Date.now();
-      if (body.manualPositions) {
-        for (const [pair, details] of Object.entries(body.manualPositions)) {
-          state.manualPositions[pair] = {
-            timeframe: details.timeframe || "M30",
-            direction: Number(details.direction || 1),
-            protectedUntil: nowMs + 24 * 60 * 60 * 1000
-          };
+      if (!state.selectedPairs || state.selectedPairs.length === 0) {
+        state.selectedPairs = PAIRS.slice();
+        state.tradingMode = "ALL_PAIRS";
+        state.manualPositions = {};
+      } else {
+        state.manualPositions = {};
+        const nowMs = Date.now();
+        if (body.manualPositions) {
+          for (const [pair, details] of Object.entries(body.manualPositions)) {
+            state.manualPositions[pair] = {
+              timeframe: details.timeframe || "M30",
+              direction: Number(details.direction || 1),
+              protectedUntil: nowMs + 24 * 60 * 60 * 1000
+            };
+          }
         }
+        state.tradingMode=state.autoRotateMode ? "AUTO_ROTATE" : (state.selectedPairs.length === 1 ? "MANUAL_1_PAIR" : "MANUAL_MULTI");
       }
-      state.tradingMode=state.autoRotateMode ? "AUTO_ROTATE" : (state.selectedPairs.length === 1 ? "MANUAL_1_PAIR" : "MANUAL_MULTI");
       await this.ctx.storage.put("state",state);
       return new Response(JSON.stringify({ok:true,selectedPairs:state.selectedPairs,manualSelectMode:state.manualSelectMode,autoRotateMode:state.autoRotateMode,manualPositions:state.manualPositions,tradingMode:state.tradingMode}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     }
@@ -198,9 +204,9 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
   }
 
   async execute(candidate,token,accountId,state){
-    const tradablePairs = state.selectedPairs && state.selectedPairs.length > 0 ? state.selectedPairs : PAIRS;
+    const tradablePairs = state.selectedPairs?.length ? state.selectedPairs : PAIRS.slice();
     if (!tradablePairs.includes(candidate.pair)) {
-      state.lastNoOrderReason = `Pair ${candidate.pair} is not in selectedPairs; execution suppressed`;
+      state.lastNoOrderReason = `Pair ${candidate.pair} not in selection`;
       return;
     }
     return super.execute(candidate,token,accountId,state);
@@ -239,46 +245,57 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
   async reconcile(requirements,token,accountId,state,config,positionsSnapshot=null,excludedPairs=new Set()){
     const positions=positionsSnapshot||await this.loadPositions(token,accountId);
-    const tradablePairs = state.selectedPairs && state.selectedPairs.length > 0 ? state.selectedPairs : PAIRS;
+    const tradablePairs = state.selectedPairs?.length ? state.selectedPairs : PAIRS.slice();
+    const nowMs = Date.now();
+
     for(const position of positions){
       if(!PAIRS.includes(position.instrument)||excludedPairs.has(position.instrument))continue;
 
       // Handle Manual Position protection
       const manual = state.manualPositions?.[position.instrument];
-      const nowMs = Date.now();
-      if (manual && nowMs < Number(manual.protectedUntil || 0)) {
-        const tf = manual.timeframe || "M30";
-        let opt = {};
-        try { opt = (await this.ctx.storage.get("optimizer")) || {}; } catch (e) {}
-        let ev = null;
-        let settings = null;
-        try {
-          settings = fullSettings(this, config, opt, position.instrument, tf);
-          const candleData = await candles(position.instrument, token, tf);
-          ev = currentEvent(candleData, position.instrument, tf, config.strategy, settings);
-        } catch (e) {
-          console.error("Failed to load candles for manual protection:", e);
+      if (manual) {
+        if (nowMs >= Number(manual.protectedUntil || 0)) {
+          // expired: auto-delete entry
+          delete state.manualPositions[position.instrument];
+        } else {
+          const tf = manual.timeframe || "M30";
+          const existing = positionDirection(position);
+          const sameTimeframe = config.timeframe === tf;
+          const sameDirection = existing === manual.direction;
+
+          if (sameTimeframe && sameDirection) {
+            let opt = {};
+            try { opt = (await this.ctx.storage.get("optimizer")) || {}; } catch (e) {}
+            let ev = null;
+            let settings = null;
+            try {
+              settings = fullSettings(this, config, opt, position.instrument, tf);
+              const candleData = await candles(position.instrument, token, tf);
+              ev = currentEvent(candleData, position.instrument, tf, config.strategy, settings);
+            } catch (e) {
+              console.error("Failed to load candles for manual protection:", e);
+            }
+
+            const longUnits=Number(position.long?.units||0);
+            const shortUnits=Math.abs(Number(position.short?.units||0));
+            const opposingDirection = -existing;
+
+            if (!ev || !ev.direction || ev.direction !== opposingDirection) {
+              const side = existing > 0 ? "LONG" : "SHORT";
+              const oppositeSide = existing > 0 ? "SELL" : "BUY";
+              await this.write({
+                type: "MANUAL_PROTECTED",
+                pair: position.instrument,
+                message: `Protecting manual ${position.instrument} ${tf} ${side} - no opposing ${tf} ${oppositeSide} signal`
+              }, false);
+              continue;
+            }
+
+            const context = this.decisionContext(ev ? { configuration: { settings } } : null, config);
+            await this.closePosition(position.instrument, existing, longUnits, shortUnits, token, accountId, ev.id, "Opposing signal for protected manual position", context);
+            continue;
+          }
         }
-
-        const longUnits=Number(position.long?.units||0);
-        const shortUnits=Math.abs(Number(position.short?.units||0));
-        const existing = positionDirection(position);
-        const opposingDirection = -existing;
-
-        if (!ev || !ev.direction || ev.direction !== opposingDirection) {
-          const side = existing > 0 ? "LONG" : "SHORT";
-          const oppositeSide = existing > 0 ? "SELL" : "BUY";
-          await this.write({
-            type: "MANUAL_PROTECTED",
-            pair: position.instrument,
-            message: `Protecting manual ${position.instrument} ${tf} ${side} - no opposing ${tf} ${oppositeSide} signal`
-          }, false);
-          continue;
-        }
-
-        const context = this.decisionContext(ev ? { configuration: { settings } } : null, config);
-        await this.closePosition(position.instrument, existing, longUnits, shortUnits, token, accountId, ev.id, "Opposing signal for protected manual position", context);
-        continue;
       }
 
       if(!tradablePairs.includes(position.instrument))continue;
@@ -374,9 +391,10 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
     this.running=true;
     let state=(await this.ctx.storage.get("state"))||{events:{},initialized:false};
 
-    if (state.selectedPairs === undefined) {
-      state.selectedPairs = ["EUR_AUD"];
-      state.tradingMode = "MANUAL_1_PAIR";
+    if (!state.selectedPairs || state.selectedPairs.length === 0) {
+      state.selectedPairs = PAIRS.slice();
+      state.tradingMode = "ALL_PAIRS";
+      state.manualPositions = {};
       await this.ctx.storage.put("state", state);
     }
 
@@ -600,7 +618,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         state.selectedPairs = [topPair];
       }
 
-      const tradablePairs = state.selectedPairs && state.selectedPairs.length > 0 ? state.selectedPairs : PAIRS;
+      const tradablePairs = state.selectedPairs?.length ? state.selectedPairs : PAIRS.slice();
       const tradableSet = new Set(tradablePairs);
 
       if(!state.initialized){

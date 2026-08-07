@@ -234,12 +234,10 @@ export class HtlEngine{
     const summary=(await callOanda(`/v3/accounts/${accountId}/summary`,token)).account||{};
     const marginAvailable = Number(summary.marginAvailable || 0);
     const marginUsed = Number(summary.marginUsed || 0);
-    if(marginAvailable < 0.2 * marginUsed){
-      state.lastNoOrderReason = "Low margin - skipping new entries, managing existing only";
-      const logMsg = existing
-        ? `NO_ORDER - Low margin, closed ${pair} but skipping opposite entry. MarginAvailable: ${marginAvailable}`
-        : "Low margin - skipping new entries, managing existing only";
-      await this.write({type:"NO_ORDER",pair,direction,message:logMsg,...context});
+
+    if (marginAvailable <= 0) {
+      state.lastNoOrderReason = `No margin available: ${marginAvailable}`;
+      await this.write({type:"NO_ORDER",pair,direction,message:state.lastNoOrderReason,...context});
       return;
     }
 
@@ -257,15 +255,30 @@ export class HtlEngine{
       return;
     }
 
+    if (marginAvailable > 0 && marginAvailable < 0.2 * marginUsed) {
+      units = Math.floor(units * 0.5);
+      if (units < 1) {
+        state.lastNoOrderReason = `Low margin scaled units to 0 for ${pair}`;
+        await this.write({type:"NO_ORDER",pair,direction,message:state.lastNoOrderReason,...context});
+        return;
+      }
+      const lowMarginMessage = `Low margin warning: ${pair} marginAvailable ${marginAvailable} < 20% marginUsed ${marginUsed}, scaling units to ${units}`;
+      console.warn(lowMarginMessage);
+      await this.write({
+        type: "CONFIGURATION",
+        message: lowMarginMessage
+      }, false);
+    }
+
     // Maintain compliance with registered strategy check gate
     const dummyCheck = units<minimumUnits;
 
     let warningMessage = null;
     if (units < minimumUnits) {
-      warningMessage = `WARNING: Below minimumUnits ${minimumUnits}, trading with ${units} due to low availability ${availVal}`;
+      warningMessage = `WARNING: Below minimumUnits ${minimumUnits}, trading with ${units} due to low availability ${availVal} for ${pair}`;
       await this.write({
         type: "CONFIGURATION",
-        message: `MinimumUnits warning: ${pair} ${units} < ${minimumUnits}`
+        message: `WARNING: Below minimumUnits ${minimumUnits}, trading with ${units} due to low availability ${availVal} for ${pair}`
       }, false);
     }
 
