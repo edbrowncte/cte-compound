@@ -1,12 +1,13 @@
 import { HtlEngine as CertifiedAnalyticsEngine } from "./engine.js";
-import { PAIRS, TIMEFRAMES, OPTIMIZER_VERSION, currentOptimizer, candles } from "./horizon-platform-engine.js";
+import { PAIRS, TIMEFRAMES, OPTIMIZER_VERSION, currentOptimizer, candles, currentEvent } from "./horizon-platform-engine.js";
 import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
 import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
 import { credentials } from "./engine-base.js";
 import {
   optimizedOptimizeNext,
   optimizedComputeConfiguration,
-  optimizedScan
+  optimizedScan,
+  fullSettings
 } from "./optimized-optimizer.js";
 
 const API="https://api-fxtrade.oanda.com";
@@ -118,8 +119,44 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
   async reconcile(requirements,token,accountId,state,config,positionsSnapshot=null,excludedPairs=new Set()){
     const positions=positionsSnapshot||await this.loadPositions(token,accountId);
+    const tradablePairs = state.selectedPairs && state.selectedPairs.length > 0 ? state.selectedPairs : PAIRS;
     for(const position of positions){
       if(!PAIRS.includes(position.instrument)||excludedPairs.has(position.instrument))continue;
+
+      // Handle Manual Position protection
+      const manual = state.manualPositions?.[position.instrument];
+      if (manual && manual.protected) {
+        const tf = manual.timeframe || "M30";
+        let opt = {};
+        try { opt = (await this.ctx.storage.get("optimizer")) || {}; } catch (e) {}
+        let ev = null;
+        let settings = null;
+        try {
+          settings = fullSettings(this, config, opt, position.instrument, tf);
+          const candleData = await candles(position.instrument, token, tf);
+          ev = currentEvent(candleData, position.instrument, tf, config.strategy, settings);
+        } catch (e) {
+          console.error("Failed to load candles for manual protection:", e);
+        }
+
+        const longUnits=Number(position.long?.units||0);
+        const shortUnits=Math.abs(Number(position.short?.units||0));
+        const existing = positionDirection(position);
+        if (!ev || !ev.direction || ev.direction === existing) {
+          await this.write({
+            type: "MANUAL_PROTECTED",
+            pair: position.instrument,
+            message: `Protecting manual ${position.instrument} ${existing > 0 ? "LONG" : "SHORT"} on ${tf} - no opposing signal`
+          }, false);
+          continue;
+        }
+        const context = this.decisionContext(ev ? { configuration: { settings } } : null, config);
+        await this.closePosition(position.instrument, existing, longUnits, shortUnits, token, accountId, ev.id, "Opposing signal for protected manual position", context);
+        continue;
+      }
+
+      if(!tradablePairs.includes(position.instrument))continue;
+
       const longUnits=Number(position.long?.units||0);
       const shortUnits=Math.abs(Number(position.short?.units||0));
       const existing=positionDirection(position);
@@ -293,6 +330,37 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       const mtfNow=this.mtfCandidates(state,rows,lastCandle,fingerprint);
       const positions=await this.loadPositions(token,accountId);
 
+      state.lastScanAt = new Date().toISOString();
+      state.openPositionsCount = positions.length;
+
+      // Handle Auto-Rotate Mode
+      if (state.autoRotateMode) {
+        const ledger = (await this.ctx.storage.get("ledger")) || [];
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        const pairPnls = {};
+        for (const item of ledger) {
+          if (item.type === "POSITION_CLOSED" && item.time) {
+            const timeMs = Date.parse(item.time);
+            if (Number.isFinite(timeMs) && timeMs >= cutoff && item.pair) {
+              const pl = Number(item.realizedPL);
+              if (Number.isFinite(pl)) {
+                pairPnls[item.pair] = (pairPnls[item.pair] || 0) + pl;
+              }
+            }
+          }
+        }
+        let topPair = "EUR_USD";
+        if (Object.keys(pairPnls).length > 0) {
+          const list = Object.keys(pairPnls).map(pair => ({ pair, pnl: pairPnls[pair] }));
+          list.sort((a, b) => b.pnl - a.pnl || a.pair.localeCompare(b.pair));
+          topPair = list[0].pair;
+        }
+        state.selectedPairs = [topPair];
+      }
+
+      const tradablePairs = state.selectedPairs && state.selectedPairs.length > 0 ? state.selectedPairs : PAIRS;
+      const tradableSet = new Set(tradablePairs);
+
       if(!state.initialized){
         await this.reconcile(requirements,token,accountId,state,config,positions);
         state.reconciledCandle=lastCandle;
@@ -311,7 +379,10 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
           return mtf?{...event,confidence:mtf.confidence,count:mtf.count}:null;
         }).filter(Boolean).sort((left,right)=>right.confidence-left.confidence);
         const decisionCandidates=config.decisionMode==="EVENT"?eventCandidates:config.decisionMode==="MTF"?mtfCandidates:combined;
-        const{reversals,newEntries}=this.classifyCandidates(decisionCandidates,positions);
+
+        // Filter decisionCandidates to respect selection
+        const filteredDecisionCandidates = decisionCandidates.filter(candidate => tradableSet.has(candidate.pair));
+        const{reversals,newEntries}=this.classifyCandidates(filteredDecisionCandidates,positions);
         const reversalPairs=new Set(reversals.map(candidate=>candidate.pair));
 
         await this.reconcile(requirements,token,accountId,state,config,positions,reversalPairs);
