@@ -1,0 +1,38 @@
+name: Apply evaluation MAS migration
+
+on:
+  push:
+    branches:
+      - repair/evaluation-mas-zscore
+    paths:
+      - scripts/apply-evaluation-mas-patch.mjs
+      - .github/workflows/patch-evaluation-html.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: repair/evaluation-mas-zscore
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply surgical HTML migration
+        run: node scripts/apply-evaluation-mas-patch.mjs
+      - name: Commit generated source change
+        run: |
+          if git diff --quiet -- public/index.html; then
+            echo "No HTML migration needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/index.html
+          git commit -m "fix: migrate Evaluation UI to canonical MAS IM statistics"
+          git push origin HEAD:repair/evaluation-mas-zscore
