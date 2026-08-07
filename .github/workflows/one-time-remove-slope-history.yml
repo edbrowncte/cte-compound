@@ -1,0 +1,59 @@
+name: Remove obsolete slope history
+
+on:
+  push:
+    branches:
+      - repair/remove-obsolete-slope-history
+    paths:
+      - .github/workflows/one-time-remove-slope-history.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: repair/remove-obsolete-slope-history
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Remove dead slope history production path
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          engine = Path('src/engine-certified-execution.js')
+          text = engine.read_text()
+          text = text.replace('import { calculateSlopeStats, calculateMAS_IM_ZScores } from "./mas-im-calculator.js";\n', '')
+          route = '''    if(path==="/evaluation/history"&&request.method==="GET"){
+                const state=(await this.ctx.storage.get("state"))||{};
+                return new Response(JSON.stringify(state.slopeHistory||{}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+              }
+          '''
+          if route not in text:
+              raise SystemExit('engine evaluation/history route marker not found')
+          text = text.replace(route, '', 1)
+          start = text.index('      // TASK 2 - Manage & Update Slope History for selectedPairs\n')
+          end = text.index('      try{await this.syncTransactions(state,token,accountId);}', start)
+          text = text[:start] + text[end:]
+          engine.write_text(text)
+
+          worker = Path('src/worker-base.js')
+          text = worker.read_text()
+          route = '        if(url.pathname==="/api/evaluation/history"&&request.method==="GET") return await env.HTL_ENGINE.getByName("live").fetch("https://engine/evaluation/history");\n'
+          if route not in text:
+              raise SystemExit('worker evaluation/history proxy marker not found')
+          worker.write_text(text.replace(route, '', 1))
+          PY
+      - name: Remove one-time workflow and commit
+        run: |
+          rm .github/workflows/one-time-remove-slope-history.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/engine-certified-execution.js src/worker-base.js .github/workflows/one-time-remove-slope-history.yml
+          git commit -m "perf: remove obsolete slope history polling path"
+          git push origin HEAD:repair/remove-obsolete-slope-history
