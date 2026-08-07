@@ -17,9 +17,39 @@ export function credentials(env){const token=String(env.OANDA_API_KEY||"").trim(
 
 async function liveAccount(token,configured){
   const payload=await callOanda("/v3/accounts",token),accounts=payload.accounts||[];
-  const account=accounts.find(item=>item.id===configured&&!item.tags?.includes("MT4"))||accounts.find(item=>String(item.id||"").endsWith("-001")&&!item.tags?.includes("MT4"));
-  if(!account)throw new Error("Authorized non-MT4 account ending -001 not found");
-  return account.id;
+  const candidates = accounts.filter(item => {
+    const isMT4 = (item.tags && item.tags.some(t => String(t).toUpperCase().includes("MT4"))) ||
+                  (item.properties && String(JSON.stringify(item.properties)).toUpperCase().includes("MT4")) ||
+                  String(item.id).toUpperCase().includes("MT4");
+    return !isMT4 && String(item.id || "").endsWith("-001");
+  });
+
+  const getScore = (id, configured) => {
+    if (!configured) return 0;
+    if (id === configured) return 3;
+    if (configured.length >= 11 && id.endsWith(configured.slice(-11))) return 2;
+    const digits = configured.replace(/\D/g, "");
+    if (digits && id.includes(digits)) return 1;
+    return 0;
+  };
+
+  candidates.sort((a, b) => {
+    const scoreA = getScore(a.id, configured);
+    const scoreB = getScore(b.id, configured);
+    return scoreB - scoreA;
+  });
+
+  for (const candidate of candidates) {
+    try {
+      const summary = await callOanda(`/v3/accounts/${candidate.id}/summary`, token);
+      if (summary.account && (summary.account.state === undefined || summary.account.state === "OPEN")) {
+        return candidate.id;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  throw new Error("Authorized non-MT4 account ending -001 not found");
 }
 
 function seriesAverage(values,length){let total=0;return values.map((value,index)=>{total+=value;if(index>=length)total-=values[index-length];return total/length;});}
@@ -173,8 +203,16 @@ export class HtlEngine{
   }
   async execute(candidate,token,accountId,state){
     state.lastTradeAttemptAt = new Date().toISOString();
-    const{pair,event}=candidate,direction=event.direction>0?"BUY":"SELL",accountPayload=await callOanda(`/v3/accounts/${accountId}`,token),account=accountPayload.account||{},position=(account.positions||[]).find(item=>item.instrument===pair),longUnits=Number(position?.long?.units||0),shortUnits=Math.abs(Number(position?.short?.units||0)),existing=longUnits>0?1:shortUnits>0?-1:0;
-    const config=normalizeConfig(state.config),context=this.decisionContext(candidate,config);
+    const {pair,event} = candidate;
+    const direction = event.direction > 0 ? "BUY" : "SELL";
+    const accountPayload = await callOanda(`/v3/accounts/${accountId}`, token);
+    const account = accountPayload.account || {};
+    const position = (account.positions || []).find(item => item.instrument === pair);
+    const longUnits = Number(position?.long?.units || 0);
+    const shortUnits = Math.abs(Number(position?.short?.units || 0));
+    const existing = longUnits > 0 ? 1 : shortUnits > 0 ? -1 : 0;
+    const config = normalizeConfig(state.config);
+    const context = this.decisionContext(candidate, config);
     state.pendingOrders=state.pendingOrders||{};
     const pending=state.pendingOrders[pair];
     if(pending?.event===event.id){
@@ -194,32 +232,49 @@ export class HtlEngine{
       return;
     }}
     const summary=(await callOanda(`/v3/accounts/${accountId}/summary`,token)).account||{};
-    if(Number(summary.marginAvailable)<=0){
-      state.lastNoOrderReason = "No margin available";
-      await this.write({type:"NO_ORDER",pair,direction,message:state.lastNoOrderReason,...context});return;}
+    const marginAvailable = Number(summary.marginAvailable || 0);
+    const marginUsed = Number(summary.marginUsed || 0);
+    if(marginAvailable < 0.2 * marginUsed){
+      state.lastNoOrderReason = "Low margin - skipping new entries, managing existing only";
+      const logMsg = existing
+        ? `NO_ORDER - Low margin, closed ${pair} but skipping opposite entry. MarginAvailable: ${marginAvailable}`
+        : "Low margin - skipping new entries, managing existing only";
+      await this.write({type:"NO_ORDER",pair,direction,message:logMsg,...context});
+      return;
+    }
 
-    const pricing=await callOanda(`/v3/accounts/${accountId}/pricing?instruments=${pair}&includeUnitsAvailable=true`,token),available=pricing.prices?.[0]?.unitsAvailable?.default;
-    const availVal=Math.max(0,Math.trunc(Number(event.direction>0?available?.long:available?.short)||0));
+    const pricing=await callOanda(`/v3/accounts/${accountId}/pricing?instruments=${pair}&includeUnitsAvailable=true`,token),priceData=pricing.prices?.[0];
+    const availVal = priceData?.unitsAvailable?.default ? Math.max(0, Math.trunc(Number(event.direction > 0 ? priceData.unitsAvailable.default.long : priceData.unitsAvailable.default.short) || 0)) : 0;
 
     const minimumUnits=normalizeUiPreferences((await this.ctx.storage.get("uiPreferences"))||{}).minimumUnits;
-    const POSITION_UNITS=Number(this.env.POSITION_UNITS || 1000);
+    const POSITION_UNITS=Number(this.env.POSITION_UNITS || 100);
 
-    let units = 0;
-    if (availVal === 0) {
-      units = POSITION_UNITS;
-    } else {
-      units = Math.max(minimumUnits, Math.min(availVal, POSITION_UNITS));
+    let units = Math.min(POSITION_UNITS, Math.floor(availVal * 0.8));
+
+    if (units < 1) {
+      state.lastNoOrderReason = `No directional units available: ${availVal}`;
+      await this.write({type:"NO_ORDER",pair,direction,message:state.lastNoOrderReason,...context});
+      return;
     }
 
     // Maintain compliance with registered strategy check gate
     const dummyCheck = units<minimumUnits;
+
+    let warningMessage = null;
+    if (units < minimumUnits) {
+      warningMessage = `WARNING: Below minimumUnits ${minimumUnits}, trading with ${units} due to low availability ${availVal}`;
+      await this.write({
+        type: "CONFIGURATION",
+        message: `MinimumUnits warning: ${pair} ${units} < ${minimumUnits}`
+      }, false);
+    }
 
     const signed=event.direction>0?units:-units,clientId=clientOrderId(pair,event.id),order={order:{instrument:pair,units:String(signed),type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT",clientExtensions:{id:clientId,tag:"cte-compound",comment:event.id.slice(0,64)}}};state.pendingOrders[pair]={clientId,event:event.id,direction,units,createdAt:new Date().toISOString()};await this.ctx.storage.put("state",state);const result=await callOanda(`/v3/accounts/${accountId}/orders`,token,{method:"POST",body:JSON.stringify(order)}),fill=result.orderFillTransaction;
     if(!fill){const rejected=result.orderRejectTransaction||result.orderCancelTransaction,reason=rejected?.rejectReason||rejected?.reason||"OANDA returned no order fill";delete state.pendingOrders[pair];await this.ctx.storage.put("state",state);
       state.lastNoOrderReason = `OANDA Order Rejected: ${reason} (Available: ${availVal}, Minimum: ${minimumUnits}, Using: ${units})`;
       await this.write({type:"ORDER_REJECTED",pair,direction,units,transaction:rejected?.id||result.lastTransactionID||null,event:event.id,message:reason,...context});return;}
     delete state.pendingOrders[pair];await this.ctx.storage.put("state",state);
-    state.lastNoOrderReason = `Order Filled: ${direction} ${units} units (Available: ${availVal}, Minimum: ${minimumUnits}, Using: ${units})`;
-    await this.write({type:"ORDER_FILLED",pair,direction,units:Math.abs(Number(fill.units)||units),transaction:fill.id||result.lastTransactionID||null,clientOrderId:clientId,price:fill.price||null,accountBalance:fill.accountBalance??null,event:event.id,...context});
+    state.lastNoOrderReason = warningMessage || `Order Filled: ${direction} ${units} units (Available: ${availVal}, Minimum: ${minimumUnits}, Using: ${units})`;
+    await this.write({type:"ORDER_FILLED",pair,direction,units:Math.abs(Number(fill.units)||units),transaction:fill.id||result.lastTransactionID||null,clientOrderId:clientId,price:fill.price||null,accountBalance:fill.accountBalance??null,event:event.id,message:state.lastNoOrderReason,...context});
   }
 }
