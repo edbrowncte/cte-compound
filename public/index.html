@@ -1363,9 +1363,6 @@
         const candlesList = state.scheduleCandles.get(key) || [];
         if (candlesList.length > 0) {
           priceCache[tf] = candlesList.map(c => c.close);
-        } else {
-          // Generate realistic and fully distinct prices per pair/timeframe
-          priceCache[tf] = getDeterministicSeries(pair + tf, 60, pair.endsWith("JPY") ? 130.0 : 1.1);
         }
       }
 
@@ -1630,12 +1627,11 @@
     const ctx = canvas.getContext("2d");
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    const width = Math.max(100, rect.width || canvas.clientWidth || canvas.parentNode?.clientWidth || 0);
+    const height = Math.max(100, rect.height || canvas.clientHeight || canvas.parentNode?.clientHeight || 0);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const width = rect.width;
-    const height = rect.height;
     ctx.fillStyle = "#080c12";
     ctx.fillRect(0, 0, width, height);
 
@@ -1647,15 +1643,15 @@
     const filterInput = el("evalChartFilter") ? clamp(Number(el("evalChartFilter").value) || 0, 0, 10) : 0;
     const currentConfig = { length: lengthInput, filter: filterInput };
 
-    const indicators = prepareIndicators(candlesList, currentConfig);
+    const indicators = prepareIndicators(state.evalCandles, currentConfig);
     const indicatorSet = CHART_INDICATORS[selectedStrategy] || CHART_INDICATORS.ASSET;
 
-    const count = Math.min(state.evalVisibleBars, candlesList.length);
-    const maxOffset = Math.max(0, candlesList.length - count);
+    const count = Math.min(state.evalVisibleBars, state.evalCandles.length);
+    const maxOffset = Math.max(0, state.evalCandles.length - count);
     const offset = clamp(state.evalOffsetBars, 0, maxOffset);
-    const visibleEnd = candlesList.length - offset;
+    const visibleEnd = state.evalCandles.length - offset;
     const visibleStart = Math.max(0, visibleEnd - count);
-    const visibleCandles = candlesList.slice(visibleStart, visibleEnd);
+    const visibleCandles = state.evalCandles.slice(visibleStart, visibleEnd);
 
     const rightAxisWidth = 60 + state.evalRightIndent;
     const margin = { top: 20, right: rightAxisWidth, bottom: 20, left: 40 };
@@ -1765,12 +1761,11 @@
     const ctx = canvas.getContext("2d");
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    const width = Math.max(100, rect.width || canvas.clientWidth || canvas.parentNode?.clientWidth || 0);
+    const height = Math.max(50, rect.height || canvas.clientHeight || canvas.parentNode?.clientHeight || 0);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const width = rect.width;
-    const height = rect.height;
     ctx.fillStyle = "#080c12";
     ctx.fillRect(0, 0, width, height);
 
@@ -1782,15 +1777,15 @@
     const filterInput = el("evalChartFilter") ? clamp(Number(el("evalChartFilter").value) || 0, 0, 10) : 0;
     const currentConfig = { length: lengthInput, filter: filterInput };
 
-    const indicators = prepareIndicators(candlesList, currentConfig);
+    const indicators = prepareIndicators(state.evalCandles, currentConfig);
     const indicatorSet = CHART_INDICATORS[selectedStrategy] || CHART_INDICATORS.ASSET;
 
-    const count = Math.min(state.evalVisibleBars, candlesList.length);
-    const maxOffset = Math.max(0, candlesList.length - count);
+    const count = Math.min(state.evalVisibleBars, state.evalCandles.length);
+    const maxOffset = Math.max(0, state.evalCandles.length - count);
     const offset = clamp(state.evalOffsetBars, 0, maxOffset);
-    const visibleEnd = candlesList.length - offset;
+    const visibleEnd = state.evalCandles.length - offset;
     const visibleStart = Math.max(0, visibleEnd - count);
-    const visibleCandles = candlesList.slice(visibleStart, visibleEnd);
+    const visibleCandles = state.evalCandles.slice(visibleStart, visibleEnd);
 
     const rightAxisWidth = 60 + state.evalRightIndent;
     const margin = { top: 10, right: rightAxisWidth, bottom: 10, left: 40 };
@@ -1895,12 +1890,11 @@
     const ctx = canvas.getContext("2d");
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    const width = Math.max(100, rect.width || canvas.clientWidth || canvas.parentNode?.clientWidth || 0);
+    const height = Math.max(100, rect.height || canvas.clientHeight || canvas.parentNode?.clientHeight || 0);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const width = rect.width;
-    const height = rect.height;
     ctx.fillStyle = "#080c12";
     ctx.fillRect(0, 0, width, height);
 
@@ -2030,24 +2024,28 @@
       }
     }
 
+    const fmtVal = (val, dec = 2, suffix = "") => {
+      return (val !== null && val !== undefined && Number.isFinite(val)) ? `${val.toFixed(dec)}${suffix}` : "—";
+    };
+
     el("evalTableBody").innerHTML = filtered.map(r => {
       const isSelected = r.pair === state.selectedInstrument;
-      const typeWord = r.type === 'TREND_FOLLOWING' ? 'Trend' : 'Reversion';
+      const typeWord = r.type === 'NEUTRAL' ? '—' : (r.type === 'TREND_FOLLOWING' ? 'Trend' : 'Reversion');
       return `
         <tr style="cursor:pointer; ${isSelected ? 'background:rgba(215,168,92,.14);' : ''}" onclick="selectEvalTablePair('${r.pair}')">
           <td><b>${formatPair(r.pair)}</b></td>
           <td>${r.timeframe}</td>
           <td class="${directionClass(r.signal)}"><b>${signalWord(r.signal)}</b></td>
-          <td>${r.mas_z.toFixed(2)}</td>
-          <td>${r.im_z.toFixed(2)}</td>
-          <td>${r.ratio.toFixed(2)}</td>
-          <td>${r.eventAngle.toFixed(0)}°</td>
-          <td>${r.weeklySlope.toFixed(6)}</td>
-          <td>${r.roc.toFixed(6)}</td>
-          <td>${r.r2.toFixed(2)}</td>
-          <td>${r.pValue.toFixed(4)}</td>
-          <td>${r.pipsPerHour.toFixed(1)}</td>
-          <td><b>${r.strength.toFixed(3)}</b></td>
+          <td>${fmtVal(r.mas_z, 2)}</td>
+          <td>${fmtVal(r.im_z, 2)}</td>
+          <td>${fmtVal(r.ratio, 2)}</td>
+          <td>${fmtVal(r.eventAngle, 0, "°")}</td>
+          <td>${fmtVal(r.weeklySlope, 6)}</td>
+          <td>${fmtVal(r.roc, 6)}</td>
+          <td>${fmtVal(r.r2, 2)}</td>
+          <td>${fmtVal(r.pValue, 4)}</td>
+          <td>${fmtVal(r.pipsPerHour, 1)}</td>
+          <td><b>${fmtVal(r.strength, 3)}</b></td>
           <td>${typeWord}</td>
         </tr>
       `;
@@ -2071,43 +2069,7 @@
     renderEvaluationTable();
   }
 
-  function setupSyncedCrosshair() {
-    const canvas = el("evalChart");
-    const osc = el("oscillatorCanvas");
-
-    const onMove = (event, targetCanvas) => {
-      const rect = targetCanvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const visible = visibleEvalSlice();
-      if (!visible.candles.length) return;
-
-      const rightIndent = state.evalRightIndent || 72;
-      const margin = { left: 20, right: 60 + rightIndent };
-      const plotWidth = rect.width - margin.left - margin.right;
-      const barWidth = plotWidth / visible.candles.length;
-
-      const localX = x - margin.left;
-      const index = clamp(Math.floor(localX / barWidth), 0, visible.candles.length - 1);
-      state.evalCrosshair = index;
-
-      drawEvalCharts();
-    };
-
-    if (canvas) {
-      canvas.addEventListener("pointermove", (e) => onMove(e, canvas));
-      canvas.addEventListener("pointerleave", () => {
-        state.evalCrosshair = null;
-        drawEvalCharts();
-      });
-    }
-    if (osc) {
-      osc.addEventListener("pointermove", (e) => onMove(e, osc));
-      osc.addEventListener("pointerleave", () => {
-        state.evalCrosshair = null;
-        drawEvalCharts();
-      });
-    }
-  }
+  function setupSyncedCrosshair() {}
 
   async function loadEngineConfig(){const response=await fetch("/api/engine/config",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);applyEngineConfig(payload);}
 
@@ -2721,7 +2683,7 @@
   async function computeConfiguration(){const button=el("computeConfiguration");if(!state.connected)return;button.disabled=true;button.textContent="Computing…";el("macroPerformanceScope").textContent="Loading the current completed OANDA candle history and optimizing…";try{const response=await fetch("/api/engine/compute",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({pair:state.selectedInstrument,timeframe:state.selectedTimeframe})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?`${payload.stage||"compute"} · ${payload.error}`:`HTTP ${response.status}`);state.autoConfigurations.set(payload.key,payload.record);const resolved=payload.record.config;if(state.chartCandles.length){state.chartAnalysis=analyzeWithConfiguration(state.chartCandles,resolved,false);state.chartCausalIndicators=null;state.chartCausalSeries=[];void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolved,state.selectedStrategy);}renderStrategyConfiguration();renderMacroPerformance();renderOptimizerRegistry();renderSchedule();updateChartSummary();updateCompartments();drawChart();}catch(error){el("macroPerformanceScope").textContent=error.message||"Compute Configuration failed";el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">${error.message||"Compute Configuration failed"}</td></tr>`;}finally{button.textContent="Compute Configuration";button.disabled=!state.connected;}}
 
 
-  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(name==='evaluation'){const activeTf = el("evalTableTfFilter")?.value || "H1"; if (el("evalChartTimeframe")) { el("evalChartTimeframe").value = activeTf; } void loadEvaluationData(); void loadEvalChartData(state.selectedInstrument, activeTf); void preloadEvaluationTimeframe(activeTf); setupSyncedCrosshair();}if(persist)queuePlatformPreferenceSave();}
+  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(name==='evaluation'){const activeTf = el("evalTableTfFilter")?.value || "H1"; if (el("evalChartTimeframe")) { el("evalChartTimeframe").value = activeTf; } void loadEvaluationData(); void loadEvalChartData(state.selectedInstrument, activeTf); void preloadEvaluationTimeframe(activeTf); setTimeout(() => { drawEvalCharts(); setupSyncedCrosshair(); }, 50);}if(persist)queuePlatformPreferenceSave();}
 
   function pointerPosition(event) { const rect=el("chart").getBoundingClientRect(); return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
 
@@ -2999,18 +2961,23 @@
     }
 
     const evalCanvas = el("evalChart");
-    if (evalCanvas) {
-      evalCanvas.addEventListener("pointerdown", event => {
-        if (!state.evalCandles.length) return;
+    const oscCanvas = el("oscillatorCanvas");
+
+    const setupEvalInteractions = (canvas) => {
+      if (!canvas) return;
+      canvas.addEventListener("pointerdown", event => {
+        if (!state.evalCandles || !state.evalCandles.length) return;
         state.evalDragging = true;
         state.evalDragStartX = event.clientX;
         state.evalDragStartOffset = state.evalOffsetBars;
-        evalCanvas.setPointerCapture(event.pointerId);
+        canvas.setPointerCapture(event.pointerId);
       });
-      evalCanvas.addEventListener("pointermove", event => {
-        const rect = evalCanvas.getBoundingClientRect();
+      canvas.addEventListener("pointermove", event => {
+        if (!state.evalCandles || !state.evalCandles.length) return;
+        const rect = canvas.getBoundingClientRect();
         const count = Math.min(state.evalVisibleBars, state.evalCandles.length);
-        const margin = { left: 40, right: 60 + state.evalRightIndent };
+        const rightIndent = state.evalRightIndent || 72;
+        const margin = { left: 40, right: 60 + rightIndent };
         const plotWidth = rect.width - margin.left - margin.right;
         const barWidth = plotWidth / count;
 
@@ -3023,27 +2990,30 @@
         }
         drawEvalCharts();
       });
-      evalCanvas.addEventListener("pointerup", event => {
+      canvas.addEventListener("pointerup", event => {
         state.evalDragging = false;
-        try { evalCanvas.releasePointerCapture(event.pointerId); } catch {}
+        try { canvas.releasePointerCapture(event.pointerId); } catch {}
       });
-      evalCanvas.addEventListener("pointercancel", () => {
+      canvas.addEventListener("pointercancel", () => {
         state.evalDragging = false;
       });
-      evalCanvas.addEventListener("pointerleave", () => {
+      canvas.addEventListener("pointerleave", () => {
         if (!state.evalDragging) {
           state.evalCrosshair = null;
           drawEvalCharts();
         }
       });
-      evalCanvas.addEventListener("wheel", event => {
+      canvas.addEventListener("wheel", event => {
         event.preventDefault();
         const factor = event.deltaY > 0 ? 1.15 : .87;
         state.evalVisibleBars = clamp(Math.round(state.evalVisibleBars * factor), 30, 300);
         state.evalOffsetBars = clamp(state.evalOffsetBars, 0, Math.max(0, state.evalCandles.length - state.evalVisibleBars));
         drawEvalCharts();
       }, { passive: false });
-    }
+    };
+
+    setupEvalInteractions(evalCanvas);
+    setupEvalInteractions(oscCanvas);
 
     const evaluationHeaders = [
       "pair", "timeframe", "signal", "mas_z", "im_z", "ratio",
