@@ -763,19 +763,8 @@
     decisionCandidates:{A:null,B:null,C:null},
     selectedDecisionCandidate:null,
     candidateBusy:false,
-    NemotronRecommendedPair:null,
-    evalVisibleBars: 120,
-    evalOffsetBars: 0,
-    evalRightIndent: 72,
-    evalCrosshairEnabled: true
+    NemotronRecommendedPair:null
   };
-
-  function visibleEvalSlice() {
-    const total = state.evalCandles ? state.evalCandles.length : 0;
-    const end = clamp(total - (state.evalOffsetBars || 0), 0, total);
-    const start = Math.max(0, end - (state.evalVisibleBars || 120));
-    return {start, end, candles: (state.evalCandles || []).slice(start, end)};
-  }
 
   const el = id => document.getElementById(id);
   const clamp = (value,min,max) => Math.max(min,Math.min(max,value));
@@ -1239,25 +1228,6 @@
   }
 
   // --- TASK 3/4/5 EVALUATION & PAIR SELECTION TAB IMPLEMENTATION ---
-  function getDeterministicSeries(pair, length = 60, basePrice = 1.1) {
-    let hash = 0;
-    for (let i = 0; i < pair.length; i++) {
-      hash = pair.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    let seed = Math.abs(hash);
-    const lcg = () => {
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      return seed / 4294967296;
-    };
-    const series = [];
-    let current = basePrice + lcg() * 0.2;
-    for (let i = 0; i < length; i++) {
-      current += (lcg() - 0.5) * 0.002;
-      series.push(current);
-    }
-    return series;
-  }
-
   const PIP_SIZE = { USD_JPY:0.01, EUR_JPY:0.01, GBP_JPY:0.01, AUD_JPY:0.01, NZD_JPY:0.01, CAD_JPY:0.01, CHF_JPY:0.01, default:0.0001 };
   function getPipSize(p){return PIP_SIZE[p]||PIP_SIZE.default;}
   function evalMean(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:0;}
@@ -1265,40 +1235,7 @@
   function normalCDF(x){const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;const sign=x<0?-1:1;x=Math.abs(x)/Math.sqrt(2);const t=1/(1+p*x);const y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x));return 0.5*(1+sign*y);}
   function calculateSlopeStats(prices,times=null){const n=prices.length;if(n<10)return {slope:0,intercept:0,r2:0,pValue:1,roc:0};const x=times||prices.map((_,i)=>i);const xM=evalMean(x),yM=evalMean(prices);let num=0,den=0,ssTot=0,ssRes=0;for(let i=0;i<n;i++){num+=(x[i]-xM)*(prices[i]-yM);den+=(x[i]-xM)**2;ssTot+=(prices[i]-yM)**2;}const slope=den===0?0:num/den;const intercept=yM-slope*xM;for(let i=0;i<n;i++){const yp=slope*x[i]+intercept;ssRes+=(prices[i]-yp)**2;}const r2=ssTot===0?0:1-ssRes/ssTot;const se=den===0||n<=2?0:Math.sqrt(ssRes/(n-2))/Math.sqrt(den);const tStat=se===0?0:slope/se;const pValue=tStat===0?1:Math.max(0,Math.min(1,2*(1-normalCDF(Math.abs(tStat)))));const roc=n>1?(prices[n-1]-prices[0])/n:0;return {slope,intercept,r2:Math.max(0,r2),pValue,roc};}
   function calcZScore(cur,hist){if(hist.length<20)return 0;const m=evalMean(hist),s=evalStd(hist,m);return s===0?0:(cur-m)/s;}
-  function calculateMAS_IM_ZScores(pair,timeframe,priceCache,slopeHistoryCache){
-    const TF_ORDER=['M1','M5','M15','M30','H1','H4','D','W'];
-    const curIdx=TF_ORDER.indexOf(timeframe);
-    const results={};
-    for(const tf of TF_ORDER){
-      const closes=priceCache[tf];
-      if(!closes||closes.length<50)continue;
-      const stats=calculateSlopeStats(closes.slice(-50));
-      let hist=slopeHistoryCache[tf]||[];
-      if (hist.length < 20) {
-        let hash = 0;
-        for (let i = 0; i < pair.length; i++) {
-          hash = pair.charCodeAt(i) + ((hash << 5) - hash) + tf.charCodeAt(0);
-        }
-        let seed = Math.abs(hash);
-        const lcg = () => {
-          seed = (seed * 1664525 + 1013904223) % 4294967296;
-          return seed / 4294967296;
-        };
-        hist = Array.from({length: 30}, () => (lcg() - 0.5) * 0.001);
-      }
-      const z=calcZScore(stats.slope,hist);
-      results[tf]={...stats,zScore:z,pipsPerHour:(stats.slope*(tf==='M1'?60:tf==='M5'?12:tf==='M15'?4:tf==='M30'?2:tf==='H1'?1:tf==='H4'?0.25:tf==='D'?0.0416:0.0059))/getPipSize(pair)};
-    }
-    const higher=TF_ORDER.slice(curIdx+1);
-    const masZs=higher.map(tf=>results[tf]?.zScore).filter(v=>v!==undefined);
-    const MAS_Z=masZs.length?evalMean(masZs):0;
-    const lower=TF_ORDER.slice(0,curIdx+1);
-    const imZs=lower.map(tf=>results[tf]?.zScore).filter(v=>v!==undefined);
-    const IM_Z=imZs.length?evalMean(imZs):0;
-    const weeklyCloses=priceCache['W']||[];
-    const wMean=evalMean(weeklyCloses),wStd=evalStd(weeklyCloses,wMean);
-    return {perTF:results,MAS_Z,IM_Z,IM_OVER_MAS:MAS_Z===0?0:IM_Z/MAS_Z,MAS_OVER_IM:IM_Z===0?0:MAS_Z/IM_Z,recovered_MAS:wMean+MAS_Z*wStd,recovered_IM:wMean+IM_Z*wStd,wMean,wStd,summary:{pair,timeframe,mas_z:MAS_Z,im_z:IM_Z,ratio:MAS_Z===0?0:IM_Z/MAS_Z,r2_avg:evalMean(Object.values(results).map(r=>r.r2)),sig_avg:evalMean(Object.values(results).map(r=>r.pValue))}};
-  }
+  function calculateMAS_IM_ZScores(pair,timeframe,priceCache,slopeHistoryCache){const TF_ORDER=['M1','M5','M15','M30','H1','H4','D','W'];const curIdx=TF_ORDER.indexOf(timeframe);const results={};for(const tf of TF_ORDER){const closes=priceCache[tf];if(!closes||closes.length<50)continue;const stats=calculateSlopeStats(closes.slice(-50));const hist=slopeHistoryCache[tf]||[];const z=calcZScore(stats.slope,hist);results[tf]={...stats,zScore:z,pipsPerHour:(stats.slope*(tf==='M1'?60:tf==='M5'?12:tf==='M15'?4:tf==='M30'?2:tf==='H1'?1:tf==='H4'?0.25:tf==='D'?0.0416:0.0059))/getPipSize(pair)};}const higher=TF_ORDER.slice(curIdx+1);const masZs=higher.map(tf=>results[tf]?.zScore).filter(v=>v!==undefined);const MAS_Z=masZs.length?evalMean(masZs):0;const lower=TF_ORDER.slice(0,curIdx+1);const imZs=lower.map(tf=>results[tf]?.zScore).filter(v=>v!==undefined);const IM_Z=imZs.length?evalMean(imZs):0;const weeklyCloses=priceCache['W']||[];const wMean=evalMean(weeklyCloses),wStd=evalStd(weeklyCloses,wMean);return {perTF:results,MAS_Z,IM_Z,IM_OVER_MAS:MAS_Z===0?0:IM_Z/MAS_Z,MAS_OVER_IM:IM_Z===0?0:MAS_Z/IM_Z,recovered_MAS:wMean+MAS_Z*wStd,recovered_IM:wMean+IM_Z*wStd,wMean,wStd,summary:{pair,timeframe,mas_z:MAS_Z,im_z:IM_Z,ratio:MAS_Z===0?0:IM_Z/MAS_Z,r2_avg:evalMean(Object.values(results).map(r=>r.r2)),sig_avg:evalMean(Object.values(results).map(r=>r.pValue))}};}
   function calculateEventAngle(prevP,currP,bars){return bars===0?0:Math.atan2(currP-prevP,bars)*(180/Math.PI);}
   function classifyType(dir,MAS_Z){if(MAS_Z===0)return 'NEUTRAL';return Math.sign(dir)===Math.sign(MAS_Z)?'TREND_FOLLOWING':'REVERSION';}
 
@@ -1363,9 +1300,6 @@
         const candlesList = state.scheduleCandles.get(key) || [];
         if (candlesList.length > 0) {
           priceCache[tf] = candlesList.map(c => c.close);
-        } else {
-          // Generate realistic and fully distinct prices per pair/timeframe
-          priceCache[tf] = getDeterministicSeries(pair + tf, 60, pair.endsWith("JPY") ? 130.0 : 1.1);
         }
       }
 
@@ -1400,7 +1334,7 @@
       const activeScheduleKey = `${pair}|${activeTf}`;
       const evalAnalysis = state.scheduleEvaluations.get(activeScheduleKey);
       const activeSignal = evalAnalysis?.latest?.[state.selectedScheduleStrategy];
-      const dir = activeSignal ? activeSignal.direction : (zScores.MAS_Z > 0.5 ? 1 : zScores.MAS_Z < -0.5 ? -1 : 0);
+      const dir = activeSignal ? activeSignal.direction : 0;
 
       const closes = priceCache[activeTf] || [];
       const prevP = closes[closes.length - 2] || 0;
@@ -1617,8 +1551,10 @@
       el("evalMetricPipsHour").textContent = (zScores.perTF?.[timeframe]?.pipsPerHour || 0).toFixed(1);
 
       el("evalChartMessage").hidden = true;
-      drawEvalCharts();
-      drawWeeklyCognition(pair, zScores);
+      setTimeout(() => {
+        drawEvalCharts();
+        drawWeeklyCognition(pair, zScores);
+      }, 50);
     } catch (e) {
       console.error("Failed to load evaluation chart data:", e);
     }
@@ -1630,17 +1566,16 @@
     const ctx = canvas.getContext("2d");
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    const width = Math.max(200, Math.round(rect.width) || canvas.clientWidth || canvas.parentElement?.clientWidth || 0);
+    const height = Math.max(300, Math.round(rect.height) || canvas.clientHeight || canvas.parentElement?.clientHeight || 0);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const width = rect.width;
-    const height = rect.height;
     ctx.fillStyle = "#080c12";
     ctx.fillRect(0, 0, width, height);
 
-    const visible = visibleEvalSlice();
-    if (!visible.candles.length) return;
+    const candlesList = state.evalCandles || [];
+    if (!candlesList.length) return;
 
     const selectedStrategy = el("evalChartStrategy")?.value || "ASSET";
     const lengthInput = el("evalChartLength") ? clamp(Math.round(Number(el("evalChartLength").value) || 10), 3, 200) : 10;
@@ -1765,17 +1700,16 @@
     const ctx = canvas.getContext("2d");
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    const width = Math.max(200, Math.round(rect.width) || canvas.clientWidth || canvas.parentElement?.clientWidth || 0);
+    const height = Math.max(150, Math.round(rect.height) || canvas.clientHeight || canvas.parentElement?.clientHeight || 0);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const width = rect.width;
-    const height = rect.height;
     ctx.fillStyle = "#080c12";
     ctx.fillRect(0, 0, width, height);
 
-    const visible = visibleEvalSlice();
-    if (!visible.candles.length) return;
+    const candlesList = state.evalCandles || [];
+    if (!candlesList.length) return;
 
     const selectedStrategy = el("evalChartStrategy")?.value || "ASSET";
     const lengthInput = el("evalChartLength") ? clamp(Math.round(Number(el("evalChartLength").value) || 10), 3, 200) : 10;
@@ -1796,31 +1730,27 @@
     const margin = { top: 10, right: rightAxisWidth, bottom: 10, left: 40 };
     const plot = { x: margin.left, y: margin.top, w: width - margin.left - margin.right, h: height - margin.top - margin.bottom };
 
-    const closes = (state.evalCandles || []).map(c => c.close);
-    const masDataFull = [];
-    const imDataFull = [];
-    const histogramFull = [];
+    const closes = candlesList.map(c => c.close);
+    const masData = [];
+    const imData = [];
+    const histogram = [];
 
     const historyCache = state.evaluationSlopeHistory?.[state.selectedInstrument] || {};
     const timeframe = el("evalChartTimeframe")?.value || "H1";
 
     for (let i = 0; i < closes.length; i++) {
       if (i < 50) {
-        masDataFull.push(0);
-        imDataFull.push(0);
-        histogramFull.push(0);
+        masData.push(0);
+        imData.push(0);
+        histogram.push(0);
       } else {
         const windowCloses = closes.slice(i - 50 + 1, i + 1);
         const zScores = calculateMAS_IM_ZScores(state.selectedInstrument, timeframe, { [timeframe]: windowCloses, 'W': windowCloses }, historyCache);
-        masDataFull.push(zScores.MAS_Z);
-        imDataFull.push(zScores.IM_Z);
-        histogramFull.push(zScores.IM_Z - zScores.MAS_Z);
+        masData.push(zScores.MAS_Z);
+        imData.push(zScores.IM_Z);
+        histogram.push(zScores.IM_Z - zScores.MAS_Z);
       }
     }
-
-    const masData = masDataFull.slice(visible.start, visible.end);
-    const imData = imDataFull.slice(visible.start, visible.end);
-    const histogram = histogramFull.slice(visible.start, visible.end);
 
     const low = -3.5;
     const high = 3.5;
@@ -2078,16 +2008,15 @@
     const onMove = (event, targetCanvas) => {
       const rect = targetCanvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
-      const visible = visibleEvalSlice();
-      if (!visible.candles.length) return;
+      const candlesList = state.evalCandles || [];
+      if (!candlesList.length) return;
 
-      const rightIndent = state.evalRightIndent || 72;
-      const margin = { left: 20, right: 60 + rightIndent };
+      const margin = { left: 20, right: 60 };
       const plotWidth = rect.width - margin.left - margin.right;
-      const barWidth = plotWidth / visible.candles.length;
+      const barWidth = plotWidth / candlesList.length;
 
       const localX = x - margin.left;
-      const index = clamp(Math.floor(localX / barWidth), 0, visible.candles.length - 1);
+      const index = clamp(Math.floor(localX / barWidth), 0, candlesList.length - 1);
       state.evalCrosshair = index;
 
       drawEvalCharts();
@@ -2771,54 +2700,6 @@
     el("eventIndentIn").addEventListener("click",()=>{state.eventRightIndent=clamp(state.eventRightIndent-24,0,260);eventDraw(state.eventData,state.eventHtl,state.eventEvents);queuePlatformPreferenceSave();});
     el("eventCrosshairToggle").addEventListener("click",event=>{state.eventCrosshairEnabled=!state.eventCrosshairEnabled;event.currentTarget.textContent=`Crosshair ${state.eventCrosshairEnabled?"on":"off"}`;event.currentTarget.setAttribute("aria-pressed",String(state.eventCrosshairEnabled));if(!state.eventCrosshairEnabled)state.eventCrosshair=null;eventDraw(state.eventData,state.eventHtl,state.eventEvents);queuePlatformPreferenceSave();});
     el("eventMaximize").addEventListener("click",async()=>{try{if(!document.fullscreenElement)await el("eventPanel").requestFullscreen();else await document.exitFullscreen();}catch{}setTimeout(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents),40);});
-
-    // Eval Controls click listeners
-    if (el("evalZoomIn")) {
-      el("evalZoomIn").addEventListener("click", () => {
-        state.evalVisibleBars = clamp(Math.round(state.evalVisibleBars * 0.8), 30, 300);
-        drawEvalCharts();
-      });
-    }
-    if (el("evalZoomOut")) {
-      el("evalZoomOut").addEventListener("click", () => {
-        state.evalVisibleBars = clamp(Math.round(state.evalVisibleBars * 1.25), 30, 300);
-        state.evalOffsetBars = clamp(state.evalOffsetBars, 0, Math.max(0, (state.evalCandles?.length || 0) - state.evalVisibleBars));
-        drawEvalCharts();
-      });
-    }
-    if (el("evalIndentOut")) {
-      el("evalIndentOut").addEventListener("click", () => {
-        state.evalRightIndent = clamp((state.evalRightIndent || 72) + 24, 0, 260);
-        drawEvalCharts();
-      });
-    }
-    if (el("evalIndentIn")) {
-      el("evalIndentIn").addEventListener("click", () => {
-        state.evalRightIndent = clamp((state.evalRightIndent || 72) - 24, 0, 260);
-        drawEvalCharts();
-      });
-    }
-    if (el("evalCrosshairToggle")) {
-      el("evalCrosshairToggle").addEventListener("click", (event) => {
-        state.evalCrosshairEnabled = !state.evalCrosshairEnabled;
-        event.currentTarget.textContent = `Crosshair ${state.evalCrosshairEnabled ? "on" : "off"}`;
-        event.currentTarget.setAttribute("aria-pressed", String(state.evalCrosshairEnabled));
-        if (!state.evalCrosshairEnabled) state.evalCrosshair = null;
-        drawEvalCharts();
-      });
-    }
-    if (el("evalMaximizeChart")) {
-      el("evalMaximizeChart").addEventListener("click", async () => {
-        const panel = el("evalChartPanel");
-        try {
-          if (!document.fullscreenElement) await panel.requestFullscreen();
-          else await document.exitFullscreen();
-        } catch {
-          panel.classList.toggle("maximized");
-        }
-        setTimeout(drawEvalCharts, 40);
-      });
-    }
     el("tradePair").addEventListener("change",()=>{el("tradeStatus").textContent="";loadTradeCapacity();});
     el("minimumUnits").addEventListener("input",event=>{event.target.value=event.target.value.replace(/\D/g,"");updateTradeButtons();renderDecisionCandidates();});
     el("minimumUnits").addEventListener("change",()=>synchronizeMinimumUnits(true));
@@ -2892,32 +2773,6 @@
         void preloadEvaluationTimeframe(tf);
       });
     }
-
-    const sortHeaders = [
-      { id: "sort-pair", key: "pair" },
-      { id: "sort-timeframe", key: "timeframe" },
-      { id: "sort-signal", key: "signal" },
-      { id: "sort-mas_z", key: "mas_z" },
-      { id: "sort-im_z", key: "im_z" },
-      { id: "sort-ratio", key: "ratio" },
-      { id: "sort-eventAngle", key: "eventAngle" },
-      { id: "sort-weeklySlope", key: "weeklySlope" },
-      { id: "sort-roc", key: "roc" },
-      { id: "sort-r2", key: "r2" },
-      { id: "sort-pValue", key: "pValue" },
-      { id: "sort-pipsPerHour", key: "pipsPerHour" },
-      { id: "sort-strength", key: "strength" },
-      { id: "sort-type", key: "type" }
-    ];
-
-    sortHeaders.forEach(h => {
-      const header = el(h.id);
-      if (header) {
-        header.addEventListener("click", () => {
-          sortEvalTable(h.key);
-        });
-      }
-    });
     if (el("evalChartPair")) {
       el("evalChartPair").addEventListener("change", () => {
         state.selectedInstrument = el("evalChartPair").value;
