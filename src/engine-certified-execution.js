@@ -36,12 +36,59 @@ async function callOanda(path,token,init={}){
   }
 }
 
-async function exactLiveAccount(token,configured){
+async function exactLiveAccount(token,configured,state,writeLedger=null){
   const payload=await callOanda("/v3/accounts",token);
   const accounts=payload.accounts||[];
-  const account=accounts.find(item=>item.id===configured&&!item.tags?.includes("MT4"))||accounts.find(item=>String(item.id||"").endsWith("-001")&&!item.tags?.includes("MT4"));
-  if(!account)throw new Error(`Configured OANDA account ${configured} is not authorized or is an MT4-linked account`);
-  return account.id;
+  const candidates = accounts.filter(item => {
+    const isMT4 = (item.tags && item.tags.some(t => String(t).toUpperCase().includes("MT4"))) ||
+                  (item.properties && String(JSON.stringify(item.properties)).toUpperCase().includes("MT4")) ||
+                  String(item.id).toUpperCase().includes("MT4");
+    return !isMT4 && String(item.id || "").endsWith("-001");
+  });
+
+  const getScore = (id, configured) => {
+    if (!configured) return 0;
+    if (id === configured) return 3;
+    if (configured.length >= 11 && id.endsWith(configured.slice(-11))) return 2;
+    const digits = configured.replace(/\D/g, "");
+    if (digits && id.includes(digits)) return 1;
+    return 0;
+  };
+
+  candidates.sort((a, b) => {
+    const scoreA = getScore(a.id, configured);
+    const scoreB = getScore(b.id, configured);
+    return scoreB - scoreA;
+  });
+
+  let resolvedId = null;
+  for (const candidate of candidates) {
+    try {
+      const summary = await callOanda(`/v3/accounts/${candidate.id}/summary`, token);
+      if (summary.account && (summary.account.state === undefined || summary.account.state === "OPEN")) {
+        resolvedId = candidate.id;
+        break;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  if (!resolvedId) {
+    throw new Error(`Configured OANDA account ${configured} is not authorized or is an MT4-linked account`);
+  }
+
+  if (state && state.resolvedAccountId !== resolvedId) {
+    state.resolvedAccountId = resolvedId;
+    if (writeLedger) {
+      await writeLedger({
+        type: "CONFIGURATION",
+        message: `Resolved live account ID to authorized non-MT4 account: ${resolvedId}`
+      });
+    }
+  }
+
+  return resolvedId;
 }
 
 function configFingerprint(config){
@@ -86,6 +133,69 @@ export const __executionTest=Object.freeze({
 });
 
 export class HtlEngine extends CertifiedAnalyticsEngine{
+  async fetch(request){
+    const url=new URL(request.url),path=url.pathname;
+    if(path==="/control/selectedPairs"&&request.method==="POST"){
+      const body=await request.json().catch(()=>({}));
+      let state=(await this.ctx.storage.get("state"))||{};
+      state.selectedPairs=body.selectedPairs||[];
+      state.manualSelectMode=body.manualSelectMode!==false;
+      state.autoRotateMode=Boolean(body.autoRotateMode);
+      state.manualPositions = {};
+      const nowMs = Date.now();
+      if (body.manualPositions) {
+        for (const [pair, details] of Object.entries(body.manualPositions)) {
+          state.manualPositions[pair] = {
+            timeframe: details.timeframe || "M30",
+            direction: Number(details.direction || 1),
+            protectedUntil: nowMs + 24 * 60 * 60 * 1000
+          };
+        }
+      }
+      state.tradingMode=state.autoRotateMode ? "AUTO_ROTATE" : (state.selectedPairs.length === 1 ? "MANUAL_1_PAIR" : "MANUAL_MULTI");
+      await this.ctx.storage.put("state",state);
+      return new Response(JSON.stringify({ok:true,selectedPairs:state.selectedPairs,manualSelectMode:state.manualSelectMode,autoRotateMode:state.autoRotateMode,manualPositions:state.manualPositions,tradingMode:state.tradingMode}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+    }
+    if(path==="/control/status"&&request.method==="GET"){
+      const state=(await this.ctx.storage.get("state"))||{};
+      const credentialInfo = credentials(this.env);
+      let summary = {};
+      let resolvedAccountId = state.resolvedAccountId;
+      try {
+        if (!resolvedAccountId) {
+          resolvedAccountId = await exactLiveAccount(credentialInfo.token, credentialInfo.accountId, state);
+        }
+        const payload = await callOanda(`/v3/accounts/${resolvedAccountId}/summary`, credentialInfo.token);
+        summary = payload.account || {};
+      } catch (e) {
+        // ignore
+      }
+      return new Response(JSON.stringify({
+        lastScanAt:state.lastScanAt||null,
+        lastTradeAttemptAt:state.lastTradeAttemptAt||null,
+        lastNoOrderReason:state.lastNoOrderReason||null,
+        openPositions:state.openPositionsCount||0,
+        selectedPairs:state.selectedPairs||[],
+        mode:state.autoRotateMode?"auto-rotate":state.manualSelectMode?"manual-select":"all",
+        tradingMode:state.tradingMode||"MANUAL_1_PAIR",
+        lastError:state.lastError||null,
+        resolvedAccountId:resolvedAccountId||null,
+        marginAvailable:Number(summary.marginAvailable || 0),
+        manualPositions:state.manualPositions||{}
+      }),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+    }
+    return super.fetch(request);
+  }
+
+  async execute(candidate,token,accountId,state){
+    const tradablePairs = state.selectedPairs && state.selectedPairs.length > 0 ? state.selectedPairs : PAIRS;
+    if (!tradablePairs.includes(candidate.pair)) {
+      state.lastNoOrderReason = `Pair ${candidate.pair} is not in selectedPairs; execution suppressed`;
+      return;
+    }
+    return super.execute(candidate,token,accountId,state);
+  }
+
   async computeConfiguration(value) {
     return optimizedComputeConfiguration(this, value);
   }
@@ -125,7 +235,8 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
       // Handle Manual Position protection
       const manual = state.manualPositions?.[position.instrument];
-      if (manual && manual.protected) {
+      const nowMs = Date.now();
+      if (manual && nowMs < Number(manual.protectedUntil || 0)) {
         const tf = manual.timeframe || "M30";
         let opt = {};
         try { opt = (await this.ctx.storage.get("optimizer")) || {}; } catch (e) {}
@@ -142,14 +253,19 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         const longUnits=Number(position.long?.units||0);
         const shortUnits=Math.abs(Number(position.short?.units||0));
         const existing = positionDirection(position);
-        if (!ev || !ev.direction || ev.direction === existing) {
+        const opposingDirection = -existing;
+
+        if (!ev || !ev.direction || ev.direction !== opposingDirection) {
+          const side = existing > 0 ? "LONG" : "SHORT";
+          const oppositeSide = existing > 0 ? "SELL" : "BUY";
           await this.write({
             type: "MANUAL_PROTECTED",
             pair: position.instrument,
-            message: `Protecting manual ${position.instrument} ${existing > 0 ? "LONG" : "SHORT"} on ${tf} - no opposing signal`
+            message: `Protecting manual ${position.instrument} ${tf} ${side} - no opposing ${tf} ${oppositeSide} signal`
           }, false);
           continue;
         }
+
         const context = this.decisionContext(ev ? { configuration: { settings } } : null, config);
         await this.closePosition(position.instrument, existing, longUnits, shortUnits, token, accountId, ev.id, "Opposing signal for protected manual position", context);
         continue;
@@ -248,6 +364,29 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
     this.running=true;
     let state=(await this.ctx.storage.get("state"))||{events:{},initialized:false};
 
+    if (state.selectedPairs === undefined) {
+      state.selectedPairs = ["EUR_AUD"];
+      state.tradingMode = "MANUAL_1_PAIR";
+      await this.ctx.storage.put("state", state);
+    }
+
+    // Task 1 - Backoff Guard check
+    const nowMs = Date.now();
+    if (state.backoffUntil && nowMs < state.backoffUntil) {
+      this.running = false;
+      const backoffTimeStr = new Date(state.backoffUntil).toISOString();
+      if (!state.lastBackoffLogged || state.lastBackoffLogged !== state.backoffUntil) {
+        state.lastBackoffLogged = state.backoffUntil;
+        await this.ctx.storage.put("state", state);
+        await this.write({
+          type: "INFO",
+          executionPolicy: EXECUTION_POLICY_VERSION,
+          message: `Skipping tick - in backoff until ${backoffTimeStr}`
+        }, false);
+      }
+      return;
+    }
+
     if(state.strategyEngineVersion!==STRATEGY_ENGINE_VERSION){
       Object.assign(state,{
         events:{},directions:null,requirements:null,lastCandle:null,
@@ -283,7 +422,34 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       }
 
       const{token,accountId:configured}=credentials(this.env);
-      const accountId=await exactLiveAccount(token,configured);
+      let accountId;
+      try {
+        accountId = await exactLiveAccount(token, configured, state, entry => this.write(entry));
+        // Reset backoff count on successful resolve
+        if (state.accountResolveError) {
+          delete state.accountResolveError;
+          delete state.backoffUntil;
+          await this.ctx.storage.put("state", state);
+        }
+      } catch (err) {
+        const errMessage = err.message || "Failed to resolve live OANDA account";
+        const resolveError = state.accountResolveError || { lastErrorAt: null, count: 0, message: "" };
+        resolveError.lastErrorAt = new Date().toISOString();
+        resolveError.count = Number(resolveError.count || 0) + 1;
+        resolveError.message = errMessage;
+
+        // Backoff delay: 2m -> 4m -> 8m -> 15m -> 30m max
+        const backoffMinutes = [2, 4, 8, 15, 30];
+        const delayMin = backoffMinutes[Math.min(resolveError.count - 1, backoffMinutes.length - 1)];
+        const backoffUntil = Date.now() + delayMin * 60 * 1000;
+
+        state.accountResolveError = resolveError;
+        state.backoffUntil = backoffUntil;
+        await this.ctx.storage.put("state", state);
+
+        throw new Error(`${errMessage}. Scheduled backoff for ${delayMin} minutes.`);
+      }
+
       try{await this.syncTransactions(state,token,accountId);}catch(error){state.transactionSyncError=String(error?.message||error);}
 
       await this.processPendingReversals(state,token,accountId);

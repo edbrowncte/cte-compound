@@ -313,16 +313,14 @@
         </div>
       </section>
       <section class="automation-panel" id="automationPanel" hidden aria-label="Automated trading controls and decisions">
-        <!-- Engine Heartbeat Panel -->
-        <div class="heartbeat-panel" id="heartbeatPanel">
-          <div class="selector-title">Engine Heartbeat</div>
-          <div class="heartbeat-grid">
-            <div class="heartbeat-item"><span>Last Scan</span><strong id="hbLastScan">—</strong></div>
-            <div class="heartbeat-item"><span>Last Trade Attempt</span><strong id="hbLastTrade">—</strong></div>
-            <div class="heartbeat-item"><span>Last Result / No Order Reason</span><strong id="hbLastReason">—</strong></div>
-            <div class="heartbeat-item"><span>Open Positions</span><strong id="hbOpenPositions">—</strong></div>
-            <div class="heartbeat-item"><span>Mode</span><strong id="hbMode">—</strong></div>
-          </div>
+        <!-- Engine Heartbeat Card -->
+        <div id="heartbeatCard" style="border:1px solid var(--line); background:#0c1219; padding:12px; margin-bottom:10px; border-radius:5px;">
+          <div style="font-size:12px; font-weight:850; text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;">Engine Heartbeat</div>
+          <div id="hbCardScan" style="font-size:10px; margin-bottom:4px;">Last Scan: —</div>
+          <div id="hbCardAttempt" style="font-size:10px; margin-bottom:4px;">Last Attempt: —</div>
+          <div id="hbCardError" style="font-size:10px; margin-bottom:4px; color:var(--sell);" hidden>Last Error: —</div>
+          <div id="hbCardReason" style="font-size:10px; margin-bottom:4px; color:var(--warn);">Last NoOrder Reason: —</div>
+          <div id="hbCardStats" style="font-size:10px; color:var(--muted);">Margin: — | Open: — | Selected: — | Resolved Account: —</div>
         </div>
 
         <!-- Tradable Pair Selector Panel -->
@@ -1065,12 +1063,22 @@
         }
       });
 
-      // Update Heartbeat UI panel
-      el("hbLastScan").textContent = data.lastScanAt ? formatTime(data.lastScanAt) : "—";
-      el("hbLastTrade").textContent = data.lastTradeAttemptAt ? formatTime(data.lastTradeAttemptAt) : "—";
-      el("hbLastReason").textContent = data.lastNoOrderReason || "—";
-      el("hbOpenPositions").textContent = String(data.openPositions || 0);
-      el("hbMode").textContent = data.mode || "—";
+      // Update Heartbeat Card lines
+      el("hbCardScan").textContent = `Last Scan: ${data.lastScanAt ? formatTime(data.lastScanAt) : "—"}`;
+      el("hbCardAttempt").textContent = `Last Attempt: ${data.lastTradeAttemptAt ? formatTime(data.lastTradeAttemptAt) : "—"}`;
+      if (data.lastError) {
+        el("hbCardError").textContent = `Last Error: ${data.lastError}`;
+        el("hbCardError").hidden = false;
+      } else {
+        el("hbCardError").hidden = true;
+      }
+      el("hbCardReason").textContent = `Last NoOrder Reason: ${data.lastNoOrderReason || "—"}`;
+
+      const formattedMargin = Number.isFinite(data.marginAvailable) ? `$${data.marginAvailable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+      const openCount = data.openPositions !== undefined ? data.openPositions : "—";
+      const selectedStr = (data.selectedPairs && data.selectedPairs.length > 0) ? data.selectedPairs.map(formatPair).join(", ") : "—";
+      const resolvedAcc = data.resolvedAccountId || "—";
+      el("hbCardStats").textContent = `Margin: ${formattedMargin} | Open: ${openCount} | Selected: ${selectedStr} | Resolved Account: ${resolvedAcc}`;
     } catch (error) {
       console.error("Failed to load control status:", error);
     }
