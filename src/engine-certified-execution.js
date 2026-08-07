@@ -1,6 +1,5 @@
 import { HtlEngine as CertifiedAnalyticsEngine } from "./engine.js";
 import { PAIRS, TIMEFRAMES, OPTIMIZER_VERSION, currentOptimizer, candles, currentEvent } from "./horizon-platform-engine.js";
-import { calculateSlopeStats, calculateMAS_IM_ZScores } from "./mas-im-calculator.js";
 import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
 import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
 import { credentials } from "./engine-base.js";
@@ -162,10 +161,6 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       }
       await this.ctx.storage.put("state",state);
       return new Response(JSON.stringify({ok:true,selectedPairs:state.selectedPairs,manualSelectMode:state.manualSelectMode,autoRotateMode:state.autoRotateMode,manualPositions:state.manualPositions,tradingMode:state.tradingMode}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
-    }
-    if(path==="/evaluation/history"&&request.method==="GET"){
-      const state=(await this.ctx.storage.get("state"))||{};
-      return new Response(JSON.stringify(state.slopeHistory||{}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     }
     if(path==="/evaluation/log"&&request.method==="POST"){
       const body=await request.json().catch(()=>({}));
@@ -477,72 +472,6 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
         throw new Error(`${errMessage}. Scheduled backoff for ${delayMin} minutes.`);
       }
-
-      // TASK 2 - Manage & Update Slope History for selectedPairs
-      state.slopeHistory = state.slopeHistory || {};
-      state.lastCandleTime = state.lastCandleTime || {};
-      const ALL_TIMEFRAMES = ['M1','M5','M15','M30','H1','H4','D','W'];
-
-      for (const pair of state.selectedPairs) {
-        state.slopeHistory[pair] = state.slopeHistory[pair] || {};
-        state.lastCandleTime[pair] = state.lastCandleTime[pair] || {};
-
-        for (const tf of ALL_TIMEFRAMES) {
-          state.slopeHistory[pair][tf] = state.slopeHistory[pair][tf] || [];
-
-          // Let's check the current candle to see if we need a recalculation
-          let currentCandles = [];
-          try {
-            // Fetch 2 candles to check the last complete candle time
-            currentCandles = await candles(pair, token, tf, 2);
-          } catch (e) {
-            console.error(`Failed to check current candle for ${pair} ${tf}:`, e);
-            continue;
-          }
-          if (!currentCandles.length) continue;
-          const currentCandleTime = currentCandles[currentCandles.length - 1].time;
-
-          const lastTime = state.lastCandleTime[pair][tf];
-          if (lastTime !== currentCandleTime || state.slopeHistory[pair][tf].length === 0) {
-            // Candle closed, recalculate!
-            state.lastCandleTime[pair][tf] = currentCandleTime;
-
-            if (state.slopeHistory[pair][tf].length === 0) {
-              // Bootstrap/seed: fetch 150 completed candles
-              try {
-                const seedCandles = await candles(pair, token, tf, 150);
-                if (seedCandles.length >= 50) {
-                  const historyPoints = [];
-                  for (let i = 0; i <= seedCandles.length - 50; i++) {
-                    const windowCloses = seedCandles.slice(i, i + 50).map(c => c.close);
-                    const stats = calculateSlopeStats(windowCloses);
-                    historyPoints.push(stats.slope);
-                  }
-                  state.slopeHistory[pair][tf] = historyPoints.slice(-100);
-                }
-              } catch (e) {
-                console.error(`Failed to bootstrap slope history for ${pair} ${tf}:`, e);
-              }
-            } else {
-              // Incremental push: fetch 50 completed candles
-              try {
-                const recentCandles = await candles(pair, token, tf, 50);
-                if (recentCandles.length >= 50) {
-                  const closes = recentCandles.map(c => c.close);
-                  const stats = calculateSlopeStats(closes);
-                  state.slopeHistory[pair][tf].push(stats.slope);
-                  if (state.slopeHistory[pair][tf].length > 100) {
-                    state.slopeHistory[pair][tf].shift();
-                  }
-                }
-              } catch (e) {
-                console.error(`Failed to update slope history for ${pair} ${tf}:`, e);
-              }
-            }
-          }
-        }
-      }
-      await this.ctx.storage.put("state", state);
 
       try{await this.syncTransactions(state,token,accountId);}catch(error){state.transactionSyncError=String(error?.message||error);}
 
