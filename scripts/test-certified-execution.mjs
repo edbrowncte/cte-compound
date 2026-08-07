@@ -66,11 +66,22 @@ const opposingPositions=[
 await engine.reconcile(requirements,"token","account",{events:{}},{strategy:"NAI",timeframe:"M5",htlLength:50,filter:1.5},opposingPositions,new Set(["EUR_USD"]));
 assert.deepEqual(closed,["GBP_USD"],"reversal pairs must bypass generic close-only reconciliation");
 
+const originalFetch=globalThis.fetch;
+let requestedUrl="";
+globalThis.fetch=async url=>{
+  requestedUrl=String(url);
+  return new Response(JSON.stringify({positions:[{instrument:"EUR_USD",long:{units:"1000"},short:{units:"0"}}]}),{status:200,headers:{"Content-Type":"application/json"}});
+};
+const openPositions=await engine.loadPositions("token","account");
+assert.match(requestedUrl,/\/v3\/accounts\/account\/openPositions$/);
+assert.equal(openPositions.length,1);
+globalThis.fetch=originalFetch;
+
 engine.ensureAiTelemetry=async()=>({integrationVersion:"test"});
 const status=await engine.status();
 assert.equal(status.armed,true);
 assert.equal(status.executionCertification,"ARMED_PRIVATE_USER");
 assert.equal(status.executionPolicy,"CERTIFIED_MULTI_REVERSAL@1.0.0");
-assert.equal(status.reconciliationCadence,"EVERY_CRON_HEARTBEAT");
+assert.equal(status.reconciliationCadence,"new-completed-candle-only");
 
-console.log("Certified multi-reversal execution, durable recovery, reconciliation exclusion, and armed status verified.");
+console.log("Certified multi-reversal execution, durable recovery, open-position loading, reconciliation exclusion, and armed status verified.");
