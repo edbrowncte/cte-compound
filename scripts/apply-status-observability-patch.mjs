@@ -29,8 +29,8 @@ await patch("src/worker-base.js",[
 await patch("public/index.html",[
   {
     label:"frontend open positions endpoint",
-    before:"/positions`,null,3)",
-    after:"/openPositions`,null,3)",
+    before:'`/v3/accounts/${encodeURIComponent(accountId)}/positions`',
+    after:'`/v3/accounts/${encodeURIComponent(accountId)}/openPositions`',
     count:2
   },
   {
