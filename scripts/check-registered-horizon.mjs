@@ -26,7 +26,9 @@ checks(engine,[
   [/executionCertification:"ARMED_PRIVATE_USER"/,"private execution certification"],
   [/async reconcile\(/,"active inherited reconciliation"],
   [/async execute\(/,"active inherited automated execution"],
-  [/NEMOTRON_CANDIDATE_TOOL@2\.0\.0/,"Nemotron structured integration"],
+  [/NEMOTRON_CANDIDATE_TOOL@3\.0\.0/,"Nemotron structured integration"],
+  [/MULTI_NEW_ENTRY_CANDIDATES_ONLY/,"Nemotron invocation boundary"],
+  [/response_format:\{type:"json_schema"/,"Nemotron constrained structured output"],
   [/transactions\/sinceid/,"lost-response transaction synchronization"],
   [/pendingOrders/,"durable pending-order state"],
   [/clientExtensions:\{id:clientId/,"idempotent order identity"]
@@ -36,4 +38,4 @@ for(const forbidden of [/async reconcile\(/,/async execute\(/,/ONE_RAW_ASSET_REC
   if(forbidden.test(registeredEngine))throw new Error(`Forbidden registered analytical override: ${forbidden}`);
 }
 
-console.log("Registered six-strategy Horizon analytical, performance, armed private execution, OANDA, ledger, and Nemotron boundaries verified.");
+console.log("Registered six-strategy Horizon analytical, performance, armed private execution, OANDA, ledger, and selective Nemotron boundaries verified.");
