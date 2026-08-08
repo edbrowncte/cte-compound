@@ -32,5 +32,10 @@ replace(
 ``,
 'remove post-cache account-list assertion');
 
+replace(
+`assert.match(workerSource,/function selectLiveAccount/);assert.match(workerSource,/id.endsWith("-001")/);assert.match(workerSource,/id.endsWith("-002")/);assert.match(workerSource,/async function resolveAccount/);`,
+`assert.match(workerSource,/function selectLiveAccount/);assert.ok(workerSource.includes('id.endsWith("-001")'));assert.ok(workerSource.includes('id.endsWith("-002")'));assert.match(workerSource,/async function resolveAccount/);`,
+'literal account suffix policy assertions');
+
 fs.writeFileSync(path,source);
 console.log(`Ordered forensic resolver tests around cache warmup (${changes} transformations).`);
