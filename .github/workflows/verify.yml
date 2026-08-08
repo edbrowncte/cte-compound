@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: 24
       - name: Apply production auto-session migration
-        run: node scripts/migrate-production-auto-session.mjs
+        run: |
+          node scripts/migrate-production-auto-session.mjs
+          node scripts/migrate-production-session-cleanup.mjs
       - name: Install dependencies
         run: npm ci
       - name: Generate Wrangler Types
