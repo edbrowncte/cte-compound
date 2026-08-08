@@ -25,7 +25,7 @@ jobs:
       - name: Apply MAS v2 UI migration on feature branch
         if: github.head_ref == 'feature/mas-antagonist-pressure-v2'
         run: |
-          node scripts/apply-mas-v2-ui.mjs
+          python3 scripts/apply-mas-v2-ui.py
           if ! git diff --quiet -- public/index.html public/mas-im-calculator.js; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
