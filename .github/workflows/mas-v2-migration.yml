@@ -1,0 +1,35 @@
+name: Apply MAS v2 Evaluation migration
+
+on:
+  push:
+    branches:
+      - feature/mas-antagonist-pressure-v2
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/mas-antagonist-pressure-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply MAS v2 UI migration
+        run: node scripts/apply-mas-v2-ui.mjs
+      - name: Commit migrated sources
+        run: |
+          if git diff --quiet -- public/index.html public/mas-im-calculator.js; then
+            echo "No migration changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/index.html public/mas-im-calculator.js
+          git commit -m "feat: wire MAS antagonist pressure v2 Evaluation facility"
+          git push origin HEAD:feature/mas-antagonist-pressure-v2
