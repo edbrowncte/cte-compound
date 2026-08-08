@@ -4,6 +4,7 @@ import {JSDOM,VirtualConsole} from "jsdom";
 
 const html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");
 const worker=await readFile(new URL("../src/worker-base.js",import.meta.url),"utf8");
+const masImSource=await readFile(new URL("../public/mas-im-calculator.js",import.meta.url),"utf8");
 
 assert.match(worker,/Math\.min\(5000,Math\.trunc\(Number\(url\.searchParams\.get\("count"\)\)\)\|\|650\)/);
 assert.match(html,/MAX_ANALYTICAL_HISTORY=5000,MAX_ANALYTICAL_LENGTH=500/);
@@ -30,7 +31,7 @@ assert.match(html,/oldBad=bad/);
 assert.match(html,/asset\[index\]=active\.price/);
 assert.match(html,/id="engineHtlLength"[^>]*max="200"/);
 
-const source=html.replace('<script src="/mas-im-calculator.js"></script>',"").replace(/;\s*void connect\(\);\s*<\/script>/,";</script>");
+const source=html.replace('<script src="/mas-im-calculator.js"></script>',`<script>${masImSource}</script>`).replace(/;\s*void connect\(\);\s*<\/script>/,";</script>");
 const virtualConsole=new VirtualConsole(),browserErrors=[];virtualConsole.on("jsdomError",error=>browserErrors.push(error));virtualConsole.on("error",error=>browserErrors.push(error));
 const canvasContext=new Proxy({measureText:value=>({width:String(value??"").length*6})},{get(target,key){if(key in target)return target[key];return()=>{};},set(target,key,value){target[key]=value;return true;}});
 const dom=new JSDOM(source,{url:"https://cte.example",runScripts:"dangerously",pretendToBeVisual:true,virtualConsole,beforeParse(window){
