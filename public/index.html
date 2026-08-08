@@ -438,6 +438,8 @@
             <label class="field"><span>Currency pair</span><select id="chartPair"></select></label>
             <label class="field"><span>Timeframe</span><select id="chartTimeframe"></select></label>
             <label class="field"><span>Strategy</span><select id="chartStrategy"></select></label>
+            <label class="field"><span>Length</span><input id="chartLength" type="number" min="3" max="200" value="10" style="width:70px;"></label>
+            <label class="field"><span>Filter</span><input id="chartFilter" type="number" min="0" max="10" step="0.1" value="0" style="width:70px;"></label>
             <button id="refreshChart" type="button" disabled>Refresh chart</button>
             <button id="zoomOut" type="button" title="Show more candles">Zoom −</button>
             <button id="zoomIn" type="button" title="Show fewer candles">Zoom +</button>
@@ -608,7 +610,6 @@
             <label class="field"><span>Currency pair</span><select id="eventPair"></select></label>
             <label class="field"><span>Timeframe</span><select id="eventTimeframe"></select></label>
             <label class="field"><span>HTL length</span><input id="eventLength" type="number" min="3" max="200" value="10"></label>
-            <label class="field"><span>Chart indicator</span><select id="eventStrategy"></select></label>
             <button id="loadEvents" type="button" disabled>Forecast events</button>
           </div>
         </div>
@@ -636,6 +637,11 @@
         </div>
         <p class="event-note" id="eventScheduleInterpretation">Current Event is the active Asset/Inverse crossing; Current Event Open is the completed crossing candle close; Location is AA above average or BA below average; completion columns estimate the active event ending within 5 or 10 bars; Events counts FINAL events; MAE columns measure duration and envelope error; Onset Brier measures the same-direction ≤10-bar probability error; Historical Brier is the rolling historical-frequency benchmark; Next HTL Event and Forecast Envelope describe the next opposite event.</p>
         <div class="chart-toolbar event-chart-toolbar">
+          <label class="field"><span>Currency pair</span><select id="eventChartPair"></select></label>
+          <label class="field"><span>Timeframe</span><select id="eventChartTimeframe"></select></label>
+          <label class="field"><span>Strategy</span><select id="eventStrategy"></select></label>
+          <label class="field"><span>Length</span><input id="eventChartLength" type="number" min="3" max="200" value="10" style="width:70px;"></label>
+          <label class="field"><span>Filter</span><input id="eventChartFilter" type="number" min="0" max="10" step="0.1" value="0" style="width:70px;"></label>
           <button id="refreshEventChart" type="button" disabled>Refresh chart</button>
           <button id="eventZoomOut" type="button">Zoom −</button><button id="eventZoomIn" type="button">Zoom +</button>
           <button id="eventIndentOut" type="button">Indent +</button><button id="eventIndentIn" type="button">Indent −</button>
@@ -969,6 +975,8 @@
     el("engineTimeframe").value=state.engineConfig.timeframe;
 
     // Evaluation selectors population
+    if (el("eventChartPair")) { el("eventChartPair").innerHTML=pairOptions; el("eventChartPair").value=state.selectedInstrument; }
+    if (el("eventChartTimeframe")) { el("eventChartTimeframe").innerHTML=TIMEFRAMES.map(item=>`<option value="${item}">${item}</option>`).join(""); el("eventChartTimeframe").value=state.selectedTimeframe; }
     if (el("evalChartStrategy")) el("evalChartStrategy").innerHTML = strategyOptions;
     if (el("evalChartPair")) el("evalChartPair").innerHTML = pairOptions;
     if (el("evalChartTimeframe")) el("evalChartTimeframe").innerHTML = TIMEFRAMES.map(item=>`<option value="${item}">${item}</option>`).join("");
@@ -1407,7 +1415,6 @@
     state.evalSelectedSlot=index;
     const slot=getRotatorSlot(index),c=slot?.candidate;
     if(!c)return;
-    state.selectedInstrument=c.pair;state.selectedTimeframe=c.timeframe;
     const ratio=Number.isFinite(c.ratio)?c.ratio.toFixed(2):c.ratio===Infinity?"∞ (MAS≈0)":"—";
     el("evalChartTitle").textContent=`Preview: ${formatPair(c.pair)} ${c.timeframe} ${signalWord(c.signal)} · MAS ${Number.isFinite(c.mas)?c.mas.toFixed(3):"—"} · IM ${Number.isFinite(c.im)?c.im.toFixed(3):"—"} · R ${ratio} · ${String(c.regime).replaceAll("_"," ")}`;
     el("evalConfirmButton").style.display="inline-block";el("evalChartPair").value=c.pair;el("evalChartTimeframe").value=c.timeframe;
@@ -1435,9 +1442,8 @@
     try{
       const priceCache=await ensureEvaluationPairFrames(pair,timeframe),candlesList=priceCache[timeframe]||[],key=`${pair}|${timeframe}`,strategy=el("evalChartStrategy")?.value||state.selectedScheduleStrategy;
       state.evalCandles=candlesList;
-      const optimized=state.autoConfigurations.get(key)?.config;
-      let analysis=state.scheduleEvaluations.get(key);
-      if(candlesList.length&&(!analysis?.series?.[strategy]?.length)){analysis=analyzeWithConfiguration(candlesList,optimized||STRATEGY_CONFIG,true);state.scheduleEvaluations.set(key,analysis);}
+      const chartConfig=chartControlConfiguration(pair,timeframe,strategy,"evalChartLength","evalChartFilter");
+      const analysis=candlesList.length?analyzeWithConfiguration(candlesList,chartConfig,true):null;
       const activeSignal=analysis?.latest?.[strategy],events=analysis?.series?.[strategy]||[],direction=Number(activeSignal?.direction)||0,metrics=evaluationFramesReady(priceCache,timeframe)?calculateMASIMPressure(pair,timeframe,priceCache,{direction,events}):null;
       state.evalMasImMetrics=metrics;
       const fmt=(value,digits=3)=>Number.isFinite(value)?value.toFixed(digits):value===Infinity?"∞":"—";
@@ -1487,7 +1493,8 @@
     const plot = { x: margin.left, y: margin.top, w: width - margin.left - margin.right, h: height - margin.top - margin.bottom };
 
     const priceValues = indicatorSet.price.flatMap(([key]) => (indicators[key] || []).slice(visibleStart, visibleEnd).filter(Number.isFinite));
-    const live = state.evalOffsetBars === 0 ? liveMid(state.selectedInstrument) : NaN;
+    const evalPair=el("evalChartPair")?.value||state.selectedInstrument;
+    const live = state.evalOffsetBars === 0 ? liveMid(evalPair) : NaN;
     let low = Math.min(...visibleCandles.map(c => c.low), ...priceValues, ...(Number.isFinite(live) ? [live] : []));
     let high = Math.max(...visibleCandles.map(c => c.high), ...priceValues, ...(Number.isFinite(live) ? [live] : []));
     const pad = (high - low) * 0.1 || 0.01;
@@ -1567,7 +1574,7 @@
 
     if (Number.isFinite(live)) {
       const yy = priceToY(live);
-      const label = formatPrice(live, state.selectedInstrument);
+      const label = formatPrice(live, evalPair);
       ctx.strokeStyle = "#7dc4ff";
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -1821,13 +1828,13 @@
 
   function applyChartDataset(instrument,timeframe,candles) {
     if(instrument!==state.selectedInstrument||timeframe!==state.selectedTimeframe)return;
-    const resolved=resolvedConfiguration(instrument,timeframe);
+    const resolved=chartControlConfiguration(instrument,timeframe,state.selectedStrategy,"chartLength","chartFilter");
     state.chartCandles=candles;state.chartAnalysis=analyzeWithConfiguration(candles,resolved,false);state.chartCausalIndicators=null;state.chartCausalSeries=[];state.offsetBars=0;state.crosshair=null;
     el("chartMessage").hidden=true;updateChartSummary();updateCompartments();markSelectedRow();drawChart();renderStrategyConfiguration();renderMacroPerformance();
     void refreshCausalChartAnalysis(instrument,timeframe,candles,resolved,state.selectedStrategy);
   }
 
-  function chartRequestCount(instrument,timeframe){const resolved=resolvedConfiguration(instrument,timeframe),selected=state.selectedStrategy,lengths=selected==="COMBO"?[resolved.DARE?.length,resolved.NAI?.length]:[resolved[selected]?.length],length=Math.max(3,...lengths.map(value=>Number(value)||3)),warmup=Math.max(120,length*3);return clamp(Math.ceil(state.visibleBars+warmup),240,650);}
+  function chartRequestCount(instrument,timeframe){const length=clamp(Math.trunc(Number(el("chartLength")?.value)||10),3,200),warmup=Math.max(120,length*3);return clamp(Math.ceil(state.visibleBars+warmup),240,650);}
   async function loadChart(instrument=state.selectedInstrument,timeframe=state.selectedTimeframe) {
     if(!state.connected)return;
     clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=null;state.chartLoading=true;state.scheduleController?.abort();state.chartController?.abort();await new Promise(resolve=>setTimeout(resolve,0));
@@ -2182,12 +2189,12 @@
     el("eventChartInstrument").textContent=formatPair(row.pair);
     el("eventChart").setAttribute("aria-label",`${formatPair(row.pair)} completed OANDA candles with HTL Asset and Inverse Asset event overlays`);
     el("eventLedger").innerHTML=row.eventList.slice(-40).reverse().map(event=>`<tr><td>${event.direction>0?"BUY":"SELL"} ${event.number}</td><td>${event.status}</td><td>${new Date(event.startTime).toLocaleString()}</td><td>${event.bars}</td><td>${eventFmt(event.high,5)}</td><td>${eventFmt(event.low,5)}</td><td>${eventFmt(event.mean,6)}</td><td>${eventFmt(event.variance,8)}</td><td>${eventFmt(event.slope,7)}</td><td>${eventFmt(event.area,6)}</td><td>${event.sourceCrosses}</td></tr>`).join("");
-    el("eventMethod").textContent=`Completed midpoint candles · ${formatPair(row.pair)} · ${el("eventTimeframe").value} · HTL length ${row.length} · ${row.data.length} candles · ${forecast.completed.length} FINAL events`;
+    el("eventMethod").textContent=`Completed midpoint candles · ${formatPair(row.pair)} · ${el("eventChartTimeframe")?.value||el("eventTimeframe").value} · HTL length ${row.length} · ${row.data.length} candles · ${forecast.completed.length} FINAL events`;
     el("eventMessage").hidden=true;eventDraw(row.data,row.htl,row.eventList);renderEventSchedule();
   }
   function selectEventScheduleRow(pair,focusRow=false){
     const row=state.eventRows.find(item=>item.pair===pair);if(!row)return;
-    el("eventPair").value=pair;renderEventDetail(row);if(state.connected)void startPositionStream(state.openPositions.map(position=>position.instrument));
+    el("eventPair").value=pair;renderEventSchedule();
     if(focusRow)requestAnimationFrame(()=>{const target=el("eventScheduleBody").querySelector(`tr[data-pair="${pair}"]`);target?.focus();target?.scrollIntoView({block:"nearest",inline:"nearest"});});
   }
   function eventDraw(data,htl,events){
@@ -2195,7 +2202,7 @@
     const canvas=el("eventChart"),rect=canvas.getBoundingClientRect(),dpr=Math.max(1,devicePixelRatio||1),width=Math.max(320,Math.round(rect.width)),height=Math.max(250,Math.round(rect.height));
     canvas.width=width*dpr;canvas.height=height*dpr;const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#080c12";ctx.fillRect(0,0,width,height);
     const count=Math.min(state.eventVisibleBars,data.length),maxOffset=Math.max(0,data.length-count),offset=clamp(state.eventOffsetBars,0,maxOffset),end=data.length-offset,start=Math.max(0,end-count),visible=data.slice(start,end);
-    const live=state.eventOffsetBars===0?liveMid(el("eventPair").value):NaN,rightAxis=72+state.eventRightIndent,plot={x:12,y:12,w:Math.max(80,width-rightAxis-12),h:Math.max(80,height-42)},series=[...htl.asset.slice(start,end),...htl.inverse.slice(start,end),...(htl.series?.upr||[]).slice(start,end),...visible.flatMap(candle=>[candle.low,candle.high]),...(Number.isFinite(live)?[live]:[])].filter(Number.isFinite);if(!series.length)return;
+    const live=state.eventOffsetBars===0?liveMid(el("eventChartPair")?.value||el("eventPair").value):NaN,rightAxis=72+state.eventRightIndent,plot={x:12,y:12,w:Math.max(80,width-rightAxis-12),h:Math.max(80,height-42)},series=[...htl.asset.slice(start,end),...htl.inverse.slice(start,end),...(htl.series?.upr||[]).slice(start,end),...visible.flatMap(candle=>[candle.low,candle.high]),...(Number.isFinite(live)?[live]:[])].filter(Number.isFinite);if(!series.length)return;
     let low=Math.min(...series),high=Math.max(...series),padding=Math.max((high-low)*.08,1e-8);low-=padding;high+=padding;
     const x=index=>plot.x+index/Math.max(1,visible.length-1)*plot.w,y=value=>plot.y+(high-value)/(high-low)*plot.h,priceAtY=yy=>high-(yy-plot.y)/plot.h*(high-low),barWidth=Math.max(1,Math.min(8,plot.w/Math.max(1,visible.length)*.72));
     ctx.font="10px system-ui";ctx.strokeStyle="#1c2632";ctx.lineWidth=1;
@@ -2207,18 +2214,18 @@
     visible.forEach((candle,index)=>{const xx=x(index),up=candle.close>=candle.open,color=up?"#48c78e":"#ef6b73";ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(xx,y(candle.high));ctx.lineTo(xx,y(candle.low));ctx.stroke();const top=y(Math.max(candle.open,candle.close)),bottom=y(Math.min(candle.open,candle.close));ctx.fillRect(xx-barWidth/2,top,barWidth,Math.max(1,bottom-top));});
     // Original HTL pair f(HL2)/UPR and original instrument-extrema HTL Asset/recovered inverse.
     [[htl.series?.hl2,"#6ddcdb",1.05],[htl.series?.upr,"#e08430",1.15],[htl.asset,"#d7a85c",2.1],[htl.inverse,"#8d72d8",2.1],[htl.assetMean,"#48a46b",1.05]].forEach(([values,color,lineWidth])=>{if(!values)return;ctx.strokeStyle=color;ctx.lineWidth=lineWidth;ctx.beginPath();let begun=false;for(let index=start;index<end;index++){const value=values[index];if(!Number.isFinite(value)){begun=false;continue;}const xx=x(index-start),yy=y(value);if(!begun){ctx.moveTo(xx,yy);begun=true;}else ctx.lineTo(xx,yy);}ctx.stroke();});
-    const selected=el("eventStrategy").value||"ASSET",resolved=resolvedConfiguration(el("eventPair").value,el("eventTimeframe").value),config=resolved[selected]||resolved.ASSET||STRATEGY_CONFIG.ASSET,indicators=prepareIndicators(data,config),definition=CHART_INDICATORS[selected]||CHART_INDICATORS.ASSET;
+    const chartPair=el("eventChartPair")?.value||el("eventPair").value,chartTimeframe=el("eventChartTimeframe")?.value||el("eventTimeframe").value,selected=el("eventStrategy").value||"ASSET",resolved=chartControlConfiguration(chartPair,chartTimeframe,selected,"eventChartLength","eventChartFilter"),config=resolved[selected]||resolved.ASSET||STRATEGY_CONFIG.ASSET,indicators=prepareIndicators(data,config),definition=CHART_INDICATORS[selected]||CHART_INDICATORS.ASSET;
     for(const [key,,color] of definition.price)drawIndicatorLine(ctx,indicators[key],start,end,x,y,color,1.8);
     if(definition.osc.length){const osc={x:plot.x,y:plot.y+plot.h*.72,w:plot.w,h:plot.h*.28},values=definition.osc.flatMap(([key])=>(indicators[key]||[]).slice(start,end).filter(Number.isFinite));if(values.length){let lo=Math.min(...values),hi=Math.max(...values);if(lo===hi){lo-=1;hi+=1;}const zy=value=>osc.y+(hi-value)/(hi-lo)*osc.h;ctx.fillStyle="rgba(8,12,18,.9)";ctx.fillRect(osc.x,osc.y,osc.w,osc.h);ctx.strokeStyle="#314052";ctx.strokeRect(osc.x,osc.y,osc.w,osc.h);for(const [key,,color] of definition.osc)drawIndicatorLine(ctx,indicators[key],start,end,x,zy,color,1.8);ctx.fillStyle="#8b98aa";ctx.fillText(hi.toFixed(2),osc.x+4,osc.y+9);ctx.fillText(lo.toFixed(2),osc.x+4,osc.y+osc.h-5);}}
     el("eventIndicatorLegend").innerHTML=`<span><i style="background:#6ddcdb"></i>f (HL2)</span><span><i style="background:#e08430"></i>UPR</span>`+[...definition.price,...definition.osc].map(([,label,color])=>`<span><i style="background:${color}"></i>${label}</span>`).join("");
     events.forEach(event=>{if(event.startIndex<start||event.startIndex>=end)return;const xx=x(event.startIndex-start);ctx.strokeStyle=event.direction>0?"#48c78e":"#ef6b73";ctx.beginPath();ctx.moveTo(xx,plot.y);ctx.lineTo(xx,plot.y+plot.h);ctx.stroke();});
-    if(Number.isFinite(live)){const yy=y(live),label=eventFmt(live,el("eventPair").value.endsWith("JPY")?3:5);ctx.strokeStyle="#7dc4ff";ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(plot.x,yy);ctx.lineTo(gridEndX,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#7dc4ff";ctx.fillRect(gridEndX,yy-9,68,18);ctx.fillStyle="#080c12";ctx.fillText(label,gridEndX+5,yy+4);}
+    if(Number.isFinite(live)){const yy=y(live),label=eventFmt(live,(el("eventChartPair")?.value||el("eventPair").value).endsWith("JPY")?3:5);ctx.strokeStyle="#7dc4ff";ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(plot.x,yy);ctx.lineTo(gridEndX,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#7dc4ff";ctx.fillRect(gridEndX,yy-9,68,18);ctx.fillStyle="#080c12";ctx.fillText(label,gridEndX+5,yy+4);}
     if(state.eventCrosshairEnabled&&state.eventCrosshair&&state.eventCrosshair.x>=plot.x&&state.eventCrosshair.x<=plot.x+plot.w&&state.eventCrosshair.y>=plot.y&&state.eventCrosshair.y<=plot.y+plot.h){
       const {x:cx,y:cy}=state.eventCrosshair,price=priceAtY(cy);ctx.strokeStyle="#dce4ef";ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(plot.x,cy);ctx.lineTo(gridEndX,cy);ctx.moveTo(cx,plot.y);ctx.lineTo(cx,plot.y+plot.h);ctx.stroke();ctx.setLineDash([]);
-      const label=eventFmt(price,state.eventRows.find(row=>row.pair===el("eventPair").value)?.pair.endsWith("JPY")?3:5),labelWidth=ctx.measureText(label).width+12;ctx.fillStyle="#dce4ef";ctx.fillRect(gridEndX,cy-9,labelWidth,18);ctx.fillStyle="#080c12";ctx.fillText(label,gridEndX+6,cy+4);
+      const label=eventFmt(price,(el("eventChartPair")?.value||el("eventPair").value).endsWith("JPY")?3:5),labelWidth=ctx.measureText(label).width+12;ctx.fillStyle="#dce4ef";ctx.fillRect(gridEndX,cy-9,labelWidth,18);ctx.fillStyle="#080c12";ctx.fillText(label,gridEndX+6,cy+4);
     }
   }
-  async function refreshSelectedEventChart(){if(!state.connected||state.eventLoading)return;state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const pair=el("eventPair").value||state.selectedInstrument,timeframe=el("eventTimeframe").value,length=clamp(Math.trunc(Number(el("eventLength").value)||10),3,200),button=el("refreshEventChart"),controller=new AbortController();state.eventController?.abort();state.eventController=controller;state.eventLoading=true;button.disabled=true;el("eventMessage").hidden=false;el("eventMessage").textContent=`Refreshing ${formatPair(pair)} ${timeframe} completed candles…`;try{const payload=await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=650`,controller,100),data=completedCandles(payload,pair,timeframe);if(!data.length)throw new Error(`No completed candles · ${formatPair(pair)} ${timeframe}`);const row=buildEventRow(pair,data,length),index=state.eventRows.findIndex(item=>item.pair===pair);if(index>=0)state.eventRows[index]=row;else state.eventRows.push(row);state.chartCache.set(scheduleKey(pair,timeframe),data);renderEventDetail(row);renderEventSchedule();updateDecisionDisplays();el("eventMessage").hidden=true;}catch(error){if(error.name!=="AbortError"){el("eventMessage").hidden=false;el("eventMessage").textContent=error.message||"Event chart refresh failed.";}}finally{if(state.eventController===controller){state.eventController=null;state.eventLoading=false;button.disabled=!state.connected;}}}
+  async function refreshSelectedEventChart(){if(!state.connected||state.eventLoading)return;state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const pair=el("eventChartPair")?.value||state.selectedInstrument,timeframe=el("eventChartTimeframe")?.value||state.selectedTimeframe,length=clamp(Math.trunc(Number(el("eventChartLength")?.value)||10),3,200),button=el("refreshEventChart"),controller=new AbortController();state.eventController?.abort();state.eventController=controller;state.eventLoading=true;button.disabled=true;el("eventMessage").hidden=false;el("eventMessage").textContent=`Refreshing ${formatPair(pair)} ${timeframe} completed candles…`;try{const payload=await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=650`,controller,100),data=completedCandles(payload,pair,timeframe);if(!data.length)throw new Error(`No completed candles · ${formatPair(pair)} ${timeframe}`);const row=buildEventRow(pair,data,length),index=state.eventRows.findIndex(item=>item.pair===pair);if(index>=0)state.eventRows[index]=row;else state.eventRows.push(row);state.chartCache.set(scheduleKey(pair,timeframe),data);renderEventDetail(row);renderEventSchedule();updateDecisionDisplays();el("eventMessage").hidden=true;}catch(error){if(error.name!=="AbortError"){el("eventMessage").hidden=false;el("eventMessage").textContent=error.message||"Event chart refresh failed.";}}finally{if(state.eventController===controller){state.eventController=null;state.eventLoading=false;button.disabled=!state.connected;}}}
 
   async function loadEventForecast(){
     if(!state.connected||state.eventLoading)return;
@@ -2228,7 +2235,7 @@
     let completed=0,errors=0,lastError="";
     try{
       await runPool(pairs,1,async pair=>{
-        try{const key=scheduleKey(pair,timeframe),cached=state.chartCache.get(key),payload=cached?.length>=300?{candles:cached.map(c=>({time:c.time,mid:{o:c.open,h:c.high,l:c.low,c:c.close},volume:c.volume,complete:true}))}:await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=650`,controller,pair===selectedPair?80:40),data=completedCandles(payload,pair,timeframe);if(!data.length)throw new Error(`No completed candles · ${formatPair(pair)} ${timeframe}`);const row=buildEventRow(pair,data,length);state.eventRows.push(row);if(pair===selectedPair)renderEventDetail(row);}
+        try{const key=scheduleKey(pair,timeframe),cached=state.chartCache.get(key),payload=cached?.length>=300?{candles:cached.map(c=>({time:c.time,mid:{o:c.open,h:c.high,l:c.low,c:c.close},volume:c.volume,complete:true}))}:await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=650`,controller,pair===selectedPair?80:40),data=completedCandles(payload,pair,timeframe);if(!data.length)throw new Error(`No completed candles · ${formatPair(pair)} ${timeframe}`);const row=buildEventRow(pair,data,length);state.eventRows.push(row);}
         catch(error){if(error.name!=="AbortError"){errors++;lastError=error.message||"Event candle load failed";}}
         finally{completed++;el("eventMessage").textContent=`Loading HTL schedule ${completed} / ${INSTRUMENTS.length}${errors?` · ${errors} errors`:""}`;renderEventSchedule();}
       });
@@ -2239,6 +2246,16 @@
   function renderStrategyConfiguration(){const automatic=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),range=automatic?.range,source=automatic?.source==="COMPUTE_CONFIGURATION"?"Compute Configuration":automatic?.source||"awaiting computation";el("configurationScope").textContent=`${formatPair(state.selectedInstrument)} · ${state.selectedTimeframe} · ${source}${range?.startDate?` · ${range.startDate} — ${range.endDate} · ${range.bars} completed candles`:automatic?` · ${formatTime(automatic.stamp)}`:""}`;el("strategyConfiguration").innerHTML=STRATEGIES.map(strategy=>{const config=automatic?.config?.[strategy.id]||STRATEGY_CONFIG[strategy.id],combined=strategy.id==='COMBO';return `<section class="config-card"><h3>${strategy.label}${automatic?' · AUTO':''}</h3><label class="field"><span>${combined?'Constituent length':'Length'}</span><input data-config-length="${strategy.id}" type="number" min="3" max="200" step="1" value="${config.length}" ${combined?'disabled':''}></label><label class="field"><span>${combined?'Required agreeing strategies':'Filter'}</span><input data-config-filter="${strategy.id}" type="number" min="0" max="${combined?5:10}" step="${combined?1:.01}" value="${config.filter}"></label></section>`;}).join('');}
   function strategyTrades(candles,analysis,id,instrument=state.selectedInstrument){const signals=analysis.series[id]||[],pip=instrument.endsWith('JPY')?100:10000,trades=[];for(let i=0;i<signals.length;i++){const signal=signals[i],opposite=signals.slice(i+1).find(next=>next.direction===-signal.direction);if(!opposite)continue;const entryIndex=Math.min(candles.length-1,signal.index+1),exitIndex=Math.min(candles.length-1,opposite.index+1);if(exitIndex<=entryIndex)continue;const entry=candles[entryIndex].open,exit=candles[exitIndex].open,range=candles.slice(entryIndex,exitIndex+1),net=(exit-entry)*signal.direction*pip,mfe=(signal.direction>0?Math.max(...range.map(c=>c.high))-entry:entry-Math.min(...range.map(c=>c.low)))*pip,mae=(signal.direction>0?entry-Math.min(...range.map(c=>c.low)):Math.max(...range.map(c=>c.high))-entry)*pip;trades.push({net,mfe:Math.max(0,mfe),mae:Math.max(0,mae)});}return trades;}
   function tradeStats(trades){const wins=trades.filter(t=>t.net>.05),losses=trades.filter(t=>t.net<-.05),flats=trades.length-wins.length-losses.length,net=trades.reduce((s,t)=>s+t.net,0),grossWin=wins.reduce((s,t)=>s+t.net,0),grossLoss=-losses.reduce((s,t)=>s+t.net,0);let equity=0,peak=0,maxDrawdown=0;trades.forEach(t=>{equity+=t.net;peak=Math.max(peak,equity);maxDrawdown=Math.max(maxDrawdown,peak-equity);});const mfe=trades.reduce((s,t)=>s+t.mfe,0),mae=trades.reduce((s,t)=>s+t.mae,0);return{trades:trades.length,wins:wins.length,losses:losses.length,flats,net,average:trades.length?net/trades.length:NaN,mfeMae:mae?mfe/mae:mfe?Infinity:NaN,maxDrawdown,profitFactor:grossLoss?grossWin/grossLoss:grossWin?Infinity:NaN,recoveryFactor:maxDrawdown?net/maxDrawdown:net>0?Infinity:NaN};}
+  function chartControlConfiguration(instrument,timeframe,strategy,lengthControlId,filterControlId){
+    const resolved=resolvedConfiguration(instrument,timeframe),config=Object.fromEntries(Object.entries(resolved).map(([id,value])=>[id,{...value}]));
+    const length=clamp(Math.trunc(Number(el(lengthControlId)?.value)||10),3,200),rawFilter=Number(el(filterControlId)?.value)||0,filter=clamp(rawFilter,0,strategy==="COMBO"?5:10);
+    if(strategy==="COMBO"){
+      config.COMBO={...(config.COMBO||STRATEGY_CONFIG.COMBO),filter};
+      for(const member of ["DARE","NAI"])config[member]={...(config[member]||STRATEGY_CONFIG[member]),length};
+    }else config[strategy]={...(config[strategy]||STRATEGY_CONFIG[strategy]),length,filter};
+    return config;
+  }
+
   function configurationSnapshot(){return Object.fromEntries(Object.entries(STRATEGY_CONFIG).map(([id,value])=>[id,{...value}]));}
   function setConfiguration(config){for(const [id,value] of Object.entries(config||{}))if(STRATEGY_CONFIG[id])Object.assign(STRATEGY_CONFIG[id],value);}
   function analyzeWithConfiguration(candles,config,withSeries){const prior=configurationSnapshot();try{setConfiguration(config);return analyzeCandles(candles,withSeries);}finally{setConfiguration(prior);}}
@@ -2254,7 +2271,7 @@
   async function computeConfiguration(){const button=el("computeConfiguration");if(!state.connected)return;button.disabled=true;button.textContent="Computing…";el("macroPerformanceScope").textContent="Loading the current completed OANDA candle history and optimizing…";try{const response=await fetch("/api/engine/compute",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({pair:state.selectedInstrument,timeframe:state.selectedTimeframe})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?`${payload.stage||"compute"} · ${payload.error}`:`HTTP ${response.status}`);state.autoConfigurations.set(payload.key,payload.record);const resolved=payload.record.config;if(state.chartCandles.length){state.chartAnalysis=analyzeWithConfiguration(state.chartCandles,resolved,false);state.chartCausalIndicators=null;state.chartCausalSeries=[];void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolved,state.selectedStrategy);}renderStrategyConfiguration();renderMacroPerformance();renderOptimizerRegistry();renderSchedule();updateChartSummary();updateCompartments();drawChart();}catch(error){el("macroPerformanceScope").textContent=error.message||"Compute Configuration failed";el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">${error.message||"Compute Configuration failed"}</td></tr>`;}finally{button.textContent="Compute Configuration";button.disabled=!state.connected;}}
 
 
-  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(name==='evaluation'){const activeTf = el("evalTableTfFilter")?.value || "H1"; if (el("evalChartTimeframe")) { el("evalChartTimeframe").value = activeTf; } void loadEvaluationData(); void loadEvalChartData(state.selectedInstrument, activeTf); void preloadEvaluationTimeframe(activeTf); setTimeout(() => { drawEvalCharts(); setupSyncedCrosshair(); }, 50);}if(persist)queuePlatformPreferenceSave();}
+  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){state.scheduleController?.abort();clearTimeout(state.progressiveScheduleTimer);const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,200)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventLoading)void loadEventForecast();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(name==='evaluation'){const activeTf=el("evalTableTfFilter")?.value||"H1",chartPair=el("evalChartPair")?.value||state.selectedInstrument,chartTf=el("evalChartTimeframe")?.value||activeTf;void loadEvaluationData();void loadEvalChartData(chartPair,chartTf);void preloadEvaluationTimeframe(activeTf);setTimeout(()=>{drawEvalCharts();setupSyncedCrosshair();},50);}if(persist)queuePlatformPreferenceSave();}
 
   function pointerPosition(event) { const rect=el("chart").getBoundingClientRect(); return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
 
@@ -2377,8 +2394,12 @@
     el("scheduleStrategy").addEventListener("change",event=>{state.selectedScheduleStrategy=event.target.value;renderSchedule();renderMtfForecast();queuePlatformPreferenceSave();});
     el("chartPair").addEventListener("change",event=>selectChart(event.target.value,state.selectedTimeframe));
     el("chartTimeframe").addEventListener("change",event=>selectChart(state.selectedInstrument,event.target.value));
-    el("chartStrategy").addEventListener("change",event=>{state.selectedStrategy=event.target.value;updateChartSummary();drawChart();if(state.chartCandles.length)void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolvedConfiguration(state.selectedInstrument,state.selectedTimeframe),state.selectedStrategy);queuePlatformPreferenceSave();});
+    const refreshAnalyticalChartConfig=()=>{state.selectedStrategy=el("chartStrategy").value;if(state.chartCandles.length)applyChartDataset(state.selectedInstrument,state.selectedTimeframe,state.chartCandles);else{updateChartSummary();drawChart();}queuePlatformPreferenceSave();};
+    el("chartStrategy").addEventListener("change",refreshAnalyticalChartConfig);
+    el("chartLength").addEventListener("change",refreshAnalyticalChartConfig);
+    el("chartFilter").addEventListener("change",refreshAnalyticalChartConfig);
     el("eventStrategy").addEventListener("change",()=>{if(state.eventData)eventDraw(state.eventData,state.eventHtl,state.eventEvents);queuePlatformPreferenceSave();});
+    for(const id of ["eventChartPair","eventChartTimeframe","eventChartLength","eventChartFilter"])el(id)?.addEventListener("change",queuePlatformPreferenceSave);
     el("signalMatrix").addEventListener("click",event=>{
       const pairButton=event.target.closest("[data-pair]"); if (pairButton) { selectChart(pairButton.dataset.pair,state.selectedTimeframe); return; }
       const cell=event.target.closest(".signal-cell"); if (cell) selectChart(cell.dataset.instrument,cell.dataset.timeframe);
@@ -2419,9 +2440,7 @@
     if (el("evalTableTfFilter")) {
       el("evalTableTfFilter").addEventListener("change", () => {
         const tf = el("evalTableTfFilter").value;
-        if (el("evalChartTimeframe")) el("evalChartTimeframe").value = tf;
         void loadEvaluationData();
-        void loadEvalChartData(state.selectedInstrument, tf);
         void preloadEvaluationTimeframe(tf);
       });
     }
@@ -2441,29 +2460,21 @@
         });
       }
     });
+    for(const id of ["evalChartStrategy","evalChartLength","evalChartFilter"])el(id)?.addEventListener("change",()=>void loadEvalChartData(el("evalChartPair").value,el("evalChartTimeframe").value));
     if (el("evalChartPair")) {
       el("evalChartPair").addEventListener("change", () => {
-        state.selectedInstrument = el("evalChartPair").value;
-        void loadEvalChartData(state.selectedInstrument, el("evalChartTimeframe").value);
+        const pair=el("evalChartPair").value;
+        void loadEvalChartData(pair,el("evalChartTimeframe").value);
       });
     }
     if (el("evalChartTimeframe")) {
       el("evalChartTimeframe").addEventListener("change", () => {
-        const tf = el("evalChartTimeframe").value;
-        if (el("evalTableTfFilter")) el("evalTableTfFilter").value = tf;
-        void loadEvalChartData(state.selectedInstrument, tf);
-        void computeEvaluationResults();
-        void preloadEvaluationTimeframe(tf);
-      });
-    }
-    if (el("evalChartStrategy")) {
-      el("evalChartStrategy").addEventListener("change", () => {
-        void loadEvalChartData(state.selectedInstrument, el("evalChartTimeframe").value);
+        void loadEvalChartData(el("evalChartPair").value,el("evalChartTimeframe").value);
       });
     }
     if (el("evalRefreshChart")) {
       el("evalRefreshChart").addEventListener("click", () => {
-        void loadEvalChartData(state.selectedInstrument, el("evalChartTimeframe").value);
+        void loadEvalChartData(el("evalChartPair").value,el("evalChartTimeframe").value);
       });
     }
     if (el("evalConfirmButton")) {
@@ -2591,7 +2602,7 @@
     });
   }
 
-  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; buildMatrix(); buildCompartments(); buildPairSelector(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadTradingLedger(state.ledgerLimit);},15000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadEngineStatus();},30000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadControlStatus();},10000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadOptimizerRecords();},120000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
+  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; if(el("eventChartPair")){el("eventChartPair").innerHTML=el("chartPair").innerHTML;el("eventChartPair").value=state.selectedInstrument;} if(el("eventChartTimeframe")){el("eventChartTimeframe").innerHTML=el("chartTimeframe").innerHTML;el("eventChartTimeframe").value=state.selectedTimeframe;} buildMatrix(); buildCompartments(); buildPairSelector(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadTradingLedger(state.ledgerLimit);},15000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadEngineStatus();},30000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadControlStatus();},10000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadOptimizerRecords();},120000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
   </script>
 </body>
 </html>
