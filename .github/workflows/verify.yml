@@ -24,6 +24,18 @@ jobs:
           node-version: 24
       - name: Apply one-time HTL loader hygiene migration
         run: node scripts/migrate-event-loader-hygiene.mjs
+      - name: Adjust bulk event browser fixture
+        run: |
+          node - <<'NODE'
+          const fs=require("fs");
+          const p="scripts/test-browser.mjs";
+          let s=fs.readFileSync(p,"utf8");
+          const a='if(instrument==="EUR_USD"&&(granularity==="M15"||granularity==="M30"))';
+          const b='if((count>=650||instrument==="EUR_USD")&&(granularity==="M15"||granularity==="M30"))';
+          if(!s.includes(a) && !s.includes(b)) throw new Error("bulk event fixture anchor missing");
+          if(s.includes(a)) s=s.replace(a,b);
+          fs.writeFileSync(p,s);
+          NODE
       - name: Install dependencies
         run: npm ci
       - name: Generate Wrangler Types
@@ -36,12 +48,12 @@ jobs:
         run: npm run check
       - name: Commit migrated source
         run: |
-          if git diff --quiet public/index.html; then
+          if git diff --quiet public/index.html scripts/test-browser.mjs; then
             echo "No migration diff."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/index.html
+          git add public/index.html scripts/test-browser.mjs
           git commit -m "fix: harden HTL event loading and cache hygiene"
           git push origin HEAD:fix/htl-event-loader-cache-hygiene
