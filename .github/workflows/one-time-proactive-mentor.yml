@@ -1,0 +1,34 @@
+name: Apply proactive mentor integration
+
+on:
+  push:
+    branches:
+      - feature/proactive-market-mentor
+    paths:
+      - .github/workflows/one-time-proactive-mentor.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/proactive-market-mentor
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply mentor integration
+        run: node scripts/apply-proactive-mentor.mjs
+      - name: Remove one-time migration assets and commit
+        run: |
+          rm scripts/apply-proactive-mentor.mjs
+          rm .github/workflows/one-time-proactive-mentor.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/index.html public/mas-im-calculator.js test/mas-im-calculator.test.js scripts/apply-proactive-mentor.mjs .github/workflows/one-time-proactive-mentor.yml
+          git commit -m "feat: wire proactive market mentor and aligned transition semantics"
+          git push origin HEAD:feature/proactive-market-mentor
