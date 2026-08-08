@@ -21,7 +21,8 @@ test("mentor identifies infinity as denominator collapse rather than infinite st
 });
 
 test("aligned state teaches that transition is no longer the question",()=>{
-  const narrative=mentor.__test.buildNarrative({rows:[row()],slots:[],selectedPair:"AUD_CHF",timeframe:"H1"});
+  const candidate=row({pair:"CAD_CHF",mas:.055,im:.464,ratio:8.5,requiredIm:NaN,transitionProbability:NaN});
+  const narrative=mentor.__test.buildNarrative({rows:[candidate],slots:[],selectedPair:"CAD_CHF",timeframe:"H1"});
   assert.match(narrative.explanation,/No transition is required because the macro field is already aligned/i);
   assert.match(narrative.lesson,/transition is no longer the question/i);
   assert.match(narrative.posture,/Trend-aligned posture/i);
