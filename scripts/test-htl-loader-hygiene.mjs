@@ -12,7 +12,7 @@ assert.doesNotMatch(html,/eventController:null,\s*eventLoading:false/);
 assert.match(html,/MAX_CANDLE_REQUESTS=2,MAX_BACKGROUND_CANDLE_REQUESTS=2,CANDLE_TIMEOUT_MS=55000/);
 assert.match(html,/candleQueue\.some\(job=>job\.priority>=50\)/);
 assert.match(html,/foreground=next\.priority>=50/);
-assert.match(html,/function eventHistoryCount\(length\)\{return clamp\(Math\.max\(650,\(Math\.max\(3,length\)\*3\)\+120\),650,1200\);\}/);
+assert.match(html,/function eventHistoryCount\(length\)\{return clamp\(Math\.max\(650,\(Math\.max\(3,length\)\*3\)\+120\),650,(?:1200|MAX_ANALYTICAL_HISTORY)\);\}/);
 assert.match(html,/function eventCachedCandles\(pair,timeframe\)/);
 assert.match(html,/await runPool\(pairs,2,pair=>load/);
 assert.match(html,/await runPool\(retryPairs,1,pair=>load/);
