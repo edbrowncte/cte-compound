@@ -11,7 +11,7 @@ assert.match(html,/id="chartLength"[^>]*max="500"/);
 assert.match(html,/id="eventLength"[^>]*max="500"/);
 assert.match(html,/id="eventChartLength"[^>]*max="500"/);
 assert.match(html,/function chartRequestCount\(instrument,timeframe\)\{return MAX_ANALYTICAL_HISTORY;\}/);
-assert.match(html,/indicatorWarmupBars\(strategy,length\).*DARE_N:5.*NAI:4.*APEX:6/);
+assert.match(html,/indicatorWarmupBars\(strategy,length\).*ASSET:4.*DARE:5.*DARE_N:6.*COMBO:5.*NAI:5.*APEX:6/);
 assert.match(html,/scheduleRequestCount\(instrument,timeframe\)/);
 assert.match(html,/loadEventRow\(pair,timeframe,length,controller,100,MAX_ANALYTICAL_HISTORY\)/);
 assert.match(html,/eventCausalIndicators\(chartPair,chartTimeframe,config\.length,data\)/);
@@ -26,6 +26,8 @@ assert.match(html,/state\.eventIndicatorCache\.clear\(\)/);
 assert.match(html,/refreshAdaptiveTimeframe\(\).*scheduleRequestCount\(pair,timeframe\)/s);
 assert.match(html,/selectedScheduleStrategy=event\.target\.value.*loadSchedule\("focused"\)/s);
 assert.match(html,/refreshAnalyticalChartConfig=.*chartCandles\.length<chartRequestCount/s);
+assert.match(html,/oldBad=bad/);
+assert.match(html,/asset\[index\]=active\.price/);
 
 // The trading-engine control remains independently certified at its registered 3..200 boundary.
 assert.match(html,/id="engineHtlLength"[^>]*max="200"/);
@@ -66,4 +68,4 @@ try{
   assert.equal(browserErrors.length,0,browserErrors.map(error=>error.message).join("\n"));
 }finally{dom.window.close();}
 
-console.log("5000-candle analytical history, length-240 causal DARE(N)/NAI/APEX coverage, missing-data safety, and independent 200-bar engine boundary verified.");
+console.log("5000-candle analytical history, length-240 causal DARE(N)/NAI/APEX coverage, corrected rolling WMA recovery, missing-data safety, and independent 200-bar engine boundary verified.");
