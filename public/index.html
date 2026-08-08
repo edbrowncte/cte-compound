@@ -1493,7 +1493,8 @@
     const plot = { x: margin.left, y: margin.top, w: width - margin.left - margin.right, h: height - margin.top - margin.bottom };
 
     const priceValues = indicatorSet.price.flatMap(([key]) => (indicators[key] || []).slice(visibleStart, visibleEnd).filter(Number.isFinite));
-    const live = state.evalOffsetBars === 0 ? liveMid(state.selectedInstrument) : NaN;
+    const evalPair=el("evalChartPair")?.value||state.selectedInstrument;
+    const live = state.evalOffsetBars === 0 ? liveMid(evalPair) : NaN;
     let low = Math.min(...visibleCandles.map(c => c.low), ...priceValues, ...(Number.isFinite(live) ? [live] : []));
     let high = Math.max(...visibleCandles.map(c => c.high), ...priceValues, ...(Number.isFinite(live) ? [live] : []));
     const pad = (high - low) * 0.1 || 0.01;
@@ -1573,7 +1574,7 @@
 
     if (Number.isFinite(live)) {
       const yy = priceToY(live);
-      const label = formatPrice(live, state.selectedInstrument);
+      const label = formatPrice(live, evalPair);
       ctx.strokeStyle = "#7dc4ff";
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -2439,9 +2440,7 @@
     if (el("evalTableTfFilter")) {
       el("evalTableTfFilter").addEventListener("change", () => {
         const tf = el("evalTableTfFilter").value;
-        if (el("evalChartTimeframe")) el("evalChartTimeframe").value = tf;
         void loadEvaluationData();
-        void loadEvalChartData(state.selectedInstrument, tf);
         void preloadEvaluationTimeframe(tf);
       });
     }
@@ -2470,21 +2469,12 @@
     }
     if (el("evalChartTimeframe")) {
       el("evalChartTimeframe").addEventListener("change", () => {
-        const tf = el("evalChartTimeframe").value;
-        if (el("evalTableTfFilter")) el("evalTableTfFilter").value = tf;
-        void loadEvalChartData(state.selectedInstrument, tf);
-        void computeEvaluationResults();
-        void preloadEvaluationTimeframe(tf);
-      });
-    }
-    if (el("evalChartStrategy")) {
-      el("evalChartStrategy").addEventListener("change", () => {
-        void loadEvalChartData(state.selectedInstrument, el("evalChartTimeframe").value);
+        void loadEvalChartData(el("evalChartPair").value,el("evalChartTimeframe").value);
       });
     }
     if (el("evalRefreshChart")) {
       el("evalRefreshChart").addEventListener("click", () => {
-        void loadEvalChartData(state.selectedInstrument, el("evalChartTimeframe").value);
+        void loadEvalChartData(el("evalChartPair").value,el("evalChartTimeframe").value);
       });
     }
     if (el("evalConfirmButton")) {
