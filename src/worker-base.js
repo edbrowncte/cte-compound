@@ -20,26 +20,37 @@ function touchCandleCache(key,entry){candleCache.delete(key);candleCache.set(key
 const OANDA_MAX_CONCURRENCY=3,OANDA_REQUEST_TIMEOUT_MS=15000;
 let oandaActive=0,oandaLastStart=0;
 const oandaWaiters=[];
-const oandaTelemetry={requests:0,retries:0,timeouts:0,failures:0,statuses:{}};
+const oandaTelemetry={requests:0,retries:0,timeouts:0,networkFailures:0,failures:0,statuses:{},lastFailure:null};
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{...JSON_HEADERS,...headers}});
+const diagnosticId=()=>crypto.randomUUID();
+function decorateError(error,{status,code,stage,retryable,upstreamStatus,attempts}={}){
+  const target=error instanceof Error?error:new Error(String(error||"Request failed."));
+  if(status!==undefined)target.status=status;if(code)target.code=code;if(stage)target.stage=stage;if(retryable!==undefined)target.retryable=retryable;if(upstreamStatus!==undefined)target.upstreamStatus=upstreamStatus;if(attempts!==undefined)target.attempts=attempts;
+  if(!target.diagnosticId)target.diagnosticId=diagnosticId();return target;
+}
+function errorSnapshot(error){const target=decorateError(error,{stage:error?.stage||"WORKER",code:error?.code||"WORKER_INTERNAL_ERROR",status:Number(error?.status)||500,retryable:Boolean(error?.retryable)});return{error:target.message||"Request failed.",code:target.code,stage:target.stage,retryable:Boolean(target.retryable),diagnosticId:target.diagnosticId,upstreamStatus:Number(target.upstreamStatus)||undefined,attempts:Number(target.attempts)||undefined};}
+function errorResponse(error){const snapshot=errorSnapshot(error);return json(snapshot,Number(error?.status)||500,{"X-CTE-Diagnostic-ID":snapshot.diagnosticId});}
+function recordOandaFailure(error){const snapshot=errorSnapshot(error);oandaTelemetry.lastFailure={time:new Date().toISOString(),code:snapshot.code,stage:snapshot.stage,status:Number(error?.status)||500,diagnosticId:snapshot.diagnosticId};}
+function skippedDiagnostic(stage,reason="Dependency not met."){return{ok:false,skipped:true,stage,code:"DEPENDENCY_NOT_MET",status:424,retryable:false,error:reason,latencyMs:0,diagnosticId:null};}
+async function diagnosticStep(stage,fn){const started=Date.now();try{return{ok:true,stage,latencyMs:Date.now()-started,value:await fn()};}catch(error){const target=decorateError(error,{stage:error?.stage||stage});const snapshot=errorSnapshot(target);return{ok:false,stage:snapshot.stage,latencyMs:Date.now()-started,...snapshot,status:Number(target.status)||500};}}
 
 function credentials(env) {
   const token=String(env.OANDA_API_KEY||"").trim();
   const accountId=String(env.OANDA_ACCOUNT_ID||"").trim();
-  if(token.length<20) throw Object.assign(new Error("OANDA_API_KEY is not configured."),{status:503});
-  if(!/^[A-Za-z0-9-]{6,80}$/.test(accountId)) throw Object.assign(new Error("OANDA_ACCOUNT_ID is not configured."),{status:503});
+  if(token.length<20) throw decorateError(new Error("OANDA_API_KEY is not configured."),{status:503,code:"OANDA_API_KEY_MISSING",stage:"CREDENTIALS",retryable:false});
+  if(!/^[A-Za-z0-9-]{6,80}$/.test(accountId)) throw decorateError(new Error("OANDA_ACCOUNT_ID is not configured."),{status:503,code:"OANDA_ACCOUNT_ID_MISSING",stage:"CREDENTIALS",retryable:false});
   return {token,accountId};
 }
 
 let accountCache=null;
 async function resolveAccount(token,configuredAccountId) {
-  if(accountCache&&accountCache.expires>Date.now()) return accountCache.id;
-  const payload=await oandaRequest("/v3/accounts",token);
+  if(accountCache&&accountCache.configuredAccountId===configuredAccountId&&accountCache.expires>Date.now()) return accountCache.id;
+  const payload=await oandaRequest("/v3/accounts",token,{stage:"ACCOUNT_LIST"});
   const accounts=Array.isArray(payload.accounts)?payload.accounts:[];
-  const selected=accounts.find(account=>account.id===configuredAccountId&&!account.tags?.includes("MT4"))||accounts.find(account=>String(account.id||"").endsWith("-001")&&!account.tags?.includes("MT4"));
-  if(!selected?.id) throw Object.assign(new Error("The authorized non-MT4 OANDA account ending -001 was not found."),{status:401});
-  accountCache={id:selected.id,expires:Date.now()+300000};
+  const selected=accounts.find(account=>account.id===configuredAccountId&&!account.tags?.includes("MT4"));
+  if(!selected?.id) throw decorateError(new Error("Configured OANDA account is not authorized for this API token."),{status:401,code:"OANDA_ACCOUNT_ID_NOT_AUTHORIZED",stage:"ACCOUNT_SELECT",retryable:false});
+  accountCache={configuredAccountId,id:selected.id,expires:Date.now()+300000};
   return selected.id;
 }
 
@@ -55,26 +66,29 @@ function releaseOandaSlot(){const next=oandaWaiters.shift();if(next)next();else 
 
 async function oandaRequest(path,token,init={}) {
   await acquireOandaSlot();
+  const stage=String(init.stage||"OANDA_REQUEST"),maxAttempts=Math.max(1,Math.min(3,Math.trunc(Number(init.maxAttempts)||3)));
   try{
     let lastError=null;
-    for(let attempt=0;attempt<3;attempt++){
-      const delay=Math.max(0,45-(Date.now()-oandaLastStart));
-      if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
+    for(let attempt=0;attempt<maxAttempts;attempt++){
+      const delay=Math.max(0,45-(Date.now()-oandaLastStart));if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
       oandaLastStart=Date.now();oandaTelemetry.requests++;
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),OANDA_REQUEST_TIMEOUT_MS);
       try{
         const response=await fetch(LIVE_OANDA_ORIGIN+path,{method:init.method||"GET",headers:{Authorization:`Bearer ${token}`,Accept:"application/json",...(init.body?{"Content-Type":"application/json"}:{})},body:init.body,redirect:"manual",cache:"no-store",signal:controller.signal});
-        const payload=await response.json().catch(()=>({}));
-        if(!response.ok){const error=Object.assign(new Error(payload.errorMessage||payload.errorCode||`OANDA HTTP ${response.status}`),{status:response.status,payload});oandaTelemetry.statuses[response.status]=Number(oandaTelemetry.statuses[response.status]||0)+1;throw error;}
+        const text=await response.text();let payload={};
+        if(text){try{payload=JSON.parse(text);}catch{const retryable=response.status===429||response.status>=500;throw decorateError(new Error(response.ok?"OANDA returned a non-JSON response.":`OANDA HTTP ${response.status} returned a non-JSON response.`),{status:response.ok?502:response.status,code:response.ok?"OANDA_INVALID_RESPONSE":`OANDA_HTTP_${response.status}`,stage,retryable,upstreamStatus:response.status});}}
+        if(!response.ok){const retryable=response.status===429||response.status>=500,error=decorateError(new Error(payload.errorMessage||payload.errorCode||`OANDA HTTP ${response.status}`),{status:response.status,code:payload.errorCode||`OANDA_HTTP_${response.status}`,stage,retryable,upstreamStatus:response.status});oandaTelemetry.statuses[response.status]=Number(oandaTelemetry.statuses[response.status]||0)+1;throw error;}
         return payload;
       }catch(error){
-        const timedOut=controller.signal.aborted;if(timedOut){oandaTelemetry.timeouts++;lastError=Object.assign(new Error("OANDA request timed out."),{status:504});}else lastError=error;
-        const status=Number(lastError?.status)||0,retryable=timedOut||status===429||status>=500;
-        if(!retryable||attempt===2){oandaTelemetry.failures++;throw lastError;}
+        if(controller.signal.aborted){oandaTelemetry.timeouts++;lastError=decorateError(new Error("OANDA request timed out."),{status:504,code:"OANDA_TIMEOUT",stage,retryable:true});}
+        else if(Number(error?.status)){lastError=decorateError(error,{stage:error?.stage||stage});}
+        else{oandaTelemetry.networkFailures++;lastError=decorateError(new Error(error?.message||"OANDA network request failed."),{status:502,code:"OANDA_NETWORK_FAILURE",stage,retryable:true});}
+        lastError.attempts=attempt+1;
+        if(!lastError.retryable||attempt===maxAttempts-1){oandaTelemetry.failures++;recordOandaFailure(lastError);throw lastError;}
         oandaTelemetry.retries++;await new Promise(resolve=>setTimeout(resolve,500*(2**attempt)+Math.floor(Math.random()*250)));
       }finally{clearTimeout(timer);}
     }
-    throw lastError||new Error("OANDA request failed.");
+    throw lastError||decorateError(new Error("OANDA request failed."),{status:502,code:"OANDA_NETWORK_FAILURE",stage,retryable:true,attempts:maxAttempts});
   }finally{releaseOandaSlot();}
 }
 
@@ -111,13 +125,13 @@ function proxyPath(raw,accountId,method) {
 }
 
 async function handleConnect(env) {
-  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),payload=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token),account=payload.account||{};
-  return json({account:{id:account.id||accountId,alias:account.alias||"",currency:account.currency||"",balance:account.balance||"0",NAV:account.NAV||"0",marginAvailable:account.marginAvailable||"0",marginUsed:account.marginUsed||"0",hedgingEnabled:Boolean(account.hedgingEnabled),openPositionCount:account.openPositionCount||0,lastTransactionID:payload.lastTransactionID||null},live:true});
+  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),payload=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token,{stage:"ACCOUNT_SUMMARY"}),account=payload.account||{};
+  return json({account:{id:account.id||accountId,alias:account.alias||"",currency:account.currency||"",balance:account.balance||"0",NAV:account.NAV||"0",marginAvailable:account.marginAvailable||"0",marginUsed:account.marginUsed||"0",hedgingEnabled:Boolean(account.hedgingEnabled),openPositionCount:account.openPositionCount||0,lastTransactionID:payload.lastTransactionID||null},live:true,connection:{stage:"CONNECTED",accountSuffix:String(accountId).slice(-3)}});
 }
 
 async function handleAccountDiagnostic(env) {
-  const {token,accountId}=credentials(env),payload=await oandaRequest("/v3/accounts",token),accounts=Array.isArray(payload.accounts)?payload.accounts:[];
-  return json({configuredSuffix:accountId.slice(-3),authorizedAccounts:accounts.map(account=>({suffix:String(account.id||"").slice(-3),selected:account.id===accountId,tags:account.tags||[]})),intendedAccountVisible:accounts.some(account=>account.id===accountId)});
+  const {token,accountId}=credentials(env),payload=await oandaRequest("/v3/accounts",token,{stage:"ACCOUNT_LIST_DIAGNOSTIC",maxAttempts:1}),accounts=Array.isArray(payload.accounts)?payload.accounts:[];
+  return json({configuredSuffix:accountId.slice(-3),authorizedAccounts:accounts.map(account=>({suffix:String(account.id||"").slice(-3),selected:account.id===accountId,tags:account.tags||[]})),intendedAccountVisible:accounts.some(account=>account.id===accountId&&!account.tags?.includes("MT4"))});
 }
 
 async function handleProxy(request,env,url) {
@@ -162,9 +176,15 @@ async function handlePlatformVersion(env){return json({deployment:deploymentMeta
 async function handlePlatformDiagnostic(env,url){
   const started=Date.now(),instrument=(url.searchParams.get("instrument")||"EUR_USD").toUpperCase(),granularity=(url.searchParams.get("granularity")||"M15").toUpperCase();
   if(!INSTRUMENTS.has(instrument)||!GRANULARITIES.has(granularity))return json({error:"Invalid diagnostic instrument or granularity."},400);
-  const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),summaryStart=Date.now();
-  const summary=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token),summaryLatencyMs=Date.now()-summaryStart,candleStart=Date.now(),candles=await oandaRequest(`/v3/instruments/${instrument}/candles?price=M&granularity=${granularity}&count=60&smooth=false`,token),candleLatencyMs=Date.now()-candleStart,engineResponse=await env.HTL_ENGINE.getByName("live").fetch("https://engine/status"),engine=await engineResponse.json().catch(()=>({}));
-  return json({deployment:deploymentMetadata(env),time:new Date().toISOString(),totalLatencyMs:Date.now()-started,worker:{oandaActive,oandaQueued:oandaWaiters.length,maxConcurrency:OANDA_MAX_CONCURRENCY,requestTimeoutMs:OANDA_REQUEST_TIMEOUT_MS,candleCacheEntries:candleCache.size,candleCacheBars:candleCacheBarCount(),candleCacheMaxEntries:CANDLE_CACHE_MAX_ENTRIES,candleCacheMaxBars:CANDLE_CACHE_MAX_BARS,telemetry:oandaTelemetry},oanda:{accountSuffix:String(accountId).slice(-3),summaryLatencyMs,candleLatencyMs,completedCandles:normalizeCandles(candles).length,NAV:summary.account?.NAV||null,marginAvailable:summary.account?.marginAvailable||null},engine:{reachable:engineResponse.ok,armed:engine.armed,running:engine.running,lastRun:engine.lastRun,lastError:engine.lastError,optimizerCoverage:engine.optimizerCoverage,optimizerTotal:engine.optimizerTotal,optimizerLastError:engine.optimizerLastError,mtfCoverage:engine.mtfCoverage,pendingOrders:engine.pendingOrders},cloneAssessment:{structuredCloneCalls:0,applicable:false,verdict:"No structuredClone hot path exists in this repository."}});
+  let credentialValue=null;
+  const credentialCheck=await diagnosticStep("CREDENTIALS",async()=>{const value=credentials(env);credentialValue=value;return{tokenConfigured:true,accountConfigured:true,configuredSuffix:value.accountId.slice(-3)};});
+  const accountList=credentialCheck.ok?await diagnosticStep("DIAGNOSTIC_ACCOUNT_LIST",async()=>{const payload=await oandaRequest("/v3/accounts",credentialValue.token,{stage:"DIAGNOSTIC_ACCOUNT_LIST",maxAttempts:1}),accounts=Array.isArray(payload.accounts)?payload.accounts:[],visible=accounts.some(account=>account.id===credentialValue.accountId&&!account.tags?.includes("MT4"));return{authorizedCount:accounts.length,nonMt4Count:accounts.filter(account=>!account.tags?.includes("MT4")).length,authorizedSuffixes:accounts.map(account=>String(account.id||"").slice(-3)),intendedAccountVisible:visible};}):skippedDiagnostic("DIAGNOSTIC_ACCOUNT_LIST","Credentials unavailable.");
+  const accountVisible=Boolean(accountList.ok&&accountList.value?.intendedAccountVisible);
+  const summary=accountVisible?await diagnosticStep("DIAGNOSTIC_ACCOUNT_SUMMARY",async()=>{const payload=await oandaRequest(`/v3/accounts/${encodeURIComponent(credentialValue.accountId)}/summary`,credentialValue.token,{stage:"DIAGNOSTIC_ACCOUNT_SUMMARY",maxAttempts:1}),account=payload.account||{};return{NAV:account.NAV||null,marginAvailable:account.marginAvailable||null,openPositionCount:account.openPositionCount||0};}):skippedDiagnostic("DIAGNOSTIC_ACCOUNT_SUMMARY",accountList.ok?"Configured account is not authorized by the current API token.":"Account list unavailable.");
+  const candles=credentialCheck.ok?await diagnosticStep("DIAGNOSTIC_CANDLES",async()=>{const payload=await oandaRequest(`/v3/instruments/${instrument}/candles?price=M&granularity=${granularity}&count=60&smooth=false`,credentialValue.token,{stage:"DIAGNOSTIC_CANDLES",maxAttempts:1}),normalized=normalizeCandles(payload);return{completedCandles:normalized.length,lastCandle:normalized.at(-1)?.time||null};}):skippedDiagnostic("DIAGNOSTIC_CANDLES","Credentials unavailable.");
+  const engine=await diagnosticStep("ENGINE_STATUS",async()=>{if(!env.HTL_ENGINE?.getByName)throw decorateError(new Error("HTL_ENGINE Durable Object binding is unavailable."),{status:503,code:"HTL_ENGINE_BINDING_MISSING",stage:"ENGINE_STATUS",retryable:false});const response=await env.HTL_ENGINE.getByName("live").fetch("https://engine/status"),payload=await response.json().catch(()=>({}));if(!response.ok)throw decorateError(new Error(payload.error||`Engine HTTP ${response.status}`),{status:response.status,code:"ENGINE_STATUS_FAILURE",stage:"ENGINE_STATUS",retryable:response.status>=500});return payload;});
+  const required=[credentialCheck,accountList,summary,candles,engine],failures=required.filter(step=>!step.ok),tradingCritical=[credentialCheck,accountList,summary,candles],verdict=tradingCritical.some(step=>!step.ok)?"FAIL":engine.ok?"PASS":"DEGRADED",firstFailure=failures.find(step=>!step.skipped)||failures[0]||null;
+  return json({verdict,time:new Date().toISOString(),totalLatencyMs:Date.now()-started,deployment:deploymentMetadata(env),checks:{credentials:credentialCheck,accountList,summary,candles,engine},worker:{oandaActive,oandaQueued:oandaWaiters.length,maxConcurrency:OANDA_MAX_CONCURRENCY,requestTimeoutMs:OANDA_REQUEST_TIMEOUT_MS,candleCacheEntries:candleCache.size,candleCacheBars:candleCacheBarCount(),candleCacheMaxEntries:CANDLE_CACHE_MAX_ENTRIES,candleCacheMaxBars:CANDLE_CACHE_MAX_BARS,telemetry:oandaTelemetry},oanda:{accountSuffix:credentialValue?.accountId?.slice(-3)||null,intendedAccountVisible:accountVisible,summaryLatencyMs:summary.latencyMs,candleLatencyMs:candles.latencyMs,completedCandles:candles.value?.completedCandles||0,NAV:summary.value?.NAV||null,marginAvailable:summary.value?.marginAvailable||null,failure:firstFailure&&!firstFailure.stage.startsWith("ENGINE")?firstFailure:null},engine:engine.ok?{reachable:true,...engine.value}:{reachable:false,lastError:engine.error,code:engine.code,diagnosticId:engine.diagnosticId},failure:firstFailure?{stage:firstFailure.stage,code:firstFailure.code,error:firstFailure.error,status:firstFailure.status,retryable:firstFailure.retryable,diagnosticId:firstFailure.diagnosticId}:null,cloneAssessment:{structuredCloneCalls:0,applicable:false,verdict:"No structuredClone hot path exists in this repository."}});
 }
 
 async function handlePricingStream(env,url) {
@@ -222,7 +242,7 @@ export default {
       }
       return secureAsset(await env.ASSETS.fetch(request),url);
     } catch(error) {
-      return json({error:error?.message||"Request failed.",details:error?.payload||undefined},Number(error?.status)||500);
+      return errorResponse(error);
     }
   },
   async scheduled(_event,env,ctx){ctx.waitUntil(env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/tick",{method:"POST"})));}
