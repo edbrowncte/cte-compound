@@ -22,6 +22,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+      - name: Repair one-time migration anchor
+        run: node scripts/fix-chart-migration-anchor.mjs
       - name: Apply one-time independent chart migration
         run: node scripts/migrate-independent-chart-controls.mjs
       - name: Install dependencies
@@ -36,7 +38,7 @@ jobs:
         run: npm run check
       - name: Commit migrated source
         run: |
-          if git diff --quiet; then
+          if git diff --quiet public/index.html; then
             echo "No migration diff."
             exit 0
           fi
