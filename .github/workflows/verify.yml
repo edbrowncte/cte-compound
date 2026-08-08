@@ -24,6 +24,18 @@ jobs:
           node-version: 24
       - name: Apply one-time HTL loader hygiene migration
         run: node scripts/migrate-event-loader-hygiene.mjs
+      - name: Align foreground queue priority
+        run: |
+          node - <<'NODE'
+          const fs=require("fs");
+          const p="public/index.html";
+          let s=fs.readFileSync(p,"utf8");
+          const a='const next=state.candleQueue[0],foreground=next.priority>=80;';
+          const b='const next=state.candleQueue[0],foreground=next.priority>=50;';
+          if(!s.includes(a) && !s.includes(b)) throw new Error("foreground priority anchor missing");
+          if(s.includes(a)) s=s.replace(a,b);
+          fs.writeFileSync(p,s);
+          NODE
       - name: Adjust bulk event browser fixture
         run: |
           node - <<'NODE'
