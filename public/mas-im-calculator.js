@@ -163,7 +163,10 @@
   function roc(values,window=DEFAULT_ROC_WINDOW){
     const sample=values.filter(Number.isFinite).slice(-Math.max(2,window));
     if(sample.length<2)return NaN;
-    return calculateSlopeStats(sample, sample.map((_,index)=>index)).slope;
+    const n=sample.length,xMean=(n-1)/2,yMean=mean(sample);
+    let numerator=0,denominator=0;
+    for(let index=0;index<n;index++){numerator+=(index-xMean)*(sample[index]-yMean);denominator+=(index-xMean)**2;}
+    return denominator>0?numerator/denominator:0;
   }
 
   function normalizeEvents(events,timeframe,anchorMs){
@@ -319,6 +322,6 @@
 
   global.CTEMASIM=Object.freeze({
     VERSION,MAS_IM_TIMEFRAMES,TF_MS,timeframeHierarchy,calculateSlopeStats,calculateLogSlopeStats,calculateMASIMPressure,calculateMAS_IM_ZScores,calculateEventAngle,classifyType,
-    __test:Object.freeze({trendPower,pressureFromForces,learnTransitionThreshold,transitionProbability,signWithDeadzone})
+    __test:Object.freeze({trendPower,pressureFromForces,learnTransitionThreshold,transitionProbability,signWithDeadzone,roc})
   });
 })(globalThis);
