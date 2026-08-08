@@ -8,11 +8,9 @@ if(text.includes(bad))text=text.split(bad).join(good);
 // Escape target-page interpolation so Node does not evaluate it while running the one-time migration.
 text=text.replace(/(?<!\\)\$\{/g,"\\${");
 // Restore interpolations that belong to the migration script itself rather than the target HTML/JS.
-for(const [escaped,live] of [
-  ["Migration anchor missing: \\${label}","Migration anchor missing: ${label}"],
-  ["Applied independent chart-control migration (\\${changes} transformations).","Applied independent chart-control migration (${changes} transformations)."],
-  ["id=\\\"\\${id}\\\"","id=\\\"${id}\\\""],
-  ["Missing required chart control \\${id}","Missing required chart control ${id}"]
-])text=text.split(escaped).join(live);
+text=text.replace("Migration anchor missing: \\${label}","Migration anchor missing: ${label}");
+text=text.replace("Applied independent chart-control migration (\\${changes} transformations).","Applied independent chart-control migration (${changes} transformations).");
+// Avoid a template literal entirely for the sanity check because its ${id} is migration-time, not target-page syntax.
+text=text.split("\n").map(line=>line.includes("Missing required chart control")?`  if(!html.includes('id="'+id+'"'))throw new Error("Missing required chart control "+id);`:line).join("\n");
 fs.writeFileSync(path,text);
 console.log("Prepared one-time chart migration anchors and literal template syntax.");
