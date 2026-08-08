@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
+const worker=await readFile(new URL("../src/worker-base.js",import.meta.url),"utf8");
+assert.match(worker,/CANDLE_CACHE_MAX_ENTRIES=32,CANDLE_CACHE_MAX_BARS=60000/);
+assert.match(worker,/function candleCacheBarCount\(\)/);
+assert.match(worker,/function trimCandleCache\(protectedKey=null\)/);
+assert.match(worker,/function setCandleCache\(key,entry\)/);
+assert.match(worker,/function touchCandleCache\(key,entry\)/);
+assert.match(worker,/candleCache\.size>CANDLE_CACHE_MAX_ENTRIES\|\|bars>CANDLE_CACHE_MAX_BARS/);
+assert.match(worker,/touchCandleCache\(key,cached\)/);
+assert.match(worker,/setCandleCache\(key,\{value,count:requestCount,expires:Date\.now\(\)\+ttl\}\)/);
+assert.doesNotMatch(worker,/candleCache\.size>400/);
+assert.match(worker,/candleCacheBars:candleCacheBarCount\(\)/);
+console.log("Worker deep-candle LRU entry/bar budgets and cache telemetry verified.");

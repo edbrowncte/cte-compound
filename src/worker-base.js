@@ -12,6 +12,11 @@ const INSTRUMENTS = new Set([
 const GRANULARITIES = new Set(["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]);
 const JSON_HEADERS = {"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
 const candleCache=new Map();
+const CANDLE_CACHE_MAX_ENTRIES=32,CANDLE_CACHE_MAX_BARS=60000;
+function candleCacheBarCount(){let total=0;for(const entry of candleCache.values())total+=Array.isArray(entry?.value?.candles)?entry.value.candles.length:0;return total;}
+function trimCandleCache(protectedKey=null){let bars=candleCacheBarCount();while(candleCache.size>CANDLE_CACHE_MAX_ENTRIES||bars>CANDLE_CACHE_MAX_BARS){const candidate=[...candleCache.keys()].find(key=>key!==protectedKey);if(!candidate)break;const entry=candleCache.get(candidate);bars-=Array.isArray(entry?.value?.candles)?entry.value.candles.length:0;candleCache.delete(candidate);}}
+function setCandleCache(key,entry){candleCache.delete(key);candleCache.set(key,entry);trimCandleCache(key);}
+function touchCandleCache(key,entry){candleCache.delete(key);candleCache.set(key,entry);}
 const OANDA_MAX_CONCURRENCY=3,OANDA_REQUEST_TIMEOUT_MS=15000;
 let oandaActive=0,oandaLastStart=0;
 const oandaWaiters=[];
@@ -140,14 +145,14 @@ async function handleManualOrder(request,env) {
 async function handleCandles(env,url) {
   const {token}=credentials(env),instrument=(url.searchParams.get("instrument")||"").toUpperCase(),granularity=(url.searchParams.get("granularity")||"").toUpperCase();
   if(!INSTRUMENTS.has(instrument)||!GRANULARITIES.has(granularity)) return json({error:"Invalid instrument or granularity."},400);
-  const count=Math.max(60,Math.min(1200,Math.trunc(Number(url.searchParams.get("count")))||650)),key=`${instrument}|${granularity}`,cached=candleCache.get(key),now=Date.now();
+  const count=Math.max(60,Math.min(5000,Math.trunc(Number(url.searchParams.get("count")))||650)),key=`${instrument}|${granularity}`,cached=candleCache.get(key),now=Date.now();
   const select=value=>({...value,candles:(value.candles||[]).slice(-count)});
-  if(cached?.value&&cached.expires>now&&cached.count>=count)return json(select(cached.value));
-  if(cached?.promise&&cached.count>=count)return json(select(await cached.promise));
+  if(cached?.value&&cached.expires>now&&cached.count>=count){touchCandleCache(key,cached);return json(select(cached.value));}
+  if(cached?.promise&&cached.count>=count){touchCandleCache(key,cached);return json(select(await cached.promise));}
   const requestCount=Math.max(count,cached?.count||0),query=new URLSearchParams({price:"M",granularity,count:String(requestCount),smooth:"false"}),ttl={S5:4000,S30:15000,M1:30000,M5:120000,M15:300000,M30:600000,H1:1200000,H4:3600000,D:21600000,W:86400000}[granularity]||30000;
   const promise=oandaRequest(`/v3/instruments/${instrument}/candles?${query}`,token).then(payload=>({instrument,granularity,candles:normalizeCandles(payload),completedOnly:true}));
-  candleCache.set(key,{promise,count:requestCount,expires:0,value:cached?.value});
-  try{const value=await promise;candleCache.set(key,{value,count:requestCount,expires:Date.now()+ttl});if(candleCache.size>400)candleCache.delete(candleCache.keys().next().value);return json(select(value));}catch(error){if(candleCache.get(key)?.promise===promise)candleCache.delete(key);throw error;}
+  setCandleCache(key,{promise,count:requestCount,expires:0,value:cached?.value});
+  try{const value=await promise;setCandleCache(key,{value,count:requestCount,expires:Date.now()+ttl});return json(select(value));}catch(error){if(candleCache.get(key)?.promise===promise)candleCache.delete(key);throw error;}
 }
 
 
@@ -159,7 +164,7 @@ async function handlePlatformDiagnostic(env,url){
   if(!INSTRUMENTS.has(instrument)||!GRANULARITIES.has(granularity))return json({error:"Invalid diagnostic instrument or granularity."},400);
   const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId),summaryStart=Date.now();
   const summary=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/summary`,token),summaryLatencyMs=Date.now()-summaryStart,candleStart=Date.now(),candles=await oandaRequest(`/v3/instruments/${instrument}/candles?price=M&granularity=${granularity}&count=60&smooth=false`,token),candleLatencyMs=Date.now()-candleStart,engineResponse=await env.HTL_ENGINE.getByName("live").fetch("https://engine/status"),engine=await engineResponse.json().catch(()=>({}));
-  return json({deployment:deploymentMetadata(env),time:new Date().toISOString(),totalLatencyMs:Date.now()-started,worker:{oandaActive,oandaQueued:oandaWaiters.length,maxConcurrency:OANDA_MAX_CONCURRENCY,requestTimeoutMs:OANDA_REQUEST_TIMEOUT_MS,candleCacheEntries:candleCache.size,telemetry:oandaTelemetry},oanda:{accountSuffix:String(accountId).slice(-3),summaryLatencyMs,candleLatencyMs,completedCandles:normalizeCandles(candles).length,NAV:summary.account?.NAV||null,marginAvailable:summary.account?.marginAvailable||null},engine:{reachable:engineResponse.ok,armed:engine.armed,running:engine.running,lastRun:engine.lastRun,lastError:engine.lastError,optimizerCoverage:engine.optimizerCoverage,optimizerTotal:engine.optimizerTotal,optimizerLastError:engine.optimizerLastError,mtfCoverage:engine.mtfCoverage,pendingOrders:engine.pendingOrders},cloneAssessment:{structuredCloneCalls:0,applicable:false,verdict:"No structuredClone hot path exists in this repository."}});
+  return json({deployment:deploymentMetadata(env),time:new Date().toISOString(),totalLatencyMs:Date.now()-started,worker:{oandaActive,oandaQueued:oandaWaiters.length,maxConcurrency:OANDA_MAX_CONCURRENCY,requestTimeoutMs:OANDA_REQUEST_TIMEOUT_MS,candleCacheEntries:candleCache.size,candleCacheBars:candleCacheBarCount(),candleCacheMaxEntries:CANDLE_CACHE_MAX_ENTRIES,candleCacheMaxBars:CANDLE_CACHE_MAX_BARS,telemetry:oandaTelemetry},oanda:{accountSuffix:String(accountId).slice(-3),summaryLatencyMs,candleLatencyMs,completedCandles:normalizeCandles(candles).length,NAV:summary.account?.NAV||null,marginAvailable:summary.account?.marginAvailable||null},engine:{reachable:engineResponse.ok,armed:engine.armed,running:engine.running,lastRun:engine.lastRun,lastError:engine.lastError,optimizerCoverage:engine.optimizerCoverage,optimizerTotal:engine.optimizerTotal,optimizerLastError:engine.optimizerLastError,mtfCoverage:engine.mtfCoverage,pendingOrders:engine.pendingOrders},cloneAssessment:{structuredCloneCalls:0,applicable:false,verdict:"No structuredClone hot path exists in this repository."}});
 }
 
 async function handlePricingStream(env,url) {
