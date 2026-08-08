@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: 24
       - name: Apply forensic connection recovery migration
-        run: node scripts/migrate-forensic-connect-recovery.mjs
+        run: |
+          node scripts/migrate-forensic-connect-recovery.mjs
+          node scripts/migrate-forensic-verdict.mjs
       - name: Install dependencies
         run: npm ci
       - name: Generate Wrangler Types
