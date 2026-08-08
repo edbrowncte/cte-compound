@@ -1,0 +1,36 @@
+name: Migrate independent chart controls
+
+on:
+  push:
+    branches:
+      - fix/independent-chart-controls
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/independent-chart-controls
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply migration
+        run: node scripts/migrate-independent-chart-controls.mjs
+      - name: Verify repository
+        run: npm run check
+      - name: Commit migrated source
+        run: |
+          if git diff --quiet; then
+            echo "No migration diff."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/index.html
+          git commit -m "fix: make analytical charts independently configurable"
+          git push origin HEAD:fix/independent-chart-controls
