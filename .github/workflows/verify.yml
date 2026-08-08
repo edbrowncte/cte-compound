@@ -26,6 +26,7 @@ jobs:
         run: |
           node scripts/migrate-production-auto-session.mjs
           node scripts/migrate-production-session-cleanup.mjs
+          node scripts/migrate-production-test-order.mjs
       - name: Install dependencies
         run: npm ci
       - name: Generate Wrangler Types
