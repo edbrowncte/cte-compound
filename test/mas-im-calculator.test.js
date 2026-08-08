@@ -45,7 +45,7 @@ function eventSeries(tf,rows,count=14){
 }
 
 test("v2 uses the complete S5-to-W hierarchy",()=>{
-  assert.equal(MAS_IM_VERSION,"MAS_ANTAGONIST_PRESSURE@2.0.0");
+  assert.equal(MAS_IM_VERSION,"MAS_ANTAGONIST_PRESSURE@2.1.0");
   assert.deepEqual(MAS_IM_TIMEFRAMES,["S5","S30","M1","M5","M15","M30","H1","H4","D","W"]);
   assert.deepEqual(timeframeHierarchy("D"),["D","W"]);
   assert.deepEqual(timeframeHierarchy("H1"),["H1","H4","D","W"]);
@@ -124,6 +124,16 @@ test("all-up trend is supporting force for BUY and antagonist force for SELL",()
   assert.equal(sell.IM,0);
   assert.equal(buy.TYPE,"TREND_FOLLOWING");
   assert.equal(sell.TYPE,"REVERSION");
+});
+
+test("trend-aligned pressure reports no future transition probability or required IM",()=>{
+  const source=monotonicCache(),result=calculateMASIMPressure("EUR_USD","H1",source,{direction:1});
+  assert.equal(result.REGIME,"TREND_ALIGNED");
+  assert.equal(result.TRANSITION_STATE,"ALREADY_ALIGNED");
+  assert.ok(Number.isNaN(result.TRANSITION_PROBABILITY));
+  assert.ok(Number.isNaN(result.REQUIRED_IM));
+  assert.equal(result.IM_OVER_MAS,Infinity);
+  assert.equal(result.MODEL_RATIO,20);
 });
 
 test("empirical transition threshold separates successful pressure ratios when history permits",()=>{
