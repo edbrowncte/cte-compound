@@ -7,7 +7,7 @@ const originalFetch=globalThis.fetch;
 const masImSource=await readFile(new URL("../public/mas-im-calculator.js",import.meta.url),"utf8");
 const source=(await readFile(new URL("../public/index.html",import.meta.url),"utf8"))
   .replace('<script src="/mas-im-calculator.js"></script>',`<script>${masImSource}</script>`)
-  .replace("CANDLE_TIMEOUT_MS=25000","CANDLE_TIMEOUT_MS=40")
+  .replace("CANDLE_TIMEOUT_MS=55000","CANDLE_TIMEOUT_MS=40")
   .replace(/;\s*void connect\(\);\s*<\/script>/,";</script>");
 
 const candleRequests=[];
@@ -78,6 +78,9 @@ try{
 
   candleShape="both";document.getElementById("refreshEventChart").click();
   await waitFor(()=>!document.getElementById("refreshEventChart").disabled&&document.getElementById("eventChartInstrument").textContent==="EUR/USD","event chart refresh");
+  assert.equal(document.querySelectorAll("#eventScheduleBody tr[data-pair]").length,0,"Refreshing the independent HTL chart must not mutate the HTL schedule");
+  document.getElementById("loadEvents").click();
+  await waitFor(()=>!document.getElementById("loadEvents").disabled&&document.getElementById("eventScheduleStatus").textContent.includes("HTL schedule"),"HTL schedule independent load",20000);
   assert.ok(document.querySelectorAll("#eventScheduleBody tr[data-pair]").length>=1);
 
   await waitFor(()=>!document.getElementById("refreshSchedule").disabled,"focused schedule completion");
@@ -98,7 +101,7 @@ try{
   document.getElementById("connectButton").click();await waitFor(()=>document.getElementById("connectButton").textContent==="TEST","connection retest");
   assert.equal(document.getElementById("accountFacts").hidden,false);assert.equal(document.getElementById("refreshChart").disabled,false);
   assert.equal(browserErrors.length,0,browserErrors.map(error=>error.message).join("\n"));
-  console.log("DOM connection, Refresh chart, normalized candle compatibility, schedule, event refresh, timeout, abort, and minimum-unit behavior verified.");
+  console.log("DOM connection, independent HTL chart/schedule loading, normalized candle compatibility, schedule, timeout, abort, and minimum-unit behavior verified.");
 }finally{
   document.getElementById("disconnectButton")?.click();dom.window.close();
   globalThis.fetch=originalFetch;
