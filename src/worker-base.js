@@ -140,7 +140,7 @@ async function handleManualOrder(request,env) {
 async function handleCandles(env,url) {
   const {token}=credentials(env),instrument=(url.searchParams.get("instrument")||"").toUpperCase(),granularity=(url.searchParams.get("granularity")||"").toUpperCase();
   if(!INSTRUMENTS.has(instrument)||!GRANULARITIES.has(granularity)) return json({error:"Invalid instrument or granularity."},400);
-  const count=Math.max(60,Math.min(1200,Math.trunc(Number(url.searchParams.get("count")))||650)),key=`${instrument}|${granularity}`,cached=candleCache.get(key),now=Date.now();
+  const count=Math.max(60,Math.min(5000,Math.trunc(Number(url.searchParams.get("count")))||650)),key=`${instrument}|${granularity}`,cached=candleCache.get(key),now=Date.now();
   const select=value=>({...value,candles:(value.candles||[]).slice(-count)});
   if(cached?.value&&cached.expires>now&&cached.count>=count)return json(select(cached.value));
   if(cached?.promise&&cached.count>=count)return json(select(await cached.promise));
