@@ -5,6 +5,7 @@ const engine=await readFile(new URL("../src/engine-certified-execution.js",impor
 const worker=await readFile(new URL("../src/worker-base.js",import.meta.url),"utf8");
 const html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");
 const calculator=await readFile(new URL("../public/mas-im-calculator.js",import.meta.url),"utf8");
+const mentor=await readFile(new URL("../public/market-mentor.js",import.meta.url),"utf8");
 
 assert.doesNotMatch(engine,/evaluation\/history/,"certified engine must not expose obsolete slope-history API");
 assert.doesNotMatch(engine,/slopeHistory/,"certified tick must not maintain obsolete raw slope histories");
@@ -12,7 +13,9 @@ assert.doesNotMatch(engine,/lastCandleTime/,"certified tick must not poll Evalua
 assert.doesNotMatch(worker,/api\/evaluation\/history/,"Worker must not proxy the retired evaluation history route");
 assert.doesNotMatch(html,/api\/evaluation\/history/,"Evaluation UI must be self-contained on canonical live candle data");
 assert.match(html,/\/mas-im-calculator\.js/,"Evaluation UI must load the canonical MAS\/IM calculator");
+assert.match(html,/\/market-mentor\.js/,"Evaluation UI must load the proactive Market Mentor");
 assert.match(html,/calculateMASIMPressure/,"Evaluation UI must use antagonist-pressure MAS\/IM v2");
+assert.match(html,/CTEMarketMentor\.update/,"Evaluation refresh must proactively update the Market Mentor");
 assert.match(html,/evaluationPriceCache/,"Evaluation UI must assemble its live multitimeframe candle cache");
 assert.match(html,/sort-masRoc/,"Evaluation table must expose MAS acceleration\/deterioration");
 assert.match(html,/sort-imRoc/,"Evaluation table must expose IM acceleration\/deterioration");
@@ -26,9 +29,13 @@ assert.match(html,/<option value="S5">S5<\/option>/,"Evaluation must include S5"
 assert.match(html,/<option value="S30">S30<\/option>/,"Evaluation must include S30");
 assert.doesNotMatch(html,/id="sort-mas_z"/,"legacy MAS-Z table definition must not return");
 assert.doesNotMatch(html,/id="evalMetricMasZ"/,"legacy MAS-Z summary card must not return");
-assert.match(calculator,/MAS_ANTAGONIST_PRESSURE@2\.0\.0/,"canonical calculator must identify MAS v2");
+assert.match(calculator,/MAS_ANTAGONIST_PRESSURE@2\.1\.0/,"canonical calculator must identify MAS v2.1");
+assert.match(calculator,/TRANSITION_STATE:transitionState/,"calculator must distinguish already-aligned from future transition probability");
 assert.match(calculator,/TIMESTAMP_SYNCHRONIZED_HIERARCHICAL_PRESSURE/,"calculator must declare timestamp synchronization");
 assert.match(calculator,/masWeight=index\+1,imWeight=n-index/,"calculator must retain exact reverse MAS\/IM cadence");
 assert.match(calculator,/Required IM|REQUIRED_IM/,"calculator must expose transition-force requirement");
+assert.match(mentor,/denominator collapse, not infinite market strength/,"mentor must explain infinity correctly");
+assert.match(mentor,/composite strength—not IM\/MAS alone/,"mentor must explain four-card rotations as composite rankings");
+assert.match(mentor,/MENTOR_ALERT/,"mentor must emit material-result alerts through the existing ledger notification path");
 
-console.log("MAS antagonist-pressure Evaluation runtime, hierarchy, acceleration, event-power, and transition diagnostics verified.");
+console.log("MAS antagonist-pressure Evaluation runtime, proactive mentoring, hierarchy, acceleration, event-power, and transition diagnostics verified.");
