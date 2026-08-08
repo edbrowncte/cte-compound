@@ -50,7 +50,7 @@ const dom=new JSDOM(source,{url:origin,runScripts:"dangerously",pretendToBeVisua
       const instrument=url.searchParams.get("instrument")||"",granularity=url.searchParams.get("granularity")||"",count=Number(url.searchParams.get("count")||0),key=`${instrument}|${granularity}`;
       candleRequests.push({instrument,granularity,count,time:Date.now()});
       if(key===hangKey)return new Promise((_,reject)=>{const abort=()=>reject(new DOMException("Aborted","AbortError"));if(init.signal?.aborted)abort();else init.signal?.addEventListener("abort",abort,{once:true});});
-      if(instrument==="EUR_USD"&&(granularity==="M15"||granularity==="M30"))return json({instrument,granularity,candles:makeCandles(Math.max(180,Math.min(count||180,240))),completedOnly:true});
+      if((count>=650||instrument==="EUR_USD")&&(granularity==="M15"||granularity==="M30"))return json({instrument,granularity,candles:makeCandles(Math.max(180,Math.min(count||180,240))),completedOnly:true});
       return json({instrument,granularity,candles:[],completedOnly:true});
     }
     throw new Error(`Unexpected browser request ${url}`);
