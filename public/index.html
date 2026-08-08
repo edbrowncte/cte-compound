@@ -665,6 +665,7 @@
   </div>
 
   <script src="/mas-im-calculator.js"></script>
+  <script src="/market-mentor.js"></script>
   <script>
   "use strict";
 
@@ -1366,6 +1367,7 @@
     state.evaluationTableData=results;
     renderEvaluationTable();
     renderFourSlotRotator();
+    if(globalThis.CTEMarketMentor)void CTEMarketMentor.update({rows:state.evaluationTableData,slots:evaluationRotatorSlots(),selectedPair:state.selectedInstrument,timeframe:activeTf,connected:state.connected});
   }
 
   function evaluationRotatorSlots(){
@@ -1380,7 +1382,7 @@
   }
 
   function renderFourSlotRotator(){
-    const fmt=(value,digits=2)=>Number.isFinite(value)?value.toFixed(digits):value===Infinity?"∞":"—",pct=value=>Number.isFinite(value)?`${(value*100).toFixed(1)}%`:"—",slots=evaluationRotatorSlots();
+    const fmt=(value,digits=2)=>Number.isFinite(value)?value.toFixed(digits):value===Infinity?"∞ (MAS≈0)":"—",pct=value=>Number.isFinite(value)?`${(value*100).toFixed(1)}%`:"—",slots=evaluationRotatorSlots();
     el("fourSlotRotator").innerHTML=slots.map((slot,index)=>{
       const c=slot.candidate;
       if(!c)return `<div class="fact" style="border:1px solid var(--line);border-radius:5px;padding:10px;background:#0c1219;opacity:.6;"><span style="font-size:8px;color:var(--muted);">${slot.title}</span><div style="font-size:11px;font-weight:bold;margin-top:4px;">No Candidate Found</div></div>`;
@@ -1391,7 +1393,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px;font-size:9px;">
           <div>MAS <b>${fmt(c.mas,3)}</b></div><div>IM <b>${fmt(c.im,3)}</b></div>
           <div>IM/MAS <b>${fmt(c.ratio,2)}</b></div><div>Ratio ROC <b>${fmt(c.ratioRoc,3)}</b></div>
-          <div>Event Z <b>${fmt(c.eventAngleZ,2)}</b></div><div>Transition <b>${pct(c.transitionProbability)}</b></div>
+          <div>Event Z <b>${fmt(c.eventAngleZ,2)}</b></div><div>Transition <b>${c.regime==="TREND_ALIGNED"?"ALIGNED":pct(c.transitionProbability)}</b></div>
         </div>
         <div style="margin-top:5px;font-size:8px;color:var(--muted);">${String(c.regime||"NEUTRAL").replaceAll("_"," ")}</div>
         <button type="button" class="connect" style="width:100%;margin-top:8px;padding:4px;font-size:9px;" onclick="confirmRotatorSlot(event,${index})">Confirm</button>
@@ -1406,7 +1408,7 @@
     const slot=getRotatorSlot(index),c=slot?.candidate;
     if(!c)return;
     state.selectedInstrument=c.pair;state.selectedTimeframe=c.timeframe;
-    const ratio=Number.isFinite(c.ratio)?c.ratio.toFixed(2):c.ratio===Infinity?"∞":"—";
+    const ratio=Number.isFinite(c.ratio)?c.ratio.toFixed(2):c.ratio===Infinity?"∞ (MAS≈0)":"—";
     el("evalChartTitle").textContent=`Preview: ${formatPair(c.pair)} ${c.timeframe} ${signalWord(c.signal)} · MAS ${Number.isFinite(c.mas)?c.mas.toFixed(3):"—"} · IM ${Number.isFinite(c.im)?c.im.toFixed(3):"—"} · R ${ratio} · ${String(c.regime).replaceAll("_"," ")}`;
     el("evalConfirmButton").style.display="inline-block";el("evalChartPair").value=c.pair;el("evalChartTimeframe").value=c.timeframe;
     void loadEvalChartData(c.pair,c.timeframe);renderFourSlotRotator();
@@ -1441,7 +1443,7 @@
       const fmt=(value,digits=3)=>Number.isFinite(value)?value.toFixed(digits):value===Infinity?"∞":"—";
       el("evalMetricSignal").textContent=signalWord(direction);el("evalMetricSignal").className=directionClass(direction);
       el("evalMetricMas").textContent=fmt(metrics?.MAS);el("evalMetricIm").textContent=fmt(metrics?.IM);el("evalMetricRatio").textContent=fmt(metrics?.IM_OVER_MAS,2);
-      el("evalMetricRequiredIm").textContent=fmt(metrics?.REQUIRED_IM);el("evalMetricTransition").textContent=Number.isFinite(metrics?.TRANSITION_PROBABILITY)?`${(metrics.TRANSITION_PROBABILITY*100).toFixed(1)}%`:"—";
+      el("evalMetricRequiredIm").textContent=metrics?.REGIME==="TREND_ALIGNED"?"—":fmt(metrics?.REQUIRED_IM);el("evalMetricTransition").textContent=metrics?.REGIME==="TREND_ALIGNED"?"ALIGNED":Number.isFinite(metrics?.TRANSITION_PROBABILITY)?`${(metrics.TRANSITION_PROBABILITY*100).toFixed(1)}%`:"—";
       el("evalMetricRegime").textContent=String(metrics?.REGIME||"—").replaceAll("_"," ");el("evalMetricPipsHour").textContent=fmt(metrics?.PIPS_PER_HOUR,1);
       if(metrics?.hierarchy?.length)el("evalChartSubtitle").textContent=`${metrics.hierarchy.join(" → ")} · timestamp-synchronized · MAS top-down / IM reverse cadence`;
       el("evalChartMessage").hidden=candlesList.length>0;drawEvalCharts();drawWeeklyCognition(pair,metrics);
@@ -1613,12 +1615,12 @@
     filtered.sort((a,b)=>{const av=a[key],bv=b[key];if(typeof av==="string"||typeof bv==="string")return String(av??"").localeCompare(String(bv??""))*direction;const aMissing=av===null||av===undefined||Number.isNaN(av),bMissing=bv===null||bv===undefined||Number.isNaN(bv);if(aMissing&&bMissing)return a.pair.localeCompare(b.pair);if(aMissing)return 1;if(bMissing)return-1;if(av===bv)return a.pair.localeCompare(b.pair);return(av-bv)*direction;});
     const headers={pair:"Pair",timeframe:"Signal TF",signal:"Signal",mas:"MAS",im:"IM",ratio:"IM/MAS",masRoc:"MAS ROC",imRoc:"IM ROC",ratioRoc:"Ratio ROC",eventAngleZ:"Event Angle Z",convexity:"Convexity",r2:"R²",fStat:"F",pValue:"Significance (p)",pipsPerHour:"Pips/Hr",requiredIm:"Required IM",transitionProbability:"Transition P",regime:"Regime"};
     for(const[k,label]of Object.entries(headers)){const th=el(`sort-${k}`);if(th)th.textContent=state.evalSortKey===k?`${label} ${state.evalSortDirection>0?"▲":"▼"}`:label;}
-    const fmt=(value,digits=2)=>Number.isFinite(value)?value.toFixed(digits):value===Infinity?"∞":"—",pct=value=>Number.isFinite(value)?`${(value*100).toFixed(1)}%`:"—";
+    const fmt=(value,digits=2)=>Number.isFinite(value)?value.toFixed(digits):value===Infinity?"∞ (MAS≈0)":"—",pct=value=>Number.isFinite(value)?`${(value*100).toFixed(1)}%`:"—";
     el("evalTableBody").innerHTML=filtered.map(row=>`<tr style="cursor:pointer;${row.pair===state.selectedInstrument?"background:rgba(215,168,92,.14);":""}" onclick="selectEvalTablePair('${row.pair}')">
       <td><b>${formatPair(row.pair)}</b></td><td>${row.timeframe}</td><td class="${directionClass(row.signal)}"><b>${signalWord(row.signal)}</b></td>
       <td>${fmt(row.mas,3)}</td><td>${fmt(row.im,3)}</td><td>${fmt(row.ratio,2)}</td><td>${fmt(row.masRoc,4)}</td><td>${fmt(row.imRoc,4)}</td><td>${fmt(row.ratioRoc,4)}</td>
       <td>${fmt(row.eventAngleZ,2)}</td><td>${fmt(row.convexity,2)}</td><td>${fmt(row.r2,2)}</td><td>${fmt(row.fStat,2)}</td><td>${fmt(row.pValue,4)}</td><td>${fmt(row.pipsPerHour,1)}</td>
-      <td>${fmt(row.requiredIm,3)}</td><td>${pct(row.transitionProbability)}</td><td>${String(row.regime||"NEUTRAL").replaceAll("_"," ")}</td></tr>`).join("")||`<tr><td colspan="18">No synchronized MAS/IM data available for ${activeTf}</td></tr>`;
+      <td>${row.regime==="TREND_ALIGNED"?"—":fmt(row.requiredIm,3)}</td><td>${row.regime==="TREND_ALIGNED"?"ALIGNED":pct(row.transitionProbability)}</td><td>${String(row.regime||"NEUTRAL").replaceAll("_"," ")}</td></tr>`).join("")||`<tr><td colspan="18">No synchronized MAS/IM data available for ${activeTf}</td></tr>`;
   }
 
   function sortEvalTable(key) {

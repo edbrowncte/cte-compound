@@ -1,7 +1,7 @@
 (function installMasIm(global){
   "use strict";
 
-  const VERSION="MAS_ANTAGONIST_PRESSURE@2.0.0";
+  const VERSION="MAS_ANTAGONIST_PRESSURE@2.1.0";
   const PIP_SIZE={USD_JPY:.01,EUR_JPY:.01,GBP_JPY:.01,AUD_JPY:.01,NZD_JPY:.01,CAD_JPY:.01,CHF_JPY:.01,default:.0001};
   const MAS_IM_TIMEFRAMES=Object.freeze(["S5","S30","M1","M5","M15","M30","H1","H4","D","W"]);
   const TF_MS=Object.freeze({S5:5000,S30:30000,M1:60000,M5:300000,M15:900000,M30:1800000,H1:3600000,H4:14400000,D:86400000,W:604800000});
@@ -290,7 +290,7 @@
     }
     const masSeries=timeline.map(state=>state.MAS),imSeries=timeline.map(state=>state.IM),ratioSeries=timeline.map(state=>state.MODEL_RATIO),masZSeries=causalZSeries(masSeries,historyLimit),imZSeries=causalZSeries(imSeries,historyLimit),masRoc=roc(masSeries,rocWindow),imRoc=roc(imSeries,rocWindow),ratioRoc=roc(ratioSeries,rocWindow);
 
-    const events=normalizeEvents(options.events,timeframe,anchorMs),eventPower=eventPowerDiagnostics(events,historyLimit),samples=transitionSamples(seriesByTf,hierarchy,activeSeries,events),threshold=learnTransitionThreshold(samples),probability=current.macroDirection===direction?1:transitionProbability(samples,current.MODEL_RATIO),requiredIm=current.macroDirection===direction?0:threshold.threshold*current.MAS,selected=perTF[timeframe]||{},regime=classifyRegime(current,direction,threshold.threshold,masRoc,imRoc,ratioRoc),type=current.macroDirection===direction?"TREND_FOLLOWING":"REVERSION";
+    const events=normalizeEvents(options.events,timeframe,anchorMs),eventPower=eventPowerDiagnostics(events,historyLimit),samples=transitionSamples(seriesByTf,hierarchy,activeSeries,events),threshold=learnTransitionThreshold(samples),transitionState=current.macroDirection===direction?"ALREADY_ALIGNED":current.macroDirection===0?"NO_DOMINANT_MACRO":"OPPOSITION_ACTIVE",probability=transitionState==="OPPOSITION_ACTIVE"?transitionProbability(samples,current.MODEL_RATIO):NaN,requiredIm=transitionState==="OPPOSITION_ACTIVE"?threshold.threshold*current.MAS:NaN,selected=perTF[timeframe]||{},regime=classifyRegime(current,direction,threshold.threshold,masRoc,imRoc,ratioRoc),type=current.macroDirection===direction?"TREND_FOLLOWING":"REVERSION";
 
     return{
       version:VERSION,pair,timeframe,signalDirection:direction,hierarchy,perTF,
@@ -298,11 +298,11 @@
       MAS_Z:masZSeries.at(-1),IM_Z:imZSeries.at(-1),MAS_ROC:masRoc,IM_ROC:imRoc,RATIO_ROC:ratioRoc,
       EVENT_VELOCITY:eventPower.eventVelocity,EVENT_ANGLE_Z:eventPower.eventAngleZ,EVENT_ANGLE:eventPower.eventAngle,CONVEXITY:eventPower.convexity,
       R2:selected.r2??NaN,F_STAT:selected.fStat??NaN,P_VALUE:selected.pValue??NaN,PIPS_PER_HOUR:selected.pipsPerHour??NaN,
-      REQUIRED_IM:requiredIm,TRANSITION_THRESHOLD:threshold.threshold,TRANSITION_THRESHOLD_SOURCE:threshold.source,TRANSITION_PROBABILITY:probability,TRANSITION_SAMPLE_COUNT:threshold.samples,TRANSITION_SUCCESS_COUNT:threshold.positives,
+      REQUIRED_IM:requiredIm,TRANSITION_THRESHOLD:threshold.threshold,TRANSITION_THRESHOLD_SOURCE:threshold.source,TRANSITION_STATE:transitionState,TRANSITION_PROBABILITY:probability,TRANSITION_SAMPLE_COUNT:threshold.samples,TRANSITION_SUCCESS_COUNT:threshold.positives,
       REGIME:regime,TYPE:type,macroForce:current.macroForce,macroDirection:current.macroDirection,currentFrames:current.perFrame,
       MAS_SERIES:masSeries,IM_SERIES:imSeries,RATIO_SERIES:ratioSeries,MAS_Z_SERIES:masZSeries,IM_Z_SERIES:imZSeries,
       historyMode:"TIMESTAMP_SYNCHRONIZED_HIERARCHICAL_PRESSURE",
-      summary:{pair,timeframe,signal:direction,mas:current.MAS,im:current.IM,ratio:current.IM_OVER_MAS,masRoc,imRoc,ratioRoc,eventAngleZ:eventPower.eventAngleZ,convexity:eventPower.convexity,r2:selected.r2??NaN,fStat:selected.fStat??NaN,pValue:selected.pValue??NaN,pipsPerHour:selected.pipsPerHour??NaN,requiredIm,transitionProbability:probability,regime}
+      summary:{pair,timeframe,signal:direction,mas:current.MAS,im:current.IM,ratio:current.IM_OVER_MAS,masRoc,imRoc,ratioRoc,eventAngleZ:eventPower.eventAngleZ,convexity:eventPower.convexity,r2:selected.r2??NaN,fStat:selected.fStat??NaN,pValue:selected.pValue??NaN,pipsPerHour:selected.pipsPerHour??NaN,requiredIm,transitionState,transitionProbability:probability,regime}
     };
   }
 
