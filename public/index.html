@@ -32,11 +32,11 @@
     .header-action { padding:5px 8px; font-size:9px; }
     .topbar:fullscreen { overflow:auto; align-content:start; background:#0b1017; }
     .topbar.collapsed { grid-template-columns:1fr; }
-    .topbar.collapsed form,.topbar.collapsed .account-facts,.topbar.collapsed .positions-panel,.topbar.collapsed .automation-panel,.topbar.collapsed .subtitle { display:none; }
+    .topbar.collapsed #connectionRuntime,.topbar.collapsed .account-facts,.topbar.collapsed .positions-panel,.topbar.collapsed .automation-panel,.topbar.collapsed .subtitle { display:none; }
     .eyebrow { color:var(--accent); font-size:10px; font-weight:900; letter-spacing:.18em; text-transform:uppercase; }
     h1 { margin:5px 0 4px; font-size:clamp(20px,2.2vw,34px); line-height:1.05; letter-spacing:.03em; }
     .subtitle { margin:0; color:var(--muted); font-size:12px; }
-    .credential-grid { display:grid; grid-template-columns:minmax(160px,.8fr) minmax(220px,1.25fr) auto auto; gap:8px; align-items:end; }
+    .credential-grid { display:grid; grid-template-columns:minmax(160px,.8fr) minmax(220px,1.25fr); gap:8px; align-items:end; }
     .field { display:grid; gap:4px; min-width:0; }
     .field span, .field label { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
     .field input { width:100%; }
@@ -278,7 +278,7 @@
         </div>
       </section>
 
-      <form id="credentialForm" autocomplete="off" novalidate>
+      <section id="connectionRuntime" aria-label="Server-managed live OANDA session">
         <div class="credential-grid">
           <div class="field">
             <span>OANDA account</span>
@@ -290,14 +290,12 @@
             <strong class="runtime-value" id="oandaApiState">Server managed</strong>
             <input id="oandaApiToken" type="hidden">
           </div>
-          <button class="connect" id="connectButton" type="submit">TEST</button>
-          <button class="disconnect" id="disconnectButton" type="button" disabled>Disconnect</button>
           <div class="connection-line" role="status" aria-live="polite">
             <span class="status-dot" id="statusDot"></span>
-            <span id="connectionStatus">Not connected</span>
+            <span id="connectionStatus">Initializing server-managed live session…</span>
           </div>
         </div>
-      </form>
+      </section>
       <details class="data-details" id="platformDiagnosticDetails">
         <summary>Platform Diagnostic Scan</summary>
         <div class="date-range-controls"><button id="runPlatformDiagnostic" type="button">Run diagnostic scan</button><span class="date-range-scope" id="platformDiagnosticStatus">Not scanned</span></div>
@@ -699,6 +697,7 @@
 
   const state = {
     connected:false,
+    connectionLoading:false,
     tradeLongAvailable:0,
     tradeShortAvailable:0,
     tradeBusy:false,
@@ -1736,45 +1735,31 @@
     return normalizeInstrumentCandles(candles,instrument);
   }
 
-  async function connect(event) {
-    event?.preventDefault?.();
+  async function connect() {
+    if(state.connected||state.connectionLoading)return;
+    state.connectionLoading=true;
     if(!state.preferencesLoaded)await loadPlatformPreferences();
-    const button=el("connectButton"),wasConnected=state.connected;
-    button.disabled=true;button.textContent="TESTING…";
-    setConnectionStatus(wasConnected?"Testing live OANDA connection…":"Connecting to live OANDA…");
+    setConnectionStatus("Initializing server-managed live OANDA session…");
     try {
       const response=await fetch("/api/oanda/connect",{headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store"}),{payload,diagnosticId}=await readApiResponse(response);
       if(!response.ok){const failure=new Error(apiFailureMessage(response,payload,diagnosticId));failure.payload=payload;failure.status=response.status;throw failure;}
       const accountId=payload.account?.id||"";
       el("oandaAccountId").value=accountId;applyAccountFacts(payload.account,accountId);
-      el("oandaAccountState").textContent=payload.account?.alias||accountId||"Connected";
-      el("oandaApiState").textContent="Connected through Worker";
-      if(wasConnected){setConnectionStatus("Live OANDA connection test passed · active session retained","connected");void loadTradeCapacity();return;}
+      el("oandaAccountState").textContent=payload.account?.alias||accountId||"Live account";
+      el("oandaApiState").textContent="Server managed · active";
       state.connected=true;
-      el("disconnectButton").disabled=false;el("refreshSchedule").disabled=false;el("refreshChart").disabled=false;el("refreshEventChart").disabled=false;el("loadEvents").disabled=false;
+      el("refreshSchedule").disabled=false;el("refreshChart").disabled=false;el("refreshEventChart").disabled=false;el("loadEvents").disabled=false;
       el("accountFacts").hidden=false;el("positionsPanel").hidden=false;el("automationPanel").hidden=false;
-      setConnectionStatus("Live OANDA connected · completed midpoint candles only","connected");
+      setConnectionStatus(`Live OANDA · •••${String(accountId).slice(-3)} · completed midpoint candles`,"connected");
       startPositionMonitor();
-      await Promise.all([loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";}),loadOptimizerRecords(),loadControlStatus().catch(() => {})]);
+      await Promise.all([loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";}),loadOptimizerRecords(),loadControlStatus().catch(()=>{})]);
       void loadTradingLedger();void loadEngineStatus();
-      await loadTradeCapacity();await loadChart();void loadSchedule("focused");setTimeout(()=>{if(state.connected&&!state.chartLoading)void runPlatformDiagnostic(false);},5000);
+      await loadTradeCapacity();await loadChart();void loadSchedule("focused");
     } catch (error) {
-      if(wasConnected){setConnectionStatus(`${error.message||"Connection test failed"} · active session retained`,"error");}
-      else{state.connected=false;el("accountFacts").hidden=true;el("positionsPanel").hidden=true;el("automationPanel").hidden=true;stopPositionMonitor();stopAdaptiveMonitor();setConnectionStatus(error.message||"OANDA connection failed.","error");setTimeout(()=>{if(!state.connected)void runPlatformDiagnostic(true);},250);}
-    } finally {button.disabled=false;button.textContent="TEST";}
-  }
-
-  function disconnect() {
-    state.scheduleController?.abort();state.chartController?.abort();state.eventScheduleController?.abort();state.eventChartController?.abort();
-    state.connected=false;clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=null;state.scheduleLoading=false;state.scheduleMode="";state.chartLoading=false;state.eventScheduleLoading=false;state.eventChartLoading=false;state.scheduleCandles.clear();state.scheduleEvaluations.clear();state.chartCache.clear();state.candleQueue=[];state.candleInflight.clear();state.eventLoadedKey="";state.eventFailures.clear();state.eventIndicatorCache.clear();
-    state.chartCandles=[]; state.chartAnalysis=null; state.eventData=null; state.eventHtl=null; state.eventEvents=[]; state.eventRows=[]; state.crosshair=null;state.tradeLongAvailable=0;state.tradeShortAvailable=0;state.tradeBusy=false;
-    el("accountFacts").hidden=true;
-    el("positionsPanel").hidden=true;el("automationPanel").hidden=true;stopPositionMonitor();stopAdaptiveMonitor();
-    el("connectButton").disabled=false;el("disconnectButton").disabled=true;el("refreshSchedule").disabled=true;el("refreshChart").disabled=true;el("refreshEventChart").disabled=true;el("loadEvents").disabled=true;
-    el("oandaAccountId").value=""; el("oandaApiToken").value="";el("oandaAccountState").textContent="Cloudflare secret";el("oandaApiState").textContent="Server managed";
-    el("factUnitsAvailable").textContent="—";el("tradeStatus").textContent="";el("eventChartInstrument").textContent="—";updateTradeButtons();
-    setConnectionStatus("Not connected");
-    resetMatrix(); updateChartSummary(); updateCompartments(); drawChart();
+      state.connected=false;el("accountFacts").hidden=true;el("positionsPanel").hidden=true;el("automationPanel").hidden=true;stopPositionMonitor();stopAdaptiveMonitor();
+      el("oandaAccountState").textContent="Cloudflare secret";el("oandaApiState").textContent="Server managed";
+      setConnectionStatus(error.message||"Live OANDA session unavailable.","error");
+    } finally {state.connectionLoading=false;}
   }
 
   function resetMatrix() {
@@ -2324,10 +2309,21 @@
 
   function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,MAX_ANALYTICAL_LENGTH)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventScheduleLoading)void loadEventForecast();if(state.connected&&!state.eventData&&!state.eventChartLoading)void refreshSelectedEventChart();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();}if(name==='evaluation'){const activeTf=el("evalTableTfFilter")?.value||"H1",chartPair=el("evalChartPair")?.value||state.selectedInstrument,chartTf=el("evalChartTimeframe")?.value||activeTf;void loadEvaluationData();void loadEvalChartData(chartPair,chartTf);void preloadEvaluationTimeframe(activeTf);setTimeout(()=>{drawEvalCharts();setupSyncedCrosshair();},50);}if(persist)queuePlatformPreferenceSave();}
 
+  function releaseBrowserSession(){
+    state.connected=false;
+    state.scheduleController?.abort();state.chartController?.abort();state.eventScheduleController?.abort();state.eventChartController?.abort();
+    clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=null;
+    state.scheduleLoading=false;state.scheduleMode="";state.chartLoading=false;state.eventScheduleLoading=false;state.eventChartLoading=false;
+    state.scheduleCandles.clear();state.scheduleEvaluations.clear();state.chartCache.clear();state.candleQueue=[];state.candleInflight.clear();
+    state.eventLoadedKey="";state.eventFailures.clear();state.eventIndicatorCache.clear();
+    stopPositionMonitor();stopAdaptiveMonitor();
+  }
+
   function pointerPosition(event) { const rect=el("chart").getBoundingClientRect(); return {x:event.clientX-rect.left,y:event.clientY-rect.top}; }
 
   function bindEvents() {
-    el("credentialForm").addEventListener("submit",connect);
+    window.addEventListener("pagehide",releaseBrowserSession);
+    window.addEventListener("pageshow",event=>{if(event.persisted&&!state.connected)void connect();});
     el("saveEngineConfig").addEventListener("click",saveEngineConfig);
     el("downloadTradingLedger").addEventListener("click",downloadTradingLedger);
     el("runPlatformDiagnostic").addEventListener("click",()=>runPlatformDiagnostic(true));
@@ -2439,7 +2435,6 @@
       state.autoRotateMode = true;
       saveSelectedPairs();
     });
-    el("disconnectButton").addEventListener("click",disconnect);
     el("refreshSchedule").addEventListener("click",()=>loadSchedule("full"));
     el("refreshChart").addEventListener("click",()=>loadChart());
     el("scheduleStrategy").addEventListener("change",event=>{state.selectedScheduleStrategy=event.target.value;renderSchedule();renderMtfForecast();if(state.connected){void loadSchedule("focused");queueProgressiveSchedule(200);}queuePlatformPreferenceSave();});

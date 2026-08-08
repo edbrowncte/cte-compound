@@ -7,8 +7,7 @@ const originalFetch=globalThis.fetch;
 const masImSource=await readFile(new URL("../public/mas-im-calculator.js",import.meta.url),"utf8");
 const source=(await readFile(new URL("../public/index.html",import.meta.url),"utf8"))
   .replace('<script src="/mas-im-calculator.js"></script>',`<script>${masImSource}</script>`)
-  .replace("CANDLE_TIMEOUT_MS=55000","CANDLE_TIMEOUT_MS=40")
-  .replace(/;\s*void connect\(\);\s*<\/script>/,";</script>");
+  .replace("CANDLE_TIMEOUT_MS=55000","CANDLE_TIMEOUT_MS=40");
 
 const candleRequests=[];
 let candleShape="both";
@@ -64,7 +63,6 @@ const dom=new JSDOM(source,{url:origin,runScripts:"dangerously",pretendToBeVisua
 const {window}=dom,document=window.document;
 
 try{
-  document.getElementById("connectButton").click();
   await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.getElementById("metricTime").textContent!=="—"&&document.querySelector("#compartment-ASSET .badge").textContent!=="—","initial causal live chart");
   assert.equal(document.getElementById("minimumUnits").value,"1000");await waitFor(()=>document.getElementById("NemotronStatus").textContent==="Ready","Nemotron status rendering");
   document.getElementById("tradeUnits").value="999";document.getElementById("tradeUnits").dispatchEvent(new window.Event("input",{bubbles:true}));assert.equal(document.getElementById("tradeBuy").disabled,true);
@@ -98,11 +96,10 @@ try{
   assert.ok(!document.getElementById("chartMessage").textContent.includes("timed out"),"Aborted superseded chart must not display a false timeout");
   hangKey="";
 
-  document.getElementById("connectButton").click();await waitFor(()=>document.getElementById("connectButton").textContent==="TEST","connection retest");
-  assert.equal(document.getElementById("accountFacts").hidden,false);assert.equal(document.getElementById("refreshChart").disabled,false);
+  assert.equal(document.getElementById("accountFacts").hidden,false);assert.equal(document.getElementById("refreshChart").disabled,false);assert.equal(document.getElementById("connectButton"),null);
   assert.equal(browserErrors.length,0,browserErrors.map(error=>error.message).join("\n"));
   console.log("DOM connection, causal analytical chart, independent HTL chart/schedule loading, normalized candle compatibility, schedule, timeout, abort, and minimum-unit behavior verified.");
 }finally{
-  document.getElementById("disconnectButton")?.click();dom.window.close();
+  dom.window.close();
   globalThis.fetch=originalFetch;
 }
