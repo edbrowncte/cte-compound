@@ -183,7 +183,7 @@
     const velocity=[];
     for(let index=1;index<events.length;index++){
       const previous=events[index-1],current=events[index],hours=(current.observedAt-previous.observedAt)/3600000;
-      if(!(hours>0)&&!Number.isFinite(hours)){velocity.push(NaN);continue;}
+      if(!(hours>0)||!Number.isFinite(hours)){velocity.push(NaN);continue;}
       if(!Number.isFinite(previous.price)||!Number.isFinite(current.price)||previous.price<=0||current.price<=0){velocity.push(NaN);continue;}
       velocity.push(current.direction*Math.log(current.price/previous.price)/hours);
     }
