@@ -20,6 +20,11 @@ replace(
 'cold resolver failure before success');
 
 replace(
+`  response=await worker.fetch(browser("/api/oanda/connect"),envFor(configuredAlias));assert.equal(response.status,200);let payload=await response.json();`,
+`  response=await worker.fetch(browser("/api/oanda/connect"),envFor(configuredAlias));assert.equal(response.status,200);payload=await response.json();`,
+'reuse payload declaration');
+
+replace(
 `  // Account-list failure is now the attributable production bootstrap failure because inventory is the proven working selection path.
   mode="list-network";calls=[];response=await worker.fetch(browser("/api/oanda/connect"),envFor(configuredAlias));assert.equal(response.status,502);payload=await response.json();assert.equal(payload.code,"OANDA_NETWORK_FAILURE");assert.equal(payload.stage,"ACCOUNT_LIST");assert.equal(payload.attempts,3);
 
