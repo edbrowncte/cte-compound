@@ -65,14 +65,14 @@ const {window}=dom,document=window.document;
 
 try{
   document.getElementById("connectButton").click();
-  await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.getElementById("metricTime").textContent!=="—","initial live chart");
+  await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.getElementById("metricTime").textContent!=="—"&&document.querySelector("#compartment-ASSET .badge").textContent!=="—","initial causal live chart");
   assert.equal(document.getElementById("minimumUnits").value,"1000");await waitFor(()=>document.getElementById("NemotronStatus").textContent==="Ready","Nemotron status rendering");
   document.getElementById("tradeUnits").value="999";document.getElementById("tradeUnits").dispatchEvent(new window.Event("input",{bubbles:true}));assert.equal(document.getElementById("tradeBuy").disabled,true);
 
   candleShape="normalized";candleRequests.length=0;document.getElementById("refreshChart").click();
   await waitFor(()=>candleRequests.length>0,"Refresh chart request");
   assert.equal(candleRequests[0].instrument,"EUR_USD","Refresh chart must not pass MouseEvent as the instrument");
-  await waitFor(()=>!document.getElementById("refreshChart").disabled,"Refresh chart completion");
+  await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.querySelector("#compartment-ASSET .badge").textContent!=="—","causal Refresh chart completion");
   assert.notEqual(document.getElementById("metricTime").textContent,"—");
   assert.notEqual(document.querySelector("#compartment-ASSET .badge").textContent,"—");
 
@@ -101,7 +101,7 @@ try{
   document.getElementById("connectButton").click();await waitFor(()=>document.getElementById("connectButton").textContent==="TEST","connection retest");
   assert.equal(document.getElementById("accountFacts").hidden,false);assert.equal(document.getElementById("refreshChart").disabled,false);
   assert.equal(browserErrors.length,0,browserErrors.map(error=>error.message).join("\n"));
-  console.log("DOM connection, independent HTL chart/schedule loading, normalized candle compatibility, schedule, timeout, abort, and minimum-unit behavior verified.");
+  console.log("DOM connection, causal analytical chart, independent HTL chart/schedule loading, normalized candle compatibility, schedule, timeout, abort, and minimum-unit behavior verified.");
 }finally{
   document.getElementById("disconnectButton")?.click();dom.window.close();
   globalThis.fetch=originalFetch;
