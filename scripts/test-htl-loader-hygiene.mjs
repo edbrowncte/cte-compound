@@ -19,8 +19,12 @@ assert.match(html,/await runPool\(retryPairs,1,pair=>load/);
 assert.match(html,/state\.eventLoadedKey=loadKey/);
 assert.match(html,/state\.chartCache\.clear\(\)/);
 assert.match(html,/state\.eventFailures\.clear\(\)/);
-assert.doesNotMatch(html,/refreshSelectedEventChart\(\)[\s\S]{0,2500}state\.eventRows\.(?:push|splice)/);
-assert.doesNotMatch(html,/refreshSelectedEventChart\(\)[\s\S]{0,2500}renderEventSchedule\(\)/);
+const refreshStart=html.indexOf("async function refreshSelectedEventChart");
+const forecastStart=html.indexOf("async function loadEventForecast",refreshStart);
+assert.ok(refreshStart>=0&&forecastStart>refreshStart,"HTL chart/schedule loader functions must both exist");
+const refreshSource=html.slice(refreshStart,forecastStart);
+assert.doesNotMatch(refreshSource,/state\.eventRows/);
+assert.doesNotMatch(refreshSource,/renderEventSchedule\(\)/);
 assert.match(html,/const runJobs=async\(items,priority\)=>runPool\(items,priority>=50\?2:1/);
 
 console.log("HTL schedule/chart isolation, dynamic history, bounded concurrency, timeout alignment, partial-success retention, and session cache hygiene verified.");
