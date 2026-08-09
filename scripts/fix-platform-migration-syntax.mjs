@@ -8,7 +8,8 @@ const replacements=[
   ['\\`${event.profitPips>0?"+":""}\\${event.profitPips.toFixed(1)}\\`','(event.profitPips>0?"+":"")+event.profitPips.toFixed(1)'],
 ];
 for(const [from,to] of replacements){if(source.includes(from)){source=source.replace(from,to);changes++;}}
-const marker='"publish forecast model context");';
-const markerIndex=source.indexOf(marker);
-if(markerIndex>=0){const start=source.lastIndexOf('  source=mustReplace(source,',markerIndex);if(start>=0){source=source.slice(0,start)+source.slice(markerIndex+marker.length);changes++;}}
+for(const marker of ['"publish forecast model context");','"optimizer history UI");']){
+  const markerIndex=source.indexOf(marker);
+  if(markerIndex>=0){const start=source.lastIndexOf('  source=mustReplace(source,',markerIndex);if(start>=0){source=source.slice(0,start)+source.slice(markerIndex+marker.length);changes++;}}
+}
 if(!changes)console.log("Migration quoting/anchors already repaired.");else{fs.writeFileSync(path,source);console.log(`Repaired migration quoting/anchors (${changes} changes).`);}
