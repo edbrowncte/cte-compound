@@ -38,6 +38,23 @@ import {
 
 export const RUNTIME_OPTIMIZER_VERSION = 7;
 export const RUNTIME_OPTIMIZER_HISTORY_BARS = 5000;
+export const RUNTIME_OPTIMIZER_STORAGE_PREFIX = `optimizer:v${RUNTIME_OPTIMIZER_VERSION}:`;
+
+export function runtimeOptimizerStorageKey(datasetKey){return `${RUNTIME_OPTIMIZER_STORAGE_PREFIX}${datasetKey}`;}
+export async function loadRuntimeOptimizer(storage,{migrateLegacy=true}={}){
+  const records={},canList=typeof storage.list==="function";
+  if(canList){const listed=await storage.list({prefix:RUNTIME_OPTIMIZER_STORAGE_PREFIX});for(const [storageKey,record] of listed)records[storageKey.slice(RUNTIME_OPTIMIZER_STORAGE_PREFIX.length)]=record;}
+  const legacy=await storage.get("optimizer");
+  if(legacy&&typeof legacy==="object"){
+    for(const [datasetKey,record] of Object.entries(legacy)){
+      if(record?.version!==RUNTIME_OPTIMIZER_VERSION||record?.strategyEngineVersion!==STRATEGY_ENGINE_VERSION)continue;
+      if(!(datasetKey in records)){if(migrateLegacy&&canList)await storage.put(runtimeOptimizerStorageKey(datasetKey),record);records[datasetKey]=record;}
+    }
+    if(migrateLegacy&&canList)await storage.delete("optimizer");
+  }
+  return currentRuntimeOptimizer(records);
+}
+export async function saveRuntimeOptimizerRecord(storage,datasetKey,record){await storage.put(runtimeOptimizerStorageKey(datasetKey),record);return record;}
 
 export function currentRuntimeOptimizer(records){
   const now=Date.now();
@@ -228,7 +245,7 @@ export async function optimizedComputeConfiguration(engine, value = {}) {
     const optimized = optimizedOptimizeDataset(data, pair, timeframe);
     const stamp = data.at(-1)?.time || new Date().toISOString();
     stage = "durable-storage";
-    const records = (await engine.ctx.storage.get("optimizer")) || {};
+    const records = await loadRuntimeOptimizer(engine.ctx.storage);
     const key = `${pair}|${timeframe}`;
     const record = {
       version: RUNTIME_OPTIMIZER_VERSION,
@@ -253,7 +270,7 @@ export async function optimizedComputeConfiguration(engine, value = {}) {
       spreadAdjustedPerformance: { status: "SEPARATE_NOT_COMPUTED", rows: [] }
     };
     records[key] = record;
-    await engine.ctx.storage.put("optimizer", records);
+    await saveRuntimeOptimizerRecord(engine.ctx.storage,key,record);
     return { key, record };
   } catch (error) {
     if (!error.stage) error.stage = stage;
@@ -267,7 +284,7 @@ export async function optimizedOptimizeNext(engine, state, apiToken) {
   const pair = PAIRS[index % PAIRS.length];
   const timeframe = TIMEFRAMES[Math.floor(index / PAIRS.length)];
   const key = `${pair}|${timeframe}`;
-  const records = (await engine.ctx.storage.get("optimizer")) || {};
+  const records = await loadRuntimeOptimizer(engine.ctx.storage);
   const existing = records[key];
   state.optimizerCycleIndex = (index + 1) % total;
   if (existing?.version === RUNTIME_OPTIMIZER_VERSION && existing?.strategyEngineVersion === STRATEGY_ENGINE_VERSION && existing?.source === "COMPUTE_CONFIGURATION" && Date.now() - Date.parse(existing.computedAt || 0) < OPTIMIZER_TTL_MS) {
@@ -302,7 +319,7 @@ export async function optimizedOptimizeNext(engine, state, apiToken) {
     spreadAdjustedPerformance: { status: "SEPARATE_NOT_COMPUTED", rows: [] }
   };
   records[key] = record;
-  await engine.ctx.storage.put("optimizer", records);
+  await saveRuntimeOptimizerRecord(engine.ctx.storage,key,record);
   state.optimizerLastDataset = key;
   state.optimizerLastRun = new Date().toISOString();
   state.optimizerLastError = null;
