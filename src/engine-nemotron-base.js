@@ -8,6 +8,9 @@ const response=(value,status=200)=>new Response(JSON.stringify(value),{status,he
 const AI_MODEL="@cf/nvidia/nemotron-3-120b-a12b";
 const AI_TIMEOUT_MS=7000;
 const AI_POLICY="CAPITALIZATION_NEW_ENTRY_DISCRETION";
+const AI_TASK_NAME="AGE";
+const AI_TASK="ADMINISTRATING_GREAT_EXPECTATIONS";
+const AGE_MANDATE=AI_TASK;
 const MODEL_CONTEXT_MAX_AGE_MS=10*60*1000;
 
 function modelContextMatchesConfig(context,config){if(!context?.controls||!config)return false;const controls=context.controls,sameNumber=(left,right)=>Math.abs(Number(left)-Number(right))<1e-9;return controls.timeframe===config.timeframe&&controls.strategy===config.strategy&&controls.confirmationStrategy===config.confirmationStrategy&&sameNumber(controls.htlLength,config.htlLength)&&sameNumber(controls.filter,config.filter)&&controls.decisionMode===config.decisionMode&&controls.configurationSource===config.configurationSource;}
@@ -70,6 +73,8 @@ function attachNemotron(candidate,{status,reason,latencyMs,recommendedPair,invok
     Nemotron:{
       model:AI_MODEL,
       policy:AI_POLICY,
+      taskName:AI_TASK_NAME,
+      task:AI_TASK,
       invoked:Boolean(invoked),
       selected:status==="SELECTED",
       recommendedPair:recommendedPair||candidate.pair,
@@ -82,7 +87,7 @@ function attachNemotron(candidate,{status,reason,latencyMs,recommendedPair,invok
 
 // NEMOTRON_CANDIDATE_TOOL@3.0.0
 export { __platformTest as __horizonTest };
-export const __nemotronTest=Object.freeze({AI_MODEL,AI_TIMEOUT_MS,AI_POLICY,MODEL_CONTEXT_MAX_AGE_MS,modelContextMatchesConfig,capitalizationScore,deterministicCandidate,compactCandidate,parseAiResponse});
+export const __nemotronTest=Object.freeze({AI_MODEL,AI_TIMEOUT_MS,AI_POLICY,AI_TASK_NAME,AI_TASK,AGE_MANDATE,MODEL_CONTEXT_MAX_AGE_MS,modelContextMatchesConfig,capitalizationScore,deterministicCandidate,compactCandidate,parseAiResponse});
 
 export class HtlEngine extends HorizonEngine {
   async fetch(request) {
@@ -104,15 +109,15 @@ export class HtlEngine extends HorizonEngine {
     const engineState=(await this.ctx.storage.get("state"))||{},modelContext=modelContextFresh(engineState.modelContext,engineState.config||null),fallback=deterministicCandidate(candidates,modelContext),table=candidates.map(candidate=>compactCandidate(candidate,modelContext)),candidatePairs=table.map(item=>item.pair),started=Date.now();
     if(!this.env.AI){
       const reason="Workers AI binding unavailable; deterministic candidate ranking used";
-      await this.recordAiDecision({invoked:false,status:"AI_BINDING_UNAVAILABLE",model:AI_MODEL,policy:AI_POLICY,latencyMs:0,candidateCount:candidates.length,candidates:candidatePairs,selectedPair:fallback.pair,reason}).catch(()=>{});
+      await this.recordAiDecision({invoked:false,status:"AI_BINDING_UNAVAILABLE",model:AI_MODEL,policy:AI_POLICY,taskName:AI_TASK_NAME,task:AI_TASK,latencyMs:0,candidateCount:candidates.length,candidates:candidatePairs,selectedPair:fallback.pair,reason}).catch(()=>{});
       return attachNemotron(fallback,{status:"AI_BINDING_UNAVAILABLE",reason,latencyMs:0,recommendedPair:fallback.pair,invoked:false});
     }
 
     const schema={type:"object",additionalProperties:false,properties:{selectedPair:{type:"string",enum:candidatePairs},reason:{type:"string",maxLength:240}},required:["selectedPair","reason"]};
     const prompt={
       messages:[
-        {role:"system",content:"You are the internal CTE Capitalization Model. Your mandate is Capitalization and Account Value Proliferation. The III analytical suite qualifies signal structure but has no pair-selection discretion; you exercise pair discretion only among the supplied engine-qualified new-entry candidates. Rank risk-adjusted expected contribution to NAV and opportunity cost using multi-timeframe confirmation, optimizer net/score/win-rate/sample support, drawdown, MAS/IM pressure balance, regime, Event Angle Z/convexity, fit and pips-per-hour when available. Operate strictly from the active saved trading controls supplied in context; the candidate set already reflects that Event, MTF, or Combined execution lane. Existing positions are the capital currently occupied in the account and must be monitored as opportunity-cost context together with NAV and available margin. Select exactly one supplied candidate. Never invent a pair, change direction, alter units or risk controls, close/reverse positions, or change configuration. Return only the requested structured result."},
-        {role:"user",content:JSON.stringify({task:"select_one_new_entry_candidate_for_capitalization",mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",controls:modelContext?.controls||null,selectedPairs:modelContext?.selectedPairs||[],account:modelContext?.account||null,openPositions:modelContext?.openPositions||[],forecasts:modelContext?.forecasts||[],mtfForecasts:modelContext?.mtfForecasts||[],candidates:table})}
+        {role:"system",content:"You are Nemotron AGE — Administrating Great Expectations — inside the CTE Capitalization Model. Your mandate is Capitalization and Account Value Proliferation. Capital is not strategically held idle while FX markets are open. Existing positions are the capital currently occupied in the account and must continuously justify that capital by qualified expected productivity, while reversals and alternative qualified pairs compete for the same capital. The III analytical suite remains signal-qualification authority. Rank risk-adjusted expected contribution to NAV and opportunity cost using multi-timeframe confirmation, optimizer net/score/win-rate/sample support, drawdown, MAS/IM pressure balance, regime, Event Angle Z/convexity, fit and pips-per-hour when available. Operate strictly from the active saved trading controls. This invocation selects only among the supplied engine-qualified new-entry candidates; it does not itself close, reverse, resize, change risk controls, invent signals, or change configuration. Friday weekend policy is flat from 3:57 PM America/Chicago until Sunday market reopening. Select exactly one supplied candidate and return only the requested structured result."},
+        {role:"user",content:JSON.stringify({task:"AGE_SELECT_BEST_QUALIFIED_EXPECTATION",taskName:AI_TASK_NAME,taskDefinition:AI_TASK,ageMandate:AGE_MANDATE,mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",capitalPolicy:"DEPLOYED_IN_QUALIFIED_POSITIVE_EXPECTATION_OR_WEEKEND_FLAT",controls:modelContext?.controls||null,selectedPairs:modelContext?.selectedPairs||[],account:modelContext?.account||null,openPositions:modelContext?.openPositions||[],forecasts:modelContext?.forecasts||[],mtfForecasts:modelContext?.mtfForecasts||[],candidates:table})}
       ],
       response_format:{type:"json_schema",json_schema:schema},
       temperature:0,
@@ -124,21 +129,21 @@ export class HtlEngine extends HorizonEngine {
       const selected=candidates.find(candidate=>candidate.pair===selectedPair);
       if(!selected){
         const reason=`Nemotron returned an invalid candidate selection${selectedPair?`: ${selectedPair}`:""}; deterministic ranking used`;
-        await this.recordAiDecision({invoked:true,status:"AI_INVALID_SELECTION",model:AI_MODEL,policy:AI_POLICY,latencyMs,candidateCount:candidates.length,candidates:candidatePairs,selectedPair:fallback.pair,reason}).catch(()=>{});
+        await this.recordAiDecision({invoked:true,status:"AI_INVALID_SELECTION",model:AI_MODEL,policy:AI_POLICY,taskName:AI_TASK_NAME,task:AI_TASK,latencyMs,candidateCount:candidates.length,candidates:candidatePairs,selectedPair:fallback.pair,reason}).catch(()=>{});
         return attachNemotron(fallback,{status:"AI_INVALID_SELECTION",reason,latencyMs,recommendedPair:selectedPair||fallback.pair,invoked:true});
       }
       const reason=String(parsed?.reason||"Nemotron selected the candidate from the eligible new-entry set").slice(0,240);
-      await this.recordAiDecision({invoked:true,status:"SELECTED",model:AI_MODEL,policy:AI_POLICY,latencyMs,candidateCount:candidates.length,candidates:candidatePairs,selectedPair,reason}).catch(()=>{});
+      await this.recordAiDecision({invoked:true,status:"SELECTED",model:AI_MODEL,policy:AI_POLICY,taskName:AI_TASK_NAME,task:AI_TASK,latencyMs,candidateCount:candidates.length,candidates:candidatePairs,selectedPair,reason}).catch(()=>{});
       return attachNemotron(selected,{status:"SELECTED",reason,latencyMs,recommendedPair:selectedPair,invoked:true});
     }catch(error){
       const latencyMs=Date.now()-started,status=error?.code==="AI_TIMEOUT"?"AI_TIMEOUT":"AI_ERROR",reason=`${status}: ${String(error?.message||error).slice(0,180)}; deterministic ranking used`;
-      await this.recordAiDecision({invoked:true,status,model:AI_MODEL,policy:AI_POLICY,latencyMs,candidateCount:candidates.length,candidates:candidatePairs,selectedPair:fallback.pair,reason}).catch(()=>{});
+      await this.recordAiDecision({invoked:true,status,model:AI_MODEL,policy:AI_POLICY,taskName:AI_TASK_NAME,task:AI_TASK,latencyMs,candidateCount:candidates.length,candidates:candidatePairs,selectedPair:fallback.pair,reason}).catch(()=>{});
       return attachNemotron(fallback,{status,reason,latencyMs,recommendedPair:fallback.pair,invoked:true});
     }
   }
 
   async tick(){const state=(await this.ctx.storage.get("state"))||{};if(state.qualificationVersion!==S.VERSION){Object.assign(state,{events:{},directions:null,requirements:null,lastCandle:null,mtf:{},mtfDecisionDirections:{},mtfRotation:0,initialized:false,calculationVersion:H.VERSION,qualificationVersion:S.VERSION});await this.ctx.storage.put("state",state);await this.write({type:"QUALIFICATION_MIGRATION",calculationVersion:H.VERSION,qualificationVersion:S.VERSION,message:"All strategies now qualify one canonical Asset/Inverse crossing clock"},false);}return super.tick();}
-  async status(){const status=await super.status(),records=currentOptimizer(await this.ctx.storage.get("optimizer")),telemetry=(await this.ctx.storage.get("aiTelemetry"))||{},engineState=(await this.ctx.storage.get("state"))||{};return{...status,optimizerVersion:OPTIMIZER_VERSION,optimizerCoverage:Object.keys(records).length,optimizerTotal:PAIRS.length*10,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,crossingContract:"ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK",strategyContract:"POST_CROSS_STRATEGY_QUALIFICATION",ai:{model:AI_MODEL,binding:Boolean(this.env.AI),policy:AI_POLICY,mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",modelContextAt:engineState.modelContext?.receivedAt||null,...telemetry}};}
+  async status(){const status=await super.status(),records=currentOptimizer(await this.ctx.storage.get("optimizer")),telemetry=(await this.ctx.storage.get("aiTelemetry"))||{},engineState=(await this.ctx.storage.get("state"))||{};return{...status,optimizerVersion:OPTIMIZER_VERSION,optimizerCoverage:Object.keys(records).length,optimizerTotal:PAIRS.length*10,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,crossingContract:"ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK",strategyContract:"POST_CROSS_STRATEGY_QUALIFICATION",ai:{model:AI_MODEL,binding:Boolean(this.env.AI),policy:AI_POLICY,taskName:AI_TASK_NAME,task:AI_TASK,ageMandate:AGE_MANDATE,mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",capitalPolicy:"DEPLOYED_IN_QUALIFIED_POSITIVE_EXPECTATION_OR_WEEKEND_FLAT",modelContextAt:engineState.modelContext?.receivedAt||null,...telemetry}};}
   async computeConfiguration(value){return computePlatformConfiguration(this,value);}
   async optimizeNext(state,token){return optimizePlatformNext(this,state,token);}
   async scan(token,config,timeframe=config.timeframe,optimizer={}){const rows=await scanPlatform(this,token,config,timeframe,optimizer);return rows.filter(row=>row.event?.qualified===true&&Boolean(row.event?.startTime));}
