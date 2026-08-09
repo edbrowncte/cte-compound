@@ -508,7 +508,6 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       if(marketWindow.weekendLock){await this.enforceAgeWeekendPolicy(state,config,marketWindow);return;}
       if(state.ageWeekendLock){state.ageWeekendLock=false;state.ageReengagedAt=new Date().toISOString();state.lastNoOrderReason=null;await this.ctx.storage.put("state",state);await this.write({type:"AGE_MARKET_REENGAGEMENT",agePolicy:AGE_POLICY_VERSION,timeZone:AGE_TIME_ZONE,message:"AGE weekend lock released; resume qualified market participation"},false);}
       if(state.ageExpectationVersion!==AGE_EXPECTATION_VERSION){state.ageExpectationVersion=AGE_EXPECTATION_VERSION;state.pendingReversals={};state.ageLastPlan=null;await this.ctx.storage.put("state",state);await this.write({type:"AGE_EXPECTATION_MIGRATION",agePolicy:AGE_POLICY_VERSION,expectationVersion:AGE_EXPECTATION_VERSION,message:"AGE Great Expectation v2 activated; legacy blanket reversal claims cleared so reversals compete with alternatives"},false);}
-      await this.processPendingReversals(state,token,accountId);
       const fingerprint=configFingerprint(config);
       state.config=config;
       if(state.mtfFingerprint!==fingerprint){
@@ -554,6 +553,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       }
 
       try{await this.syncTransactions(state,token,accountId);}catch(error){state.transactionSyncError=String(error?.message||error);}
+      await this.processPendingReversals(state,token,accountId);
 
       let optimizer=await loadRuntimeOptimizer(this.ctx.storage);
       try{optimizer=(await this.optimizeNext(state,token)).records;}catch(error){state.optimizerLastError=String(error?.message||error);}
