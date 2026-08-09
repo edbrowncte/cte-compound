@@ -1,0 +1,34 @@
+name: Materialize capitalization evidence freshness
+
+on:
+  push:
+    branches:
+      - feature/capitalization-model-control-unison
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/capitalization-model-control-unison
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply evidence freshness refinement
+        run: node scripts/migrate-capitalization-evidence-freshness.mjs
+      - name: Commit refinement
+        run: |
+          if git diff --quiet public/index.html; then
+            echo "No refinement diff."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/index.html
+          git commit -m "fix: keep capitalization evidence on active trading timeframe"
+          git push origin HEAD:feature/capitalization-model-control-unison
