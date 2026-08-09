@@ -43,16 +43,26 @@ assert.ok(!eventRefresh.includes('el("eventLength").value'),"Event chart refresh
 const scheduleSelection=between('function selectEventScheduleRow','function eventDraw',"HTL schedule row selection");
 assert.ok(!scheduleSelection.includes("renderEventDetail"),"HTL schedule row selection must not redraw the independent Event chart");
 
-const analyticalApply=between('function applyChartDataset','function chartRequestCount',"Analytical chart calculation");
+const analyticalApply=between('function applyChartDataset','function loadUnifiedChartCandles',"Analytical chart calculation");
 assert.ok(analyticalApply.includes('chartControlConfiguration(instrument,timeframe,state.selectedStrategy,"chartLength","chartFilter")'),"Analytical chart must calculate from its own Length/Filter controls");
 
 const evalLoad=between('async function loadEvalChartData','function drawEvalCharts',"Evaluation chart calculation");
 assert.ok(evalLoad.includes('chartControlConfiguration(pair,timeframe,strategy,"evalChartLength","evalChartFilter")'),"Evaluation chart must calculate from its own Strategy/Length/Filter controls");
+assert.ok(evalLoad.includes('loadUnifiedChartCandles(pair,timeframe,null,95,true)'),"Evaluation chart must load its own pair/timeframe through the canonical maximum-history loader");
 
 const evalDraw=between('function drawEvalCharts()','function drawOscillatorChart',"Evaluation chart draw");
-assert.ok(evalDraw.includes('const evalPair=el("evalChartPair")?.value||state.selectedInstrument'),"Evaluation chart must resolve its own pair");
-assert.ok(evalDraw.includes('liveMid(evalPair)'),"Evaluation chart live price must use its own pair");
-assert.ok(evalDraw.includes('formatPrice(live, evalPair)'),"Evaluation chart price label must use its own pair");
+assert.ok(evalDraw.includes('const pair=el("evalChartPair")?.value||state.selectedInstrument'),"Evaluation chart must resolve its own pair");
+assert.ok(evalDraw.includes('timeframe=el("evalChartTimeframe")?.value||state.selectedTimeframe'),"Evaluation chart must resolve its own timeframe");
+assert.ok(evalDraw.includes('strategy=el("evalChartStrategy")?.value||state.evaluationSelectedStrategy'),"Evaluation chart must resolve its own indicator");
+assert.ok(evalDraw.includes('renderUnifiedChartSurface('),"Evaluation chart must delegate rendering to the canonical shared chart surface");
+assert.ok(evalDraw.includes('pair,timeframe,strategy,length'),"Evaluation chart must pass its own controls into the canonical renderer");
+assert.ok(!evalDraw.includes('state.chartCandles'),"Evaluation chart must not render the Analytical Compound candle array");
+assert.ok(!evalDraw.includes('state.eventData'),"Evaluation chart must not render the HTL Event candle array");
+
+const analyticalDraw=between('function drawChart()','// Canonical HTL series construction.',"Analytical chart draw");
+assert.ok(analyticalDraw.includes('renderUnifiedChartSurface('),"Analytical chart must use the same canonical renderer as Evaluation");
+const eventDraw=between('function eventDraw(data,htl,events)','function eventHistoryCount',"HTL Event chart draw");
+assert.ok(eventDraw.includes('renderUnifiedChartSurface('),"HTL Event chart must use the same canonical renderer as Evaluation");
 
 const evaluationBindings=between('// Evaluation panel event listeners','const evaluationHeaders = [',"Evaluation bindings");
 const tableFilter=between('if (el("evalTableTfFilter")) {','const sortHeaders=[',"Evaluation table filter");
@@ -61,4 +71,4 @@ assert.ok(!tableFilter.includes("loadEvalChartData"),"Evaluation table timeframe
 assert.ok(evaluationBindings.includes('loadEvalChartData(el("evalChartPair").value,el("evalChartTimeframe").value)'),"Evaluation chart controls must load their own pair/timeframe");
 assert.ok(!evaluationBindings.includes('loadEvalChartData(state.selectedInstrument'),"Evaluation chart controls must not load the Analytical Compound pair");
 
-console.log("Independent chart-control contract verified.");
+console.log("Independent chart controls over one canonical shared chart renderer verified.");

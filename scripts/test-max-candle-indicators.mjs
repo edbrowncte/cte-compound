@@ -4,6 +4,7 @@ import {JSDOM,VirtualConsole} from "jsdom";
 
 const html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");
 const worker=await readFile(new URL("../src/worker-base.js",import.meta.url),"utf8");
+const unifiedChart=await readFile(new URL("../public/unified-chart.js",import.meta.url),"utf8");
 const masImSource=await readFile(new URL("../public/mas-im-calculator.js",import.meta.url),"utf8");
 
 assert.match(worker,/Math\.min\(5000,Math\.trunc\(Number\(url\.searchParams\.get\("count"\)\)\)\|\|650\)/);
@@ -11,20 +12,23 @@ assert.match(html,/MAX_ANALYTICAL_HISTORY=5000,MAX_ANALYTICAL_LENGTH=500/);
 assert.match(html,/id="chartLength"[^>]*max="500"/);
 assert.match(html,/id="eventLength"[^>]*max="500"/);
 assert.match(html,/id="eventChartLength"[^>]*max="500"/);
+assert.match(html,/id="evalChartLength"[^>]*max="500"/);
 assert.match(html,/function chartRequestCount\(instrument,timeframe\)\{return MAX_ANALYTICAL_HISTORY;\}/);
 assert.match(html,/indicatorWarmupBars\(strategy,length\).*ASSET:4.*DARE:5.*DARE_N:6.*COMBO:5.*NAI:5.*APEX:6/);
 assert.match(html,/scheduleRequestCount\(instrument,timeframe\)/);
 assert.match(html,/loadEventRow\(pair,timeframe,length,controller,100,MAX_ANALYTICAL_HISTORY\)/);
-assert.match(html,/eventCausalIndicators\(chartPair,chartTimeframe,config\.length,data\)/);
-assert.match(html,/const zDefinitions=definition\.z\|\|\[\]/);
-assert.match(html,/\.\.\.\(definition\.z\|\|\[\]\)/);
+assert.match(html,/unifiedIndicatorSet\(pair,timeframe,data,length\)/);
+assert.match(html,/unifiedIndicatorSet\(pair,timeframe,state\.evalCandles,length\)/);
+assert.match(unifiedChart,/const zDefinitions=indicatorSet\.z\|\|\[\]/);
+assert.match(unifiedChart,/const oscDefinitions=indicatorSet\.osc\|\|\[\]/);
+assert.match(unifiedChart,/indicatorSet\.price\|\|\[\]/);
 assert.match(html,/state\.chartAnalysis=\{latest:\{\.\.\.latest\}\}/);
 assert.match(html,/Publish the selected indicator first/);
 assert.doesNotMatch(html,/const relation=\(left,right,threshold=0\)=>\{const spread=finite\(left\[index\]\)-finite\(right\[index\]\)/);
 assert.match(html,/if\(!Number\.isFinite\(leftValue\)\|\|!Number\.isFinite\(rightValue\)\)return\{direction:0,spread:NaN\}/);
 assert.match(html,/while\(state\.chartCache\.size>12\)/);
-assert.match(html,/while\(state\.eventIndicatorCache\.size>8\)/);
-assert.match(html,/state\.eventIndicatorCache\.clear\(\)/);
+assert.match(html,/while\(state\.unifiedIndicatorCache\.size>12\)/);
+assert.match(html,/state\.unifiedIndicatorCache\.clear\(\)/);
 assert.match(html,/refreshAdaptiveTimeframe\(\).*scheduleRequestCount\(pair,timeframe\)/s);
 assert.match(html,/selectedScheduleStrategy=event\.target\.value.*loadSchedule\("focused"\)/s);
 assert.match(html,/refreshAnalyticalChartConfig=.*chartCandles\.length<chartRequestCount/s);
@@ -32,7 +36,7 @@ assert.match(html,/oldBad=bad/);
 assert.match(html,/asset\[index\]=active\.price/);
 assert.match(html,/id="engineHtlLength"[^>]*max="200"/);
 
-const source=html.replace('<script src="/mas-im-calculator.js"></script>',`<script>${masImSource}</script>`).replace(/;\s*void connect\(\);\s*<\/script>/,";</script>");
+const source=html.replace('<script src="/unified-chart.js"></script>',"").replace('<script src="/mas-im-calculator.js"></script>',`<script>${masImSource}</script>`).replace(/;\s*void connect\(\);\s*<\/script>/,";</script>");
 const virtualConsole=new VirtualConsole(),browserErrors=[];virtualConsole.on("jsdomError",error=>browserErrors.push(error));virtualConsole.on("error",error=>browserErrors.push(error));
 const canvasContext=new Proxy({measureText:value=>({width:String(value??"").length*6})},{get(target,key){if(key in target)return target[key];return()=>{};},set(target,key,value){target[key]=value;return true;}});
 const dom=new JSDOM(source,{url:"https://cte.example",runScripts:"dangerously",pretendToBeVisual:true,virtualConsole,beforeParse(window){
@@ -52,4 +56,4 @@ try{
   for(const key of ["naiAsset","naiInverse","dareNAsset","dareNInverse","zup","puz"])assert.equal(tail(indicators[key]).filter(Number.isFinite).length,120,`${key} must cover the complete final 120-bar visible window at length 240 · ${JSON.stringify(diagnostic)}`);
   assert.ok(firstFinite(indicators.naiAsset)>=length*3,"NAI must retain causal warmup");assert.ok(firstFinite(indicators.dareNInverse)>=length*4,"DARE(N) inverse must retain deeper causal warmup");assert.equal(browserErrors.length,0,browserErrors.map(error=>error.message).join("\n"));
 }finally{dom.window.close();}
-console.log("5000-candle analytical history, selected-first indicator publication, length-240 causal DARE(N)/NAI/APEX coverage, corrected rolling WMA recovery, missing-data safety, and independent 200-bar engine boundary verified.");
+console.log("5000-candle unified chart history, selected-first publication, length-240 causal DARE(N)/NAI/APEX coverage, missing-data safety, and independent 200-bar engine boundary verified.");
