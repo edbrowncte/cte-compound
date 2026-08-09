@@ -1,0 +1,34 @@
+name: Materialize capitalization control unison
+
+on:
+  push:
+    branches:
+      - feature/capitalization-model-control-unison
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/capitalization-model-control-unison
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply migration
+        run: node scripts/migrate-capitalization-control-unison.mjs
+      - name: Commit runtime synchronization
+        run: |
+          if git diff --quiet public/index.html src/engine-certified-execution.js src/engine-nemotron-base.js; then
+            echo "No migration diff."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/index.html src/engine-certified-execution.js src/engine-nemotron-base.js
+          git commit -m "feat: synchronize capitalization model with trading controls"
+          git push origin HEAD:feature/capitalization-model-control-unison
