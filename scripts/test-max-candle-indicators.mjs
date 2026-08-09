@@ -18,7 +18,8 @@ assert.match(html,/loadEventRow\(pair,timeframe,length,controller,100,MAX_ANALYT
 assert.match(html,/eventCausalIndicators\(chartPair,chartTimeframe,config\.length,data\)/);
 assert.match(html,/const zDefinitions=definition\.z\|\|\[\]/);
 assert.match(html,/\.\.\.\(definition\.z\|\|\[\]\)/);
-assert.match(html,/state\.chartAnalysis=\{latest\}/);
+assert.match(html,/state\.chartAnalysis=\{latest:\{\.\.\.latest\}\}/);
+assert.match(html,/Publish the selected indicator first/);
 assert.doesNotMatch(html,/const relation=\(left,right,threshold=0\)=>\{const spread=finite\(left\[index\]\)-finite\(right\[index\]\)/);
 assert.match(html,/if\(!Number\.isFinite\(leftValue\)\|\|!Number\.isFinite\(rightValue\)\)return\{direction:0,spread:NaN\}/);
 assert.match(html,/while\(state\.chartCache\.size>12\)/);
@@ -51,4 +52,4 @@ try{
   for(const key of ["naiAsset","naiInverse","dareNAsset","dareNInverse","zup","puz"])assert.equal(tail(indicators[key]).filter(Number.isFinite).length,120,`${key} must cover the complete final 120-bar visible window at length 240 · ${JSON.stringify(diagnostic)}`);
   assert.ok(firstFinite(indicators.naiAsset)>=length*3,"NAI must retain causal warmup");assert.ok(firstFinite(indicators.dareNInverse)>=length*4,"DARE(N) inverse must retain deeper causal warmup");assert.equal(browserErrors.length,0,browserErrors.map(error=>error.message).join("\n"));
 }finally{dom.window.close();}
-console.log("5000-candle analytical history, length-240 causal DARE(N)/NAI/APEX coverage, corrected rolling WMA recovery, missing-data safety, and independent 200-bar engine boundary verified.");
+console.log("5000-candle analytical history, selected-first indicator publication, length-240 causal DARE(N)/NAI/APEX coverage, corrected rolling WMA recovery, missing-data safety, and independent 200-bar engine boundary verified.");

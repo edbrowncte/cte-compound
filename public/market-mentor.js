@@ -1,7 +1,7 @@
 (function installMarketMentor(global){
   "use strict";
 
-  const VERSION="CTE_MARKET_MENTOR@1.0.0";
+  const VERSION="CTE_MARKET_MENTOR@1.1.0";
   const MATERIAL_REGIMES=new Set(["TRANSITION","ANTAGONIST_DETERIORATING","ANTAGONIST_ACCELERATING"]);
   let previous=null,lastExternalFingerprint="",panel=null;
 
@@ -16,7 +16,7 @@
   function ensurePanel(){
     if(typeof document==="undefined")return null;
     if(panel&&document.contains(panel))return panel;
-    const anchor=document.getElementById("fourSlotRotator")||document.getElementById("evalTableBody");
+    const modelBody=document.getElementById("modelCompositionBody"),anchor=modelBody||document.getElementById("fourSlotRotator")||document.getElementById("evalTableBody");
     if(!anchor)return null;
     panel=document.createElement("section");
     panel.id="cteMarketMentor";
@@ -24,7 +24,7 @@
     panel.style.cssText="margin-top:10px;border:1px solid #3a4657;background:linear-gradient(180deg,#111923,#0b1118);padding:12px;box-shadow:0 12px 30px rgba(0,0,0,.28);";
     panel.innerHTML=`
       <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
-        <div><div style="font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#7dc4ff;">CTE Market Mentor · Proactive</div><div id="mentorVersion" style="font-size:8px;color:#8e9aab;margin-top:2px;">${VERSION} · teaching-first · no execution authority</div></div>
+        <div><div style="font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#7dc4ff;">CTE Market Mentor · Proactive</div><div id="mentorVersion" style="font-size:8px;color:#8e9aab;margin-top:2px;">${VERSION} · capitalization interpretation · pair-discretion context · no direct execution authority</div></div>
         <div style="display:flex;gap:6px;align-items:center;"><strong id="mentorAlertLevel" style="font-size:9px;color:#d7a85c;">OBSERVING</strong><button id="mentorNotifications" type="button" style="padding:5px 8px;font-size:9px;">Enable browser alerts</button></div>
       </div>
       <div id="mentorHeadline" style="font-size:14px;font-weight:850;margin-top:10px;line-height:1.25;">Waiting for synchronized Evaluation data.</div>
@@ -38,7 +38,7 @@
         <div style="border:1px solid #2b3543;padding:9px;"><div style="font-size:8px;color:#8e9aab;text-transform:uppercase;">Recommendation</div><div id="mentorRecommendation" style="font-size:9px;line-height:1.5;margin-top:4px;">—</div></div>
       </div>
       <div id="mentorRotation" style="margin-top:9px;color:#8e9aab;font-size:9px;line-height:1.45;">Four-card rotation commentary will appear after the first change.</div>`;
-    anchor.parentElement?.insertAdjacentElement("afterend",panel);
+    if(modelBody)modelBody.appendChild(panel);else anchor.parentElement?.insertAdjacentElement("afterend",panel);
     const button=panel.querySelector("#mentorNotifications");
     if(button)button.addEventListener("click",async()=>{
       if(typeof Notification==="undefined"){button.textContent="Browser alerts unavailable";return;}

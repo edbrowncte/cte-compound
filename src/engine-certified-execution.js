@@ -1,5 +1,5 @@
 import { HtlEngine as CertifiedAnalyticsEngine } from "./engine.js";
-import { PAIRS, TIMEFRAMES, OPTIMIZER_VERSION, currentOptimizer, candles, currentEvent } from "./horizon-platform-engine.js";
+import { PAIRS, TIMEFRAMES, candles, currentEvent } from "./horizon-platform-engine.js";
 import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
 import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
 import { credentials } from "./engine-base.js";
@@ -7,7 +7,10 @@ import {
   optimizedOptimizeNext,
   optimizedComputeConfiguration,
   optimizedScan,
-  fullSettings
+  fullSettings,
+  RUNTIME_OPTIMIZER_VERSION,
+  RUNTIME_OPTIMIZER_HISTORY_BARS,
+  currentRuntimeOptimizer
 } from "./optimized-optimizer.js";
 
 const API="https://api-fxtrade.oanda.com";
@@ -100,7 +103,7 @@ function configFingerprint(config){
     htlLength:config.htlLength,
     filter:config.filter,
     configurationSource:config.configurationSource,
-    optimizerVersion:OPTIMIZER_VERSION,
+    optimizerVersion:RUNTIME_OPTIMIZER_VERSION,
   });
 }
 
@@ -112,6 +115,15 @@ function positionDirection(position){
 
 function requirementDirection(requirement){
   return Number(requirement?.event?.direction??requirement??0);
+}
+
+function modelNumber(value,min=-Infinity,max=Infinity){const number=Number(value);return Number.isFinite(number)?Math.max(min,Math.min(max,number)):null;}
+function sanitizeModelContext(value){
+  const body=value&&typeof value==="object"?value:{},direction=value=>value==="BUY"||value==="SELL"?value:null,pair=value=>PAIRS.includes(String(value||""))?String(value):null;
+  const compactReport=item=>{const validPair=pair(item?.pair);if(!validPair)return null;return{pair:validPair,direction:direction(item.direction),type:String(item?.type||"").slice(0,32),regime:String(item?.regime||"").slice(0,48),strength:modelNumber(item?.strength,0,1),mas:modelNumber(item?.mas,0,1),im:modelNumber(item?.im,0,1),ratio:modelNumber(item?.ratio,0,20),masRoc:modelNumber(item?.masRoc,-10,10),imRoc:modelNumber(item?.imRoc,-10,10),ratioRoc:modelNumber(item?.ratioRoc,-20,20),eventAngleZ:modelNumber(item?.eventAngleZ,-20,20),convexity:modelNumber(item?.convexity,-40,40),r2:modelNumber(item?.r2,0,1),pipsPerHour:modelNumber(item?.pipsPerHour,-10000,10000),transitionProbability:modelNumber(item?.transitionProbability,0,1)};};
+  const compactForecast=item=>{const validPair=pair(item?.pair);if(!validPair)return null;return{key:["A","B","C"].includes(item?.key)?item.key:null,pair:validPair,direction:direction(item.direction),confidence:modelNumber(item?.confidence,0,1),source:String(item?.source||"").slice(0,24)};};
+  const compactPosition=item=>{const validPair=pair(item?.pair);if(!validPair)return null;return{pair:validPair,direction:direction(item.direction),units:modelNumber(item?.units,0,1e9),unrealizedPL:modelNumber(item?.unrealizedPL,-1e9,1e9)};};
+  return{mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",timeframe:TIMEFRAMES.includes(body.timeframe)?body.timeframe:null,account:{balance:modelNumber(body.account?.balance,0,1e12),nav:modelNumber(body.account?.nav,0,1e12),marginAvailable:modelNumber(body.account?.marginAvailable,0,1e12)},slots:(Array.isArray(body.slots)?body.slots:[]).slice(0,4).map(compactReport).filter(Boolean),forecasts:(Array.isArray(body.forecasts)?body.forecasts:[]).slice(0,3).map(compactForecast).filter(Boolean),openPositions:(Array.isArray(body.openPositions)?body.openPositions:[]).slice(0,PAIRS.length).map(compactPosition).filter(Boolean),receivedAt:new Date().toISOString()};
 }
 
 function compactCandidate(candidate){
@@ -127,6 +139,7 @@ function compactCandidate(candidate){
 
 export const __executionTest=Object.freeze({
   EXECUTION_POLICY_VERSION,
+  sanitizeModelContext,
   positionDirection,
   requirementDirection,
   configFingerprint,
@@ -135,12 +148,17 @@ export const __executionTest=Object.freeze({
 export class HtlEngine extends CertifiedAnalyticsEngine{
   async fetch(request){
     const url=new URL(request.url),path=url.pathname;
+    if(path==="/optimizer"&&request.method==="GET"){
+      const records=currentRuntimeOptimizer((await this.ctx.storage.get("optimizer"))||{});
+      return new Response(JSON.stringify({version:RUNTIME_OPTIMIZER_VERSION,optimizerHistoryBars:RUNTIME_OPTIMIZER_HISTORY_BARS,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,records}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+    }
     if(path==="/control/selectedPairs"&&request.method==="POST"){
       const body=await request.json().catch(()=>({}));
       let state=(await this.ctx.storage.get("state"))||{};
       state.selectedPairs=body.selectedPairs||[];
       state.manualSelectMode=body.manualSelectMode!==false;
       state.autoRotateMode=Boolean(body.autoRotateMode);
+      if(state.autoRotateMode){state.selectedPairs=PAIRS.slice();state.manualPositions={};}
       if (!state.selectedPairs || state.selectedPairs.length === 0) {
         state.selectedPairs = PAIRS.slice();
         state.tradingMode = "ALL_PAIRS";
@@ -164,6 +182,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
     }
     if(path==="/evaluation/log"&&request.method==="POST"){
       const body=await request.json().catch(()=>({}));
+      if(body?.type==="MODEL_CONTEXT"){const state=(await this.ctx.storage.get("state"))||{};state.modelContext=sanitizeModelContext(body);await this.ctx.storage.put("state",state);return new Response(JSON.stringify({ok:true,receivedAt:state.modelContext.receivedAt}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});}
       await this.write(body);
       return new Response(JSON.stringify({ok:true}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     }
@@ -192,7 +211,8 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         lastError:state.lastError||null,
         resolvedAccountId:resolvedAccountId||null,
         marginAvailable:Number(summary.marginAvailable || 0),
-        manualPositions:state.manualPositions||{}
+        manualPositions:state.manualPositions||{},
+        modelContextAt:state.modelContext?.receivedAt||null
       }),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     }
     return super.fetch(request);
@@ -222,8 +242,13 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
   async status(){
     const status=await super.status();
     const state=(await this.ctx.storage.get("state"))||{};
+    const runtimeOptimizer=currentRuntimeOptimizer((await this.ctx.storage.get("optimizer"))||{});
     return{
       ...status,
+      optimizerVersion:RUNTIME_OPTIMIZER_VERSION,
+      optimizerHistoryBars:RUNTIME_OPTIMIZER_HISTORY_BARS,
+      optimizerCoverage:Object.keys(runtimeOptimizer).length,
+      optimizerTotal:PAIRS.length*TIMEFRAMES.length,
       armed:true,
       executionCertification:"ARMED_PRIVATE_USER",
       executionPolicy:EXECUTION_POLICY_VERSION,
@@ -477,7 +502,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
       await this.processPendingReversals(state,token,accountId);
 
-      let optimizer=currentOptimizer((await this.ctx.storage.get("optimizer"))||{});
+      let optimizer=currentRuntimeOptimizer((await this.ctx.storage.get("optimizer"))||{});
       try{optimizer=(await this.optimizeNext(state,token)).records;}catch(error){state.optimizerLastError=String(error?.message||error);}
 
       const rotationIndex=Number(state.mtfRotation||0)%TIMEFRAMES.length;
@@ -522,30 +547,8 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       state.lastScanAt = new Date().toISOString();
       state.openPositionsCount = positions.length;
 
-      // Handle Auto-Rotate Mode
-      if (state.autoRotateMode) {
-        const ledger = (await this.ctx.storage.get("ledger")) || [];
-        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-        const pairPnls = {};
-        for (const item of ledger) {
-          if (item.type === "POSITION_CLOSED" && item.time) {
-            const timeMs = Date.parse(item.time);
-            if (Number.isFinite(timeMs) && timeMs >= cutoff && item.pair) {
-              const pl = Number(item.realizedPL);
-              if (Number.isFinite(pl)) {
-                pairPnls[item.pair] = (pairPnls[item.pair] || 0) + pl;
-              }
-            }
-          }
-        }
-        let topPair = "EUR_USD";
-        if (Object.keys(pairPnls).length > 0) {
-          const list = Object.keys(pairPnls).map(pair => ({ pair, pnl: pairPnls[pair] }));
-          list.sort((a, b) => b.pnl - a.pnl || a.pair.localeCompare(b.pair));
-          topPair = list[0].pair;
-        }
-        state.selectedPairs = [topPair];
-      }
+      // Model Discretion mode keeps the full qualified universe available. Pair selection is performed downstream by Nemotron among engine-qualified new-entry candidates; III itself does not choose the pair.
+      if(state.autoRotateMode){state.selectedPairs=PAIRS.slice();state.tradingMode="MODEL_DISCRETION";}
 
       const tradablePairs = state.selectedPairs?.length ? state.selectedPairs : PAIRS.slice();
       const tradableSet = new Set(tradablePairs);

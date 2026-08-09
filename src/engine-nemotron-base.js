@@ -7,18 +7,18 @@ const H=globalThis.CTE_HORIZON_HTL,S=globalThis.CTE_HORIZON_STRATEGIES;
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
 const AI_MODEL="@cf/nvidia/nemotron-3-120b-a12b";
 const AI_TIMEOUT_MS=7000;
-const AI_POLICY="MULTI_NEW_ENTRY_CANDIDATES_ONLY";
+const AI_POLICY="CAPITALIZATION_NEW_ENTRY_DISCRETION";
+const MODEL_CONTEXT_MAX_AGE_MS=10*60*1000;
 
-function deterministicCandidate(candidates){
-  return [...candidates].sort((left,right)=>{
-    const leftConfidence=Number(left?.confidence)||0,rightConfidence=Number(right?.confidence)||0;
-    const leftCount=Number(left?.count)||0,rightCount=Number(right?.count)||0;
-    return rightConfidence-leftConfidence||rightCount-leftCount||String(left?.pair||"").localeCompare(String(right?.pair||""));
-  })[0]||null;
+function modelContextFresh(context){const time=Date.parse(context?.receivedAt||0);return Number.isFinite(time)&&Date.now()-time<=MODEL_CONTEXT_MAX_AGE_MS?context:null;}
+function modelReportForPair(context,pair){return context?.slots?.find(item=>item?.pair===pair)||null;}
+function capitalizationScore(candidate,context=null){const primary=candidate?.configuration?.primary||{},report=modelReportForPair(context,candidate?.pair),confidence=Math.max(0,Math.min(1,Number(candidate?.confidence)||0)),count=Math.max(0,Number(candidate?.count)||0),winRate=Math.max(0,Math.min(1,Number(primary.winRate)||0)),net=Number(primary.net)||0,score=Number(primary.score)||0,drawdown=Math.max(0,Number(primary.maxDrawdown)||0),sample=Math.max(0,Number(primary.trades)||0),structure=Math.max(0,Math.min(1,Number(report?.strength)||0)),fit=Math.max(0,Math.min(1,Number(report?.r2)||0)),velocity=Math.tanh((Number(report?.pipsPerHour)||0)/25),regime=String(report?.regime||""),regimeBonus=regime==="TREND_ALIGNED"?.45:regime==="TRANSITION"?.3:regime==="CHALLENGE"?.1:0;return confidence*3+Math.min(10,count)*.12+winRate+Math.tanh(net/30)+Math.tanh(score/15)-Math.tanh(drawdown/25)+Math.min(1,sample/30)*.5+structure*1.5+fit*.5+velocity*.25+regimeBonus;}
+function deterministicCandidate(candidates,context=null){
+  return [...candidates].sort((left,right)=>capitalizationScore(right,context)-capitalizationScore(left,context)||String(left?.pair||"").localeCompare(String(right?.pair||"")))[0]||null;
 }
 
-function compactCandidate(candidate){
-  const primary=candidate?.configuration?.primary||{},confirmation=candidate?.configuration?.confirmation||null;
+function compactCandidate(candidate,context=null){
+  const primary=candidate?.configuration?.primary||{},confirmation=candidate?.configuration?.confirmation||null,report=modelReportForPair(context,candidate?.pair);
   return{
     pair:String(candidate?.pair||""),
     direction:Number(candidate?.event?.direction)>0?"BUY":"SELL",
@@ -41,6 +41,8 @@ function compactCandidate(candidate){
       filter:Number.isFinite(Number(confirmation.filter))?Number(confirmation.filter):null,
       score:Number.isFinite(Number(confirmation.score))?Number(confirmation.score):null,
     }:null,
+    capitalizationReport:report?{type:report.type||null,regime:report.regime||null,strength:Number.isFinite(Number(report.strength))?Number(report.strength):null,mas:Number.isFinite(Number(report.mas))?Number(report.mas):null,im:Number.isFinite(Number(report.im))?Number(report.im):null,ratio:Number.isFinite(Number(report.ratio))?Number(report.ratio):null,ratioRoc:Number.isFinite(Number(report.ratioRoc))?Number(report.ratioRoc):null,eventAngleZ:Number.isFinite(Number(report.eventAngleZ))?Number(report.eventAngleZ):null,convexity:Number.isFinite(Number(report.convexity))?Number(report.convexity):null,r2:Number.isFinite(Number(report.r2))?Number(report.r2):null,pipsPerHour:Number.isFinite(Number(report.pipsPerHour))?Number(report.pipsPerHour):null,transitionProbability:Number.isFinite(Number(report.transitionProbability))?Number(report.transitionProbability):null}:null,
+    capitalizationRank:capitalizationScore(candidate,context),
   };
 }
 
@@ -79,7 +81,7 @@ function attachNemotron(candidate,{status,reason,latencyMs,recommendedPair,invok
 
 // NEMOTRON_CANDIDATE_TOOL@3.0.0
 export { __platformTest as __horizonTest };
-export const __nemotronTest=Object.freeze({AI_MODEL,AI_TIMEOUT_MS,AI_POLICY,deterministicCandidate,compactCandidate,parseAiResponse});
+export const __nemotronTest=Object.freeze({AI_MODEL,AI_TIMEOUT_MS,AI_POLICY,MODEL_CONTEXT_MAX_AGE_MS,capitalizationScore,deterministicCandidate,compactCandidate,parseAiResponse});
 
 export class HtlEngine extends HorizonEngine {
   async fetch(request) {
@@ -98,7 +100,7 @@ export class HtlEngine extends HorizonEngine {
     if(!Array.isArray(candidates)||!candidates.length)return null;
     if(candidates.length===1)return candidates[0];
 
-    const fallback=deterministicCandidate(candidates),table=candidates.map(compactCandidate),candidatePairs=table.map(item=>item.pair),started=Date.now();
+    const engineState=(await this.ctx.storage.get("state"))||{},modelContext=modelContextFresh(engineState.modelContext),fallback=deterministicCandidate(candidates,modelContext),table=candidates.map(candidate=>compactCandidate(candidate,modelContext)),candidatePairs=table.map(item=>item.pair),started=Date.now();
     if(!this.env.AI){
       const reason="Workers AI binding unavailable; deterministic candidate ranking used";
       await this.recordAiDecision({invoked:false,status:"AI_BINDING_UNAVAILABLE",model:AI_MODEL,policy:AI_POLICY,latencyMs:0,candidateCount:candidates.length,candidates:candidatePairs,selectedPair:fallback.pair,reason}).catch(()=>{});
@@ -108,8 +110,8 @@ export class HtlEngine extends HorizonEngine {
     const schema={type:"object",additionalProperties:false,properties:{selectedPair:{type:"string",enum:candidatePairs},reason:{type:"string",maxLength:240}},required:["selectedPair","reason"]};
     const prompt={
       messages:[
-        {role:"system",content:"You are the internal CTE Compound new-entry adjudicator. Select exactly one candidate from the supplied candidate set. You may rank only these candidates; do not create a new pair, change direction, alter units, modify risk controls, close or reverse positions, or change configuration. Prefer stronger multi-timeframe confirmation and statistically superior optimizer evidence while penalizing drawdown and weak sample support. Return only the requested structured result."},
-        {role:"user",content:JSON.stringify({task:"select_one_new_entry_candidate",candidates:table})}
+        {role:"system",content:"You are the internal CTE Capitalization Model. Your mandate is Capitalization and Account Value Proliferation. The III analytical suite qualifies signal structure but has no pair-selection discretion; you exercise pair discretion only among the supplied engine-qualified new-entry candidates. Rank risk-adjusted expected contribution to NAV and opportunity cost using multi-timeframe confirmation, optimizer net/score/win-rate/sample support, drawdown, MAS/IM pressure balance, regime, Event Angle Z/convexity, fit and pips-per-hour when available. Existing positions and available margin are context for capital efficiency. Select exactly one supplied candidate. Never invent a pair, change direction, alter units or risk controls, close/reverse positions, or change configuration. Return only the requested structured result."},
+        {role:"user",content:JSON.stringify({task:"select_one_new_entry_candidate_for_capitalization",mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",account:modelContext?.account||null,openPositions:modelContext?.openPositions||[],forecasts:modelContext?.forecasts||[],candidates:table})}
       ],
       response_format:{type:"json_schema",json_schema:schema},
       temperature:0,
@@ -135,7 +137,7 @@ export class HtlEngine extends HorizonEngine {
   }
 
   async tick(){const state=(await this.ctx.storage.get("state"))||{};if(state.qualificationVersion!==S.VERSION){Object.assign(state,{events:{},directions:null,requirements:null,lastCandle:null,mtf:{},mtfDecisionDirections:{},mtfRotation:0,initialized:false,calculationVersion:H.VERSION,qualificationVersion:S.VERSION});await this.ctx.storage.put("state",state);await this.write({type:"QUALIFICATION_MIGRATION",calculationVersion:H.VERSION,qualificationVersion:S.VERSION,message:"All strategies now qualify one canonical Asset/Inverse crossing clock"},false);}return super.tick();}
-  async status(){const status=await super.status(),records=currentOptimizer(await this.ctx.storage.get("optimizer")),telemetry=(await this.ctx.storage.get("aiTelemetry"))||{};return{...status,optimizerVersion:OPTIMIZER_VERSION,optimizerCoverage:Object.keys(records).length,optimizerTotal:PAIRS.length*10,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,crossingContract:"ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK",strategyContract:"POST_CROSS_STRATEGY_QUALIFICATION",ai:{model:AI_MODEL,binding:Boolean(this.env.AI),policy:AI_POLICY,...telemetry}};}
+  async status(){const status=await super.status(),records=currentOptimizer(await this.ctx.storage.get("optimizer")),telemetry=(await this.ctx.storage.get("aiTelemetry"))||{},engineState=(await this.ctx.storage.get("state"))||{};return{...status,optimizerVersion:OPTIMIZER_VERSION,optimizerCoverage:Object.keys(records).length,optimizerTotal:PAIRS.length*10,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,crossingContract:"ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK",strategyContract:"POST_CROSS_STRATEGY_QUALIFICATION",ai:{model:AI_MODEL,binding:Boolean(this.env.AI),policy:AI_POLICY,mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",modelContextAt:engineState.modelContext?.receivedAt||null,...telemetry}};}
   async computeConfiguration(value){return computePlatformConfiguration(this,value);}
   async optimizeNext(state,token){return optimizePlatformNext(this,state,token);}
   async scan(token,config,timeframe=config.timeframe,optimizer={}){const rows=await scanPlatform(this,token,config,timeframe,optimizer);return rows.filter(row=>row.event?.qualified===true&&Boolean(row.event?.startTime));}

@@ -29,14 +29,20 @@ import {
   STRATEGIES,
   ANALYTICAL_CERTIFICATION,
   OPTIMIZER_TTL_MS,
-  OPTIMIZER_VERSION,
   PAIRS,
   TIMEFRAMES,
   candles,
   candlesForRange,
   currentEvent,
-  currentOptimizer,
 } from "./horizon-platform-engine.js";
+
+export const RUNTIME_OPTIMIZER_VERSION = 7;
+export const RUNTIME_OPTIMIZER_HISTORY_BARS = 5000;
+
+export function currentRuntimeOptimizer(records){
+  const now=Date.now();
+  return Object.fromEntries(Object.entries(records||{}).filter(([,record])=>record?.version===RUNTIME_OPTIMIZER_VERSION&&record?.strategyEngineVersion===STRATEGY_ENGINE_VERSION&&now-Date.parse(record?.computedAt||record?.stamp||0)<OPTIMIZER_TTL_MS));
+}
 
 const responseError = (message, status = 400) => Object.assign(new Error(message), { status });
 
@@ -216,7 +222,7 @@ export async function optimizedComputeConfiguration(engine, value = {}) {
     stage = "credentials";
     const apiToken = token(engine.env);
     stage = "oanda-history";
-    const data = hasDateRange ? await candlesForRange(pair, apiToken, timeframe, startDate, endDate) : await candles(pair, apiToken, timeframe);
+    const data = hasDateRange ? await candlesForRange(pair, apiToken, timeframe, startDate, endDate) : await candles(pair, apiToken, timeframe, RUNTIME_OPTIMIZER_HISTORY_BARS);
     if (data.length < 150) throw responseError(`Insufficient completed candles for registered Horizon computation: ${data.length}.`);
     stage = "registered-horizon-optimization";
     const optimized = optimizedOptimizeDataset(data, pair, timeframe);
@@ -225,12 +231,13 @@ export async function optimizedComputeConfiguration(engine, value = {}) {
     const records = (await engine.ctx.storage.get("optimizer")) || {};
     const key = `${pair}|${timeframe}`;
     const record = {
-      version: OPTIMIZER_VERSION,
+      version: RUNTIME_OPTIMIZER_VERSION,
       strategyEngineVersion: STRATEGY_ENGINE_VERSION,
       performanceVersion: REGISTERED_PERFORMANCE_VERSION,
       stamp,
       computedAt: new Date().toISOString(),
       source: "COMPUTE_CONFIGURATION",
+      optimizerHistoryBars: RUNTIME_OPTIMIZER_HISTORY_BARS,
       validation: VALIDATION,
       analyticalCertification: ANALYTICAL_CERTIFICATION,
       range: {
@@ -263,22 +270,23 @@ export async function optimizedOptimizeNext(engine, state, apiToken) {
   const records = (await engine.ctx.storage.get("optimizer")) || {};
   const existing = records[key];
   state.optimizerCycleIndex = (index + 1) % total;
-  if (existing?.version === OPTIMIZER_VERSION && existing?.strategyEngineVersion === STRATEGY_ENGINE_VERSION && existing?.source === "COMPUTE_CONFIGURATION" && Date.now() - Date.parse(existing.computedAt || 0) < OPTIMIZER_TTL_MS) {
+  if (existing?.version === RUNTIME_OPTIMIZER_VERSION && existing?.strategyEngineVersion === STRATEGY_ENGINE_VERSION && existing?.source === "COMPUTE_CONFIGURATION" && Date.now() - Date.parse(existing.computedAt || 0) < OPTIMIZER_TTL_MS) {
     state.optimizerLastDataset = key;
     state.optimizerLastRun = new Date().toISOString();
     state.optimizerLastError = null;
-    return { records: currentOptimizer(records), key, record: existing };
+    return { records: currentRuntimeOptimizer(records), key, record: existing };
   }
-  const data = await candles(pair, apiToken, timeframe);
+  const data = await candles(pair, apiToken, timeframe, RUNTIME_OPTIMIZER_HISTORY_BARS);
   const optimized = optimizedOptimizeDataset(data, pair, timeframe);
   const stamp = data.at(-1)?.time || new Date().toISOString();
   const record = {
-    version: OPTIMIZER_VERSION,
+    version: RUNTIME_OPTIMIZER_VERSION,
     strategyEngineVersion: STRATEGY_ENGINE_VERSION,
     performanceVersion: REGISTERED_PERFORMANCE_VERSION,
     stamp,
     computedAt: new Date().toISOString(),
     source: "SERVER",
+    optimizerHistoryBars: RUNTIME_OPTIMIZER_HISTORY_BARS,
     validation: VALIDATION,
     analyticalCertification: ANALYTICAL_CERTIFICATION,
     range: {
@@ -298,7 +306,7 @@ export async function optimizedOptimizeNext(engine, state, apiToken) {
   state.optimizerLastDataset = key;
   state.optimizerLastRun = new Date().toISOString();
   state.optimizerLastError = null;
-  return { records: currentOptimizer(records), key, record };
+  return { records: currentRuntimeOptimizer(records), key, record };
 }
 
 export async function optimizedScan(engine, apiToken, config, timeframe = config.timeframe, optimizer = {}) {
