@@ -49,6 +49,12 @@ try{
   mode="success";calls=[];response=await worker.fetch(browser("/api/platform/diagnostic?instrument=EUR_USD&granularity=M15"),envFor(configuredAlias));assert.equal(response.status,200);payload=await response.json();assert.equal(payload.verdict,"PASS");assert.deepEqual(payload.checks.accountList.value.authorizedSuffixes,["001","002"]);assert.equal(payload.checks.accountList.value.selectedSuffix,"001");assert.equal(payload.checks.accountList.value.blockedMt4Present,true);assert.equal(payload.checks.summary.value.accountSuffix,"001");assert.equal(payload.checks.engine.ok,true);
 
   const html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");assert.doesNotMatch(html,/id="connectButton"|>TEST<\/button>|TESTING…|Testing live OANDA connection/);assert.match(html,/connectionRuntime/);assert.match(html,/void connect()/);
+  const connectStart=html.indexOf("async function connect()"),resetStart=html.indexOf("function resetMatrix",connectStart),connectSource=html.slice(connectStart,resetStart);
+  assert.doesNotMatch(connectSource,/await Promise\.all\(\[loadEngineConfig/);
+  assert.doesNotMatch(connectSource,/await loadTradeCapacity\(\)/);
+  assert.match(connectSource,/void loadOptimizerRecords\(\)\.catch/);
+  assert.match(connectSource,/void loadTradeCapacity\(\)\.catch/);
+  assert.match(connectSource,/await loadChart\(\)/);
   const workerSource=await readFile(new URL("../src/worker-base.js",import.meta.url),"utf8");assert.match(workerSource,/function selectLiveAccount/);assert.ok(workerSource.includes('id.endsWith("-001")'));assert.ok(workerSource.includes('id.endsWith("-002")'));assert.match(workerSource,/async function resolveAccount/);assert.match(workerSource,/OANDA_MT4_ACCOUNT_BLOCKED/);assert.ok(workerSource.includes("tradingCritical=[credentialCheck,accountList,summary,candles]"));
   console.log("Automatic production session, one-token account inventory, unique non-MT4 -001 selection, and explicit -002 MT4 exclusion verified.");
 }finally{globalThis.fetch=originalFetch;}
