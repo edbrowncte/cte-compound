@@ -4,7 +4,7 @@ This document describes the current production runtime after the 2026-08-07 diag
 
 ## 1. Scheduler and Durable Object
 
-`wrangler.toml` schedules `cte-compound` once per minute. The Worker forwards the scheduled heartbeat to the singleton `HTL_ENGINE` Durable Object (`HtlEngine`). The Durable Object prevents overlapping ticks with its in-memory `running` guard.
+`wrangler.toml` schedules `cte-compound` once per minute. The Worker first forwards the trading heartbeat to the singleton `HTL_ENGINE` Durable Object (`HtlEngine`), then invokes the independent optimizer service budget. The Durable Object prevents overlapping trading ticks with its in-memory `running` guard.
 
 A cron heartbeat is **not** itself a trading signal. Position reconciliation is gated by `state.reconciledCandle` and occurs once for a newly completed configured candle. New entries are additionally gated by registered event identity and/or MTF decision transitions.
 
@@ -24,9 +24,11 @@ Before scanning for new entries, the engine synchronizes OANDA transactions from
 
 Durable reversal claims are processed before new-entry selection. An opposing eligible event is therefore not dependent on the single-candidate selection path: reversal claims are persisted, retried, and removed only after execution/reconciliation succeeds.
 
-## 5. Optimizer and multi-timeframe rotation
+## 5. Independent optimizer and multi-timeframe rotation
 
-One optimizer dataset is advanced per tick. The registered optimizer remains server-managed.
+Trading and optimization no longer share one failure boundary. The trading heartbeat reads the current sharded optimizer snapshot but never performs 5,000-candle optimization work. After the trading request completes, `OptimizerRuntimeService` advances one dataset through the internal `/optimizer/tick` route and persists its cycle/error telemetry under `optimizerRuntimeState`.
+
+Optimizer records remain server-managed and use one `optimizer:v7:<pair>|<timeframe>` key per dataset. A failed or oversized dataset records an optimizer error and advances the persisted cycle independently; it cannot abort transaction synchronization, completed-candle scanning, reconciliation, or order execution.
 
 The engine also rotates one timeframe from:
 
@@ -84,7 +86,7 @@ Orders are live OANDA `MARKET`, `FOK`, `DEFAULT` fills with durable client-order
 
 The engine ledger records configuration changes, churn warnings, initialization/migrations, partial scans, broker transactions, AI decisions/fallbacks, order fills/rejections, position closes, reversal retries/resolution, and runtime errors.
 
-The production status surface exposes execution certification, reconciliation cadence, optimizer coverage, pending reversals/orders, last run/error information, and Nemotron binding/model/policy/telemetry. The control-status surface additionally exposes account/margin and pair-selection state.
+The production status surface exposes execution certification, reconciliation cadence, optimizer coverage, independent optimizer service/storage health, pending reversals/orders, last run/error information, and Nemotron binding/model/policy/telemetry. The control-status surface additionally exposes account/margin and pair-selection state.
 
 ## 12. Protected analytical boundaries
 

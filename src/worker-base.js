@@ -257,5 +257,5 @@ export default {
       return errorResponse(error);
     }
   },
-  async scheduled(_event,env,ctx){ctx.waitUntil(env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/tick",{method:"POST"})));}
+  async scheduled(_event,env,ctx){ctx.waitUntil((async()=>{const engine=env.HTL_ENGINE.getByName("live");await engine.fetch(new Request("https://engine/tick",{method:"POST"}));await engine.fetch(new Request("https://engine/optimizer/tick",{method:"POST"}));})());}
 };

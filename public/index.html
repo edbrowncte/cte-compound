@@ -724,7 +724,6 @@
   const STRATEGY_CONFIG={ASSET:{length:10,filter:0},DARE_N:{length:50,filter:0},DARE:{length:50,filter:0},COMBO:{length:50,filter:2},NAI:{length:50,filter:0},APEX:{length:20,filter:2}};
 
   const state = {
-    connected:false,
     connectionLoading:false,
     readiness:{
       access:{status:"checking",detail:"Cloudflare Access"},
@@ -1056,7 +1055,6 @@
     state.readiness[lane]={status,detail,time:new Date().toISOString()};
     const node=el(`readiness${lane[0].toUpperCase()}${lane.slice(1)}`);
     if(node){node.textContent=detail?`${READINESS_LABELS[status]||status} · ${detail}`:(READINESS_LABELS[status]||status);node.className=status==="ready"?"positive":status==="failed"||status==="degraded"?"negative":"";}
-    if(lane==="account")state.connected=status==="ready";
     if(lane==="account"||lane==="engine"){
       const ready=accountReady()&&readinessReady("engine");
       state.readiness.execution={status:ready?"ready":"locked",detail:ready?"Account and engine verified":"Account and engine required",time:new Date().toISOString()};
@@ -1129,13 +1127,13 @@
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       el("positionsStreamStatus").textContent="Live pricing stream";el("positionsStreamStatus").classList.add("live");
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer="";
-      while(state.connected&&!controller.signal.aborted){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split("\n");buffer=lines.pop()||"";for(const line of lines){if(!line.trim())continue;try{setPositionPrice(JSON.parse(line));}catch{}}}
+      while(accountReady()&&!controller.signal.aborted){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split("\n");buffer=lines.pop()||"";for(const line of lines){if(!line.trim())continue;try{setPositionPrice(JSON.parse(line));}catch{}}}
     }catch(error){if(controller.signal.aborted)return;el("positionsStreamStatus").textContent="Live refresh";el("positionsStreamStatus").classList.remove("live");}
-    finally{if(state.connected&&!controller.signal.aborted&&state.positionStreamSignature===signature){state.positionStreamSignature="";setTimeout(()=>{if(state.connected)void startPositionStream(instruments);},2000);}}
+    finally{if(accountReady()&&!controller.signal.aborted&&state.positionStreamSignature===signature){state.positionStreamSignature="";setTimeout(()=>{if(accountReady())void startPositionStream(instruments);},2000);}}
   }
 
   async function refreshOpenPositions(){
-    if(!state.connected||state.positionsBusy)return;state.positionsBusy=true;
+    if(!accountReady()||state.positionsBusy)return;state.positionsBusy=true;
     try{
       const accountId=el("oandaAccountId").value.trim(),[positionsPayload,summaryPayload]=await Promise.all([oanda(`/v3/accounts/${encodeURIComponent(accountId)}/openPositions`),oanda(`/v3/accounts/${encodeURIComponent(accountId)}/summary`)]),positions=(positionsPayload.positions||[]).filter(position=>Number(position.long?.units||0)!==0||Number(position.short?.units||0)!==0),instruments=positions.map(position=>position.instrument);
       state.openPositions=positions;applyAccountFacts(summaryPayload.account||{},accountId);
@@ -1253,7 +1251,7 @@
   }
 
   async function saveSelectedPairs() {
-    if (!state.connected) return;
+    if (!accountReady()) return;
     const selectedPairs = [];
     const manualPositions = {};
     const checks = document.querySelectorAll(".pair-check");
@@ -1304,7 +1302,7 @@
   }
 
   async function loadControlStatus() {
-    if (!state.connected) return;
+    if (!accountReady()) return;
     try {
       const response = await fetch("/api/control/status", {
         headers: { Accept: "application/json" },
@@ -1474,13 +1472,13 @@
     state.evaluationTableData=results;
     renderEvaluationTable();
     renderFourSlotRotator();
-    if(globalThis.CTEMarketMentor)void CTEMarketMentor.update({rows:state.evaluationTableData,slots:evaluationRotatorSlots(),selectedPair:state.selectedInstrument,timeframe:activeTf,connected:state.connected});
+    if(globalThis.CTEMarketMentor)void CTEMarketMentor.update({rows:state.evaluationTableData,slots:evaluationRotatorSlots(),selectedPair:state.selectedInstrument,timeframe:activeTf,connected:accountReady()});
     queueModelContextPublish();
   }
 
   function modelContextNumber(value){const number=Number(value);return Number.isFinite(number)?number:null;}
   function queueModelContextPublish(){
-    if(!state.connected)return;clearTimeout(state.modelContextTimer);state.modelContextTimer=setTimeout(async()=>{
+    if(!accountReady())return;clearTimeout(state.modelContextTimer);state.modelContextTimer=setTimeout(async()=>{
       const controls=engineControlPerspective();
       const evaluationAligned=state.evaluationTableTimeframe===controls.timeframe,slots=(evaluationAligned?evaluationRotatorSlots():[]).map(slot=>{const c=slot.candidate;if(!c)return null;return{title:slot.title,pair:c.pair,direction:c.signal>0?"BUY":"SELL",type:c.type,regime:c.regime,strength:modelContextNumber(c.strength),mas:modelContextNumber(c.mas),im:modelContextNumber(c.im),ratio:c.ratio===Infinity?20:modelContextNumber(c.ratio),masRoc:modelContextNumber(c.masRoc),imRoc:modelContextNumber(c.imRoc),ratioRoc:modelContextNumber(c.ratioRoc),eventAngleZ:modelContextNumber(c.eventAngleZ),convexity:modelContextNumber(c.convexity),r2:modelContextNumber(c.r2),pipsPerHour:modelContextNumber(c.pipsPerHour),transitionProbability:modelContextNumber(c.transitionProbability)};}).filter(Boolean);
       const forecasts=Object.entries(state.decisionCandidates||{}).map(([key,c])=>c?{key,pair:c.pair,direction:c.direction>0?"BUY":"SELL",confidence:modelContextNumber(c.confidence),source:c.source||null}:null).filter(Boolean),pairReports=modelPairReports(),mtfForecasts=engineMtfForecasts();
@@ -1655,12 +1653,12 @@
 
   function updateTradeButtons(){
     const units=tradeUnitAmount(),minimum=minimumUnitAmount();
-    el("tradeBuy").disabled=!state.connected||state.tradeBusy||!Number.isFinite(units)||units<minimum||units>state.tradeLongAvailable;
-    el("tradeSell").disabled=!state.connected||state.tradeBusy||!Number.isFinite(units)||units<minimum||units>state.tradeShortAvailable;
+    el("tradeBuy").disabled=!accountReady()||state.tradeBusy||!Number.isFinite(units)||units<minimum||units>state.tradeLongAvailable;
+    el("tradeSell").disabled=!accountReady()||state.tradeBusy||!Number.isFinite(units)||units<minimum||units>state.tradeShortAvailable;
   }
 
   async function loadTradeCapacity(){
-    if(!state.connected)return;
+    if(!accountReady())return;
     state.tradeLongAvailable=0;state.tradeShortAvailable=0;el("factUnitsAvailable").textContent="—";updateTradeButtons();
     try{
       const accountId=el("oandaAccountId").value.trim(),instrument=el("tradePair").value,payload=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/pricing?instruments=${encodeURIComponent(instrument)}&includeUnitsAvailable=true`),available=payload.prices?.[0]?.unitsAvailable?.default;
@@ -1671,7 +1669,7 @@
   }
 
   async function placeTrade(side){
-    if(!state.connected||state.tradeBusy)return;
+    if(!accountReady()||state.tradeBusy)return;
     const accountId=el("oandaAccountId").value.trim(),instrument=el("tradePair").value,amount=tradeUnitAmount(),limit=side==="BUY"?state.tradeLongAvailable:state.tradeShortAvailable;
     if(!Number.isFinite(amount)||amount<minimumUnitAmount()||amount>limit)return;
     state.tradeBusy=true;el("tradeStatus").textContent="";updateTradeButtons();
@@ -2187,9 +2185,9 @@
   async function refreshAdaptiveTimeframe(){if(!marketDataReady()||state.adaptiveBusy||state.chartLoading||state.scheduleLoading||document.hidden)return;state.adaptiveBusy=true;const timeframe=TIMEFRAMES[state.adaptiveRotation++%TIMEFRAMES.length];try{await runPool(INSTRUMENTS,1,async pair=>{try{const count=scheduleRequestCount(pair,timeframe),payload=await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=${count}`),candles=completedCandles(payload,pair,timeframe),key=scheduleKey(pair,timeframe);if(candles.length>=(state.scheduleCandles.get(key)?.length||0))state.scheduleCandles.set(key,candles);const cached=state.autoConfigurations.get(key);state.scheduleEvaluations.set(key,analyzeWithConfiguration(candles,cached?.config||STRATEGY_CONFIG,false));renderScheduleCell(pair,timeframe);}catch{}});el("scheduleStamp").textContent=`Adaptive refresh ${timeframe} · ${new Date().toLocaleTimeString()}`;queueAutomaticOptimization();renderMtfForecast();}finally{state.adaptiveBusy=false;}}
   function startAdaptiveMonitor(){clearInterval(state.adaptiveTimer);state.adaptiveTimer=setInterval(refreshAdaptiveTimeframe,300000);}
   function stopAdaptiveMonitor(){clearInterval(state.adaptiveTimer);state.adaptiveTimer=null;state.adaptiveBusy=false;state.optimizationQueue=[];}
-  function renderMacroPerformance(){const fmt=(value,digits=2)=>Number.isFinite(value)?Number(value).toFixed(digits):"—",record=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),authoritative=Boolean(record?.source==="COMPUTE_CONFIGURATION");if(!authoritative){el("macroPerformanceScope").textContent="Not computed · Run Compute Configuration to load the current completed OANDA candle history";el("macroPerformanceBody").innerHTML='<tr><td colspan="9">Compute Configuration will determine and report the actual first and last completed OANDA candles.</td></tr>';el("computeConfiguration").disabled=!state.connected;return;}const first=record.range?.firstCandle,last=record.range?.lastCandle,bars=Number(record.range?.bars)||0;el("macroPerformanceScope").textContent=`History started ${formatTime(first)} · ended ${formatTime(last)} · ${bars} completed candles · computed ${formatTime(record.computedAt)}`;el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const entry=record.config?.[strategy.id]||{},stats={...entry,...entry.grossPerformance};return `<tr><td>${strategy.label}</td><td>${stats.trades??"—"}</td><td>${Number.isFinite(stats.wins)?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${Number(stats.net)>=0?"positive":"negative"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;}).join("");el("computeConfiguration").disabled=!state.connected;}
+  function renderMacroPerformance(){const fmt=(value,digits=2)=>Number.isFinite(value)?Number(value).toFixed(digits):"—",record=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),authoritative=Boolean(record?.source==="COMPUTE_CONFIGURATION");if(!authoritative){el("macroPerformanceScope").textContent="Not computed · Run Compute Configuration to load the current completed OANDA candle history";el("macroPerformanceBody").innerHTML='<tr><td colspan="9">Compute Configuration will determine and report the actual first and last completed OANDA candles.</td></tr>';el("computeConfiguration").disabled=!accountReady();return;}const first=record.range?.firstCandle,last=record.range?.lastCandle,bars=Number(record.range?.bars)||0;el("macroPerformanceScope").textContent=`History started ${formatTime(first)} · ended ${formatTime(last)} · ${bars} completed candles · computed ${formatTime(record.computedAt)}`;el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const entry=record.config?.[strategy.id]||{},stats={...entry,...entry.grossPerformance};return `<tr><td>${strategy.label}</td><td>${stats.trades??"—"}</td><td>${Number.isFinite(stats.wins)?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${Number(stats.net)>=0?"positive":"negative"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;}).join("");el("computeConfiguration").disabled=!accountReady();}
   function applyConfiguration(){document.querySelectorAll('[data-config-length]').forEach(input=>{if(!input.disabled)STRATEGY_CONFIG[input.dataset.configLength].length=clamp(Math.round(Number(input.value)||50),3,200);});document.querySelectorAll('[data-config-filter]').forEach(input=>{const id=input.dataset.configFilter;STRATEGY_CONFIG[id].filter=clamp(Number(input.value)||0,0,id==='COMBO'?5:10);});el("eventLength").value=STRATEGY_CONFIG.ASSET.length;state.scheduleEvaluations.clear();for(const [key,candles] of state.scheduleCandles)try{state.scheduleEvaluations.set(key,analyzeCandles(candles,false));}catch{}if(state.chartCandles.length){state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolvedConfiguration(state.selectedInstrument,state.selectedTimeframe),state.selectedStrategy);}renderSchedule();updateChartSummary();updateCompartments();drawChart();renderMacroPerformance();renderStrategyConfiguration();}
-  async function computeConfiguration(){const button=el("computeConfiguration");if(!state.connected)return;button.disabled=true;button.textContent="Computing…";el("macroPerformanceScope").textContent="Loading the current completed OANDA candle history and optimizing…";try{const response=await fetch("/api/engine/compute",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({pair:state.selectedInstrument,timeframe:state.selectedTimeframe})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?`${payload.stage||"compute"} · ${payload.error}`:`HTTP ${response.status}`);state.autoConfigurations.set(payload.key,payload.record);const resolved=payload.record.config;if(state.chartCandles.length){state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolved,state.selectedStrategy);}renderStrategyConfiguration();renderMacroPerformance();renderOptimizerRegistry();renderSchedule();void loadOptimizerEventLedger();updateChartSummary();updateCompartments();drawChart();}catch(error){el("macroPerformanceScope").textContent=error.message||"Compute Configuration failed";el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">${error.message||"Compute Configuration failed"}</td></tr>`;}finally{button.textContent="Compute Configuration";button.disabled=!state.connected;}}
+  async function computeConfiguration(){const button=el("computeConfiguration");if(!accountReady())return;button.disabled=true;button.textContent="Computing…";el("macroPerformanceScope").textContent="Loading the current completed OANDA candle history and optimizing…";try{const response=await fetch("/api/engine/compute",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({pair:state.selectedInstrument,timeframe:state.selectedTimeframe})}),payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error?`${payload.stage||"compute"} · ${payload.error}`:`HTTP ${response.status}`);state.autoConfigurations.set(payload.key,payload.record);const resolved=payload.record.config;if(state.chartCandles.length){state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,resolved,state.selectedStrategy);}renderStrategyConfiguration();renderMacroPerformance();renderOptimizerRegistry();renderSchedule();void loadOptimizerEventLedger();updateChartSummary();updateCompartments();drawChart();}catch(error){el("macroPerformanceScope").textContent=error.message||"Compute Configuration failed";el("macroPerformanceBody").innerHTML=`<tr><td colspan="9">${error.message||"Compute Configuration failed"}</td></tr>`;}finally{button.textContent="Compute Configuration";button.disabled=!accountReady();}}
 
 
   function composePlatformPanels(){
@@ -2211,10 +2209,10 @@
     }
   }
 
-  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,MAX_ANALYTICAL_LENGTH)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(marketDataReady()&&state.eventLoadedKey!==key&&!state.eventScheduleLoading)void loadEventForecast();if(state.connected&&!state.eventData&&!state.eventChartLoading)void refreshSelectedEventChart();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();void loadOptimizerEventLedger();}if(name==='evaluation'){const activeTf=el("evalTableTfFilter")?.value||"H1",chartPair=el("evalChartPair")?.value||state.selectedInstrument,chartTf=el("evalChartTimeframe")?.value||activeTf;void loadEvaluationData();void loadEvalChartData(chartPair,chartTf);void preloadEvaluationTimeframe(activeTf);setTimeout(()=>{drawEvalCharts();setupSyncedCrosshair();},50);}if(persist)queuePlatformPreferenceSave();}
+  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,MAX_ANALYTICAL_LENGTH)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(marketDataReady()&&state.eventLoadedKey!==key&&!state.eventScheduleLoading)void loadEventForecast();if(accountReady()&&!state.eventData&&!state.eventChartLoading)void refreshSelectedEventChart();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();void loadOptimizerEventLedger();}if(name==='evaluation'){const activeTf=el("evalTableTfFilter")?.value||"H1",chartPair=el("evalChartPair")?.value||state.selectedInstrument,chartTf=el("evalChartTimeframe")?.value||activeTf;void loadEvaluationData();void loadEvalChartData(chartPair,chartTf);void preloadEvaluationTimeframe(activeTf);setTimeout(()=>{drawEvalCharts();setupSyncedCrosshair();},50);}if(persist)queuePlatformPreferenceSave();}
 
   function releaseBrowserSession(){
-    state.connected=false;
+    setReadiness("account","waiting","Browser session released");
     clearTimeout(state.accountRecoveryTimer);state.accountRecoveryTimer=null;
     state.scheduleController?.abort();state.chartController?.abort();state.eventScheduleController?.abort();state.eventChartController?.abort();
     clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=null;
@@ -2228,7 +2226,7 @@
 
   function bindEvents() {
     window.addEventListener("pagehide",releaseBrowserSession);
-    window.addEventListener("pageshow",event=>{if(event.persisted&&!state.connected)void connect();});
+    window.addEventListener("pageshow",event=>{if(event.persisted&&!accountReady())void connect();});
     el("saveEngineConfig").addEventListener("click",saveEngineConfig);
     el("downloadTradingLedger").addEventListener("click",downloadTradingLedger);
     el("runPlatformDiagnostic").addEventListener("click",()=>runPlatformDiagnostic(true));
@@ -2553,7 +2551,7 @@
     });
   }
 
-  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; if(el("eventChartPair")){el("eventChartPair").innerHTML=el("chartPair").innerHTML;el("eventChartPair").value=state.selectedInstrument;} if(el("eventChartTimeframe")){el("eventChartTimeframe").innerHTML=el("chartTimeframe").innerHTML;el("eventChartTimeframe").value=state.selectedTimeframe;} buildMatrix(); buildCompartments(); buildPairSelector(); composePlatformPanels(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadTradingLedger(state.ledgerLimit);},15000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadEngineStatus();},30000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadControlStatus();},10000);setInterval(()=>{if(state.connected&&!document.hidden&&!state.chartLoading)void loadOptimizerRecords();},120000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
+  buildSelectors(); el("eventPair").innerHTML=el("chartPair").innerHTML; el("eventTimeframe").innerHTML=el("chartTimeframe").innerHTML; el("eventTimeframe").value=state.selectedTimeframe; if(el("eventChartPair")){el("eventChartPair").innerHTML=el("chartPair").innerHTML;el("eventChartPair").value=state.selectedInstrument;} if(el("eventChartTimeframe")){el("eventChartTimeframe").innerHTML=el("chartTimeframe").innerHTML;el("eventChartTimeframe").value=state.selectedTimeframe;} buildMatrix(); buildCompartments(); buildPairSelector(); composePlatformPanels(); renderStrategyConfiguration(); bindEvents(); updateDateTime();setInterval(updateDateTime,1000);setInterval(()=>{if(accountReady()&&!document.hidden&&!state.chartLoading)void loadTradingLedger(state.ledgerLimit);},15000);setInterval(()=>{if(accountReady()&&!document.hidden&&!state.chartLoading)void loadEngineStatus();},30000);setInterval(()=>{if(accountReady()&&!document.hidden&&!state.chartLoading)void loadControlStatus();},10000);setInterval(()=>{if(accountReady()&&!document.hidden&&!state.chartLoading)void loadOptimizerRecords();},120000);updateChartSummary(); updateCompartments(); drawChart(); void connect();
   </script>
 </body>
 </html>
