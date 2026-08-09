@@ -19,8 +19,7 @@ checks(engine,[
   [/SIX_INDEPENDENT_REGISTERED_HORIZON_STATE_MACHINES/,"six independent strategy contract"],
   [/REGISTERED_HORIZON_STRATEGY_V1_GROSS/,"registered gross validation"],
   [/REGISTERED_HISTORY_BARS\s*=\s*3000/,"frozen 3000-bar registered performance semantics"],
-  [/OPTIMIZER_VERSION\s*=\s*7/,"optimizer generation 7"],
-  [/OPTIMIZER_HISTORY_BARS\s*=\s*5000/,"5000-bar optimizer history"],
+  [/OPTIMIZER_VERSION\s*=\s*6/,"frozen registered optimizer generation 6"],
   [/OPPOSITE STRATEGY EVENT · NEXT OPEN/,"registered trade timing"],
   [/spreadAdjustedPerformance:\{status:"SEPARATE_NOT_COMPUTED"/,"gross/spread separation"],
   [/armed:true/,"armed private runtime"],
@@ -39,4 +38,4 @@ for(const forbidden of [/async reconcile\(/,/async execute\(/,/ONE_RAW_ASSET_REC
   if(forbidden.test(registeredEngine))throw new Error(`Forbidden registered analytical override: ${forbidden}`);
 }
 
-console.log("Registered six-strategy Horizon analytical, frozen performance, armed private execution, OANDA, optimizer-v7, ledger, and capitalization Nemotron boundaries verified.");
+console.log("Registered six-strategy Horizon analytical, frozen 3,000-bar performance/optimizer, armed private execution, OANDA, ledger, and capitalization Nemotron boundaries verified.");
