@@ -26,7 +26,7 @@ const candidate=(pair,confidence,count,score=1)=>({
 const candidates=[candidate("EUR_USD",.71,5,.8),candidate("GBP_USD",.74,6,1.4),candidate("AUD_USD",.63,4,.6)];
 
 assert.equal(__nemotronTest.AI_MODEL,"@cf/nvidia/nemotron-3-120b-a12b");
-assert.equal(__nemotronTest.AI_POLICY,"MULTI_NEW_ENTRY_CANDIDATES_ONLY");
+assert.equal(__nemotronTest.AI_POLICY,"CAPITALIZATION_NEW_ENTRY_DISCRETION");
 assert.equal(__nemotronTest.deterministicCandidate(candidates).pair,"GBP_USD");
 assert.deepEqual(__nemotronTest.parseAiResponse({response:{selectedPair:"EUR_USD",reason:"ok"}}),{selectedPair:"EUR_USD",reason:"ok"});
 assert.deepEqual(__nemotronTest.parseAiResponse({response:'{"selectedPair":"AUD_USD","reason":"json"}'}),{selectedPair:"AUD_USD",reason:"json"});
@@ -44,6 +44,7 @@ assert.deepEqual(__nemotronTest.parseAiResponse({response:'{"selectedPair":"AUD_
 
 {
   const storage=new Storage();
+  await storage.put("state",{modelContext:{receivedAt:new Date().toISOString(),mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",account:{nav:10000,marginAvailable:8000},openPositions:[{pair:"USD_JPY",direction:"BUY",units:1000,unrealizedPL:-4}],forecasts:[{key:"A",pair:"EUR_USD",direction:"BUY",confidence:.71}],slots:[{pair:"EUR_USD",type:"TREND_FOLLOWING",regime:"TREND_ALIGNED",strength:.91,mas:.05,im:.55,ratio:11,eventAngleZ:2.1,convexity:.4,r2:.72,pipsPerHour:3.2}]}});
   let aiCalls=0,modelSeen=null,inputSeen=null;
   const engine=new HtlEngine({storage},{AI:{run:async(model,input)=>{aiCalls++;modelSeen=model;inputSeen=input;return{response:{selectedPair:"EUR_USD",reason:"best risk-adjusted optimizer profile"}};}}});
   const ledger=[];engine.write=async(entry,sendNotification=true)=>ledger.push({entry,sendNotification});
@@ -52,6 +53,10 @@ assert.deepEqual(__nemotronTest.parseAiResponse({response:'{"selectedPair":"AUD_
   assert.equal(modelSeen,__nemotronTest.AI_MODEL);
   assert.equal(inputSeen.temperature,0);
   assert.equal(inputSeen.response_format.type,"json_schema");
+  const modelPayload=JSON.parse(inputSeen.messages[1].content);
+  assert.equal(modelPayload.mandate,"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION");
+  assert.equal(modelPayload.account.nav,10000);
+  assert.equal(modelPayload.candidates[0].capitalizationReport.regime,"TREND_ALIGNED");
   assert.deepEqual(inputSeen.response_format.json_schema.properties.selectedPair.enum,["EUR_USD","GBP_USD","AUD_USD"]);
   assert.equal(selected.pair,"EUR_USD");
   assert.equal(selected.Nemotron.selected,true);
@@ -112,4 +117,4 @@ assert.deepEqual(__nemotronTest.parseAiResponse({response:'{"selectedPair":"AUD_
   assert.equal(status.ai.binding,false);
 }
 
-console.log("Observable Nemotron multi-candidate-only adjudication, structured selection, telemetry, and deterministic fallback verified.");
+console.log("Observable Nemotron capitalization-model pair discretion, structured selection, unified context, telemetry, and deterministic fallback verified.");
