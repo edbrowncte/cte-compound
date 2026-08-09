@@ -3,6 +3,7 @@ import { PAIRS, TIMEFRAMES, candles, currentEvent } from "./horizon-platform-eng
 import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
 import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
 import { credentials } from "./engine-base.js";
+import { AGE_EXPECTATION_VERSION, AGE_REALLOCATION_MIN_INDEX, AGE_REALLOCATION_DELTA_INDEX, annotateAgeCandidate, continuationExpectation, reallocationDecision } from "./age-expectation.js";
 import {
   optimizedOptimizeNext,
   optimizedComputeConfiguration,
@@ -14,8 +15,8 @@ import {
 } from "./optimized-optimizer.js";
 
 const API="https://api-fxtrade.oanda.com";
-const EXECUTION_POLICY_VERSION="CERTIFIED_MULTI_REVERSAL@1.0.0";
-const AGE_POLICY_VERSION="AGE_ADMINISTRATING_GREAT_EXPECTATIONS@1.0.0";
+const EXECUTION_POLICY_VERSION="CERTIFIED_AGE_REALLOCATION@2.0.0";
+const AGE_POLICY_VERSION="AGE_ADMINISTRATING_GREAT_EXPECTATIONS@2.0.0";
 const AGE_TIME_ZONE="America/Chicago";
 const AGE_FRIDAY_FLATTEN_HOUR=15,AGE_FRIDAY_FLATTEN_MINUTE=57,AGE_SUNDAY_REOPEN_HOUR=16,AGE_SUNDAY_REOPEN_MINUTE=5;
 function ageLocalParts(now=new Date()){const parts=new Intl.DateTimeFormat("en-US",{timeZone:AGE_TIME_ZONE,weekday:"short",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(now),get=type=>parts.find(part=>part.type===type)?.value;return{weekday:get("weekday"),year:Number(get("year")),month:Number(get("month")),day:Number(get("day")),hour:Number(get("hour")),minute:Number(get("minute"))};}
@@ -128,10 +129,14 @@ function sanitizeModelContext(value){
   const compactReport=item=>{const validPair=pair(item?.pair);if(!validPair)return null;return{pair:validPair,direction:direction(item.direction),type:String(item?.type||"").slice(0,32),regime:String(item?.regime||"").slice(0,48),strength:modelNumber(item?.strength,0,1),mas:modelNumber(item?.mas,0,1),im:modelNumber(item?.im,0,1),ratio:modelNumber(item?.ratio,0,20),masRoc:modelNumber(item?.masRoc,-10,10),imRoc:modelNumber(item?.imRoc,-10,10),ratioRoc:modelNumber(item?.ratioRoc,-20,20),eventAngleZ:modelNumber(item?.eventAngleZ,-20,20),convexity:modelNumber(item?.convexity,-40,40),r2:modelNumber(item?.r2,0,1),pipsPerHour:modelNumber(item?.pipsPerHour,-10000,10000),transitionProbability:modelNumber(item?.transitionProbability,0,1)};};
   const compactForecast=item=>{const validPair=pair(item?.pair);if(!validPair)return null;return{key:["A","B","C"].includes(item?.key)?item.key:null,pair:validPair,direction:direction(item.direction),confidence:modelNumber(item?.confidence,0,1),source:String(item?.source||"").slice(0,24)};};
   const compactMtf=item=>{const validPair=pair(item?.pair);if(!validPair)return null;return{pair:validPair,direction:direction(item.direction),confidence:modelNumber(item?.confidence,0,1),matches:modelNumber(item?.matches,0,10),available:modelNumber(item?.available,0,10)};};
-  const compactPosition=item=>{const validPair=pair(item?.pair);if(!validPair)return null;return{pair:validPair,direction:direction(item.direction),units:modelNumber(item?.units,0,1e9),unrealizedPL:modelNumber(item?.unrealizedPL,-1e9,1e9)};};
+  const compactPosition=item=>{const validPair=pair(item?.pair);if(!validPair)return null;return{pair:validPair,direction:direction(item.direction),units:modelNumber(item?.units,0,1e9),averagePrice:modelNumber(item?.averagePrice,0,1e9),currentPrice:modelNumber(item?.currentPrice,0,1e9),marginUsed:modelNumber(item?.marginUsed,0,1e12),unrealizedPL:modelNumber(item?.unrealizedPL,-1e9,1e9)};};
   const strategyIds=new Set(["ASSET","DARE","DARE_N","NAI","COMBO","APEX"]),controlsBody=body.controls&&typeof body.controls==="object"?body.controls:{},controls={timeframe:TIMEFRAMES.includes(controlsBody.timeframe)?controlsBody.timeframe:null,strategy:strategyIds.has(controlsBody.strategy)?controlsBody.strategy:null,confirmationStrategy:controlsBody.confirmationStrategy==="NONE"||strategyIds.has(controlsBody.confirmationStrategy)?controlsBody.confirmationStrategy:null,htlLength:modelNumber(controlsBody.htlLength,3,200),filter:modelNumber(controlsBody.filter,0,10),decisionMode:["EVENT","MTF","COMBINED"].includes(controlsBody.decisionMode)?controlsBody.decisionMode:null,configurationSource:controlsBody.configurationSource==="OPTIMIZED"?"OPTIMIZED":null,minimumUnits:modelNumber(controlsBody.minimumUnits,1,1e9)};
   return{mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",timeframe:controls.timeframe||(TIMEFRAMES.includes(body.timeframe)?body.timeframe:null),controls,selectedPairs:(Array.isArray(body.selectedPairs)?body.selectedPairs:[]).map(pair).filter(Boolean).slice(0,PAIRS.length),account:{balance:modelNumber(body.account?.balance,0,1e12),nav:modelNumber(body.account?.nav,0,1e12),marginAvailable:modelNumber(body.account?.marginAvailable,0,1e12)},slots:(Array.isArray(body.slots)?body.slots:[]).slice(0,4).map(compactReport).filter(Boolean),pairReports:(Array.isArray(body.pairReports)?body.pairReports:[]).slice(0,PAIRS.length).map(compactReport).filter(Boolean),forecasts:(Array.isArray(body.forecasts)?body.forecasts:[]).slice(0,3).map(compactForecast).filter(Boolean),mtfForecasts:(Array.isArray(body.mtfForecasts)?body.mtfForecasts:[]).slice(0,PAIRS.length).map(compactMtf).filter(Boolean),openPositions:(Array.isArray(body.openPositions)?body.openPositions:[]).slice(0,PAIRS.length).map(compactPosition).filter(Boolean),receivedAt:new Date().toISOString()};
 }
+
+function ageContextForConfig(context,config){if(!context?.controls||!config)return null;const received=Date.parse(context.receivedAt||0);if(!Number.isFinite(received)||Date.now()-received>10*60*1000)return null;const controls=context.controls,same=(left,right)=>Math.abs(Number(left)-Number(right))<1e-9;if(controls.timeframe!==config.timeframe||controls.strategy!==config.strategy||controls.confirmationStrategy!==config.confirmationStrategy||!same(controls.htlLength,config.htlLength)||!same(controls.filter,config.filter)||controls.decisionMode!==config.decisionMode||controls.configurationSource!==config.configurationSource)return null;return context;}
+
+function compactAgePlan(plan){if(!plan)return null;return{action:plan.action,qualified:Boolean(plan.qualified),selected:plan.selected?{pair:plan.selected.pair,direction:plan.selected.direction,index:plan.selected.index,expectedPipsPerHour:plan.selected.expectedPipsPerHour}:null,displacement:plan.displacement?{pair:plan.displacement.pair,direction:plan.displacement.direction,index:plan.displacement.continuation?.index,expectedPipsPerHour:plan.displacement.continuation?.expectedPipsPerHour}:null,delta:plan.delta,threshold:plan.threshold,minimum:plan.minimum,time:new Date().toISOString()};}
 
 function compactCandidate(candidate){
   return{
@@ -141,6 +146,7 @@ function compactCandidate(candidate){
     count:Number.isFinite(candidate.count)?candidate.count:null,
     configuration:candidate.configuration||null,
     Nemotron:candidate.Nemotron||null,
+    AGE:candidate.AGE||null,
   };
 }
 
@@ -148,6 +154,9 @@ export const __executionTest=Object.freeze({
   EXECUTION_POLICY_VERSION,
   AGE_POLICY_VERSION,
   AGE_TIME_ZONE,
+  AGE_EXPECTATION_VERSION,
+  AGE_REALLOCATION_MIN_INDEX,
+  AGE_REALLOCATION_DELTA_INDEX,
   ageLocalParts,
   ageMarketWindow,
   sanitizeModelContext,
@@ -223,7 +232,11 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         resolvedAccountId:resolvedAccountId||null,
         marginAvailable:Number(summary.marginAvailable || 0),
         manualPositions:state.manualPositions||{},
-        modelContextAt:state.modelContext?.receivedAt||null
+        modelContextAt:state.modelContext?.receivedAt||null,
+        ageExpectationVersion:AGE_EXPECTATION_VERSION,
+        ageReallocationMinimumIndex:AGE_REALLOCATION_MIN_INDEX,
+        ageReallocationDeltaIndex:AGE_REALLOCATION_DELTA_INDEX,
+        ageLastPlan:state.ageLastPlan||null
       }),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     }
     return super.fetch(request);
@@ -262,13 +275,6 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
     state.lastRun=new Date().toISOString();state.lastError=null;await this.ctx.storage.put("state",state);return{closed,attempted,window};
   }
 
-  async tick(){
-    const state=(await this.ctx.storage.get("state"))||{events:{},initialized:false},config=await this.config(),window=ageMarketWindow(new Date());
-    if(window.weekendLock){await this.enforceAgeWeekendPolicy(state,config,window);return;}
-    if(state.ageWeekendLock){state.ageWeekendLock=false;state.ageReengagedAt=new Date().toISOString();state.lastNoOrderReason=null;await this.ctx.storage.put("state",state);await this.write({type:"AGE_MARKET_REENGAGEMENT",agePolicy:AGE_POLICY_VERSION,timeZone:AGE_TIME_ZONE,message:"AGE weekend lock released; resume qualified market participation"},false);}
-    return super.tick();
-  }
-
   async status(){
     const status=await super.status();
     const state=(await this.ctx.storage.get("state"))||{};
@@ -283,7 +289,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       executionCertification:"ARMED_PRIVATE_USER",
       executionPolicy:EXECUTION_POLICY_VERSION,
       pendingReversals:Object.keys(state.pendingReversals||{}).length,
-      reversalPolicy:"ALL_OPPOSING_EVENTS_INDEPENDENT_NEW_ENTRIES_NEMOTRON_RANKED",
+      reversalPolicy:"AGE_REVERSAL_AND_ALTERNATIVE_EXPECTATIONS_COMPETE",
       reconciliationCadence:"new-completed-candle-only",
       agePolicy:AGE_POLICY_VERSION,
       ageMandate:"ADMINISTRATING_GREAT_EXPECTATIONS",
@@ -291,6 +297,10 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       ageWeekendClose:"Friday 15:57 America/Chicago",
       ageWeekendLock:Boolean(state.ageWeekendLock),
       ageWeekendFlattenAt:state.ageWeekendFlattenAt||null,
+      ageExpectationVersion:AGE_EXPECTATION_VERSION,
+      ageReallocationMinimumIndex:AGE_REALLOCATION_MIN_INDEX,
+      ageReallocationDeltaIndex:AGE_REALLOCATION_DELTA_INDEX,
+      ageLastPlan:state.ageLastPlan||null,
     };
   }
 
@@ -490,6 +500,11 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
     try{
       const config=await this.config();
+      const marketWindow=ageMarketWindow(new Date());
+      if(marketWindow.weekendLock){await this.enforceAgeWeekendPolicy(state,config,marketWindow);return;}
+      if(state.ageWeekendLock){state.ageWeekendLock=false;state.ageReengagedAt=new Date().toISOString();state.lastNoOrderReason=null;await this.ctx.storage.put("state",state);await this.write({type:"AGE_MARKET_REENGAGEMENT",agePolicy:AGE_POLICY_VERSION,timeZone:AGE_TIME_ZONE,message:"AGE weekend lock released; resume qualified market participation"},false);}
+      if(state.ageExpectationVersion!==AGE_EXPECTATION_VERSION){state.ageExpectationVersion=AGE_EXPECTATION_VERSION;state.pendingReversals={};state.ageLastPlan=null;await this.ctx.storage.put("state",state);await this.write({type:"AGE_EXPECTATION_MIGRATION",agePolicy:AGE_POLICY_VERSION,expectationVersion:AGE_EXPECTATION_VERSION,message:"AGE Great Expectation v2 activated; legacy blanket reversal claims cleared so reversals compete with alternatives"},false);}
+      await this.processPendingReversals(state,token,accountId);
       const fingerprint=configFingerprint(config);
       state.config=config;
       if(state.mtfFingerprint!==fingerprint){
@@ -535,8 +550,6 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       }
 
       try{await this.syncTransactions(state,token,accountId);}catch(error){state.transactionSyncError=String(error?.message||error);}
-
-      await this.processPendingReversals(state,token,accountId);
 
       let optimizer=currentRuntimeOptimizer((await this.ctx.storage.get("optimizer"))||{});
       try{optimizer=(await this.optimizeNext(state,token)).records;}catch(error){state.optimizerLastError=String(error?.message||error);}
@@ -610,21 +623,23 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
         // Filter decisionCandidates to respect selection
         const filteredDecisionCandidates = decisionCandidates.filter(candidate => tradableSet.has(candidate.pair));
-        const{reversals,newEntries}=this.classifyCandidates(filteredDecisionCandidates,positions);
-        const reversalPairs=new Set(reversals.map(candidate=>candidate.pair));
+        const{reversals,newEntries}=this.classifyCandidates(filteredDecisionCandidates,positions),ageContext=ageContextForConfig(state.modelContext,config);
+        const deploymentCandidates=[...reversals.map(candidate=>annotateAgeCandidate(candidate,ageContext,"REVERSAL")),...newEntries.map(candidate=>annotateAgeCandidate(candidate,ageContext,"NEW_ENTRY"))];
 
-        await this.reconcile(requirements,token,accountId,state,config,positions,reversalPairs);
+        // Opposed positions are closed first; their reversal does not automatically inherit the capital. Reversal and alternative deployment now compete inside AGE.
+        await this.reconcile(requirements,token,accountId,state,config,positions);
         state.reconciledCandle=lastCandle;
 
-        if(reversals.length){
-          await this.claimReversals(reversals,state);
-          await this.processPendingReversals(state,token,accountId);
-        }
-
-        if(newEntries.length){
-          const selected=await this.choose(newEntries);
-          if(selected)await this.execute(selected,token,accountId,state);
-        }
+        if(deploymentCandidates.length){
+          const selected=await this.choose(deploymentCandidates);
+          if(selected){
+            const plan=reallocationDecision({positions,requirements,selectedCandidate:selected,context:ageContext,manualPositions:state.manualPositions||{}});state.ageLastPlan=compactAgePlan(plan);
+            await this.write({type:"AGE_EXPECTATION_DECISION",agePolicy:AGE_POLICY_VERSION,expectationVersion:AGE_EXPECTATION_VERSION,pair:selected.pair,direction:selected.event.direction>0?"BUY":"SELL",action:plan.action,greatExpectationIndex:plan.selected?.index??null,expectedPipsPerHour:plan.selected?.expectedPipsPerHour??null,displacedPair:plan.displacement?.pair||null,continuationIndex:plan.displacement?.continuation?.index??null,delta:plan.delta??null,threshold:plan.threshold,minimum:plan.minimum,message:`AGE ${plan.action} · selected ${selected.pair} · GE ${Number(plan.selected?.index||0).toFixed(1)}`},false);
+            if(selected.AGE?.candidateType==="REVERSAL"){await this.claimReversals([selected],state);await this.processPendingReversals(state,token,accountId);}
+            else if(plan.action==="REALLOCATE"&&plan.displacement?.position){const position=plan.displacement.position,existing=positionDirection(position),longUnits=Number(position.long?.units||0),shortUnits=Math.abs(Number(position.short?.units||0)),fill=await this.closePosition(position.instrument,existing,longUnits,shortUnits,token,accountId,selected.event.id,`AGE reallocation · GE delta ${Number(plan.delta||0).toFixed(1)}`,{...this.decisionContext(selected,config),agePolicy:AGE_POLICY_VERSION,expectationVersion:AGE_EXPECTATION_VERSION,capitalDisposition:"REALLOCATE",replacementPair:selected.pair,greatExpectationIndex:plan.selected?.index??null,continuationIndex:plan.displacement?.continuation?.index??null});if(fill)await this.execute(selected,token,accountId,state);else state.lastNoOrderReason=`AGE displacement close failed for ${position.instrument}; replacement ${selected.pair} withheld`; }
+            else await this.execute(selected,token,accountId,state);
+          }
+        }else{const monitored=(positions||[]).map(position=>{const direction=positionDirection(position);if(!direction)return null;const continuation=continuationExpectation({pair:position.instrument,direction},requirements[position.instrument],ageContext);return{pair:position.instrument,direction,index:continuation.index,expectedPipsPerHour:continuation.expectedPipsPerHour,disposition:continuation.disposition};}).filter(Boolean);state.ageLastPlan={action:"MONITOR_CONTINUATIONS",qualified:false,selected:null,displacement:null,delta:null,threshold:AGE_REALLOCATION_DELTA_INDEX,minimum:AGE_REALLOCATION_MIN_INDEX,positions:monitored,time:new Date().toISOString()};}
 
         for(const row of rows)state.events[row.pair]=row.event.id;
         state.mtfDecisionDirections=Object.fromEntries(mtfNow.map(row=>[row.pair,row.event.direction]));

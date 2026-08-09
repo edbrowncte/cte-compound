@@ -5,40 +5,13 @@ import {__nemotronTest} from "../src/engine-nemotron-base.js";
 
 const html=fs.readFileSync("public/index.html","utf8"),certified=fs.readFileSync("src/engine-certified-execution.js","utf8"),nemotron=fs.readFileSync("src/engine-nemotron-base.js","utf8");
 
-assert.match(html,/id="modelControlPerspective"/);
-assert.match(html,/id="modelDecisionPerspective"/);
-assert.match(html,/id="modelPositionPerspective"/);
-assert.match(html,/id="modelUniversePerspective"/);
-assert.match(html,/function engineControlPerspective\(\)/);
-assert.match(html,/function engineScheduleAnalysis\(pair,timeframe\)/);
-assert.match(html,/function engineMtfForecasts\(\)/);
-assert.match(html,/function modelPairReports\(\)/);
-assert.match(html,/tableTf\.value=state\.engineConfig\.timeframe/);
-assert.match(html,/const output=engineScheduleAnalysis\(pair,timeframe\)/);
-assert.match(html,/mtfPairDecision\(pair\)/);
-assert.doesNotMatch(html,/mtfPairDecision\(pair,strategy=state\.selectedScheduleStrategy\)/);
-assert.match(html,/controls:\{timeframe:controls\.timeframe,strategy:controls\.strategy,confirmationStrategy:controls\.confirmationStrategy,htlLength:controls\.htlLength,filter:controls\.filter,decisionMode:controls\.decisionMode/);
-assert.match(html,/pairReports,forecasts,mtfForecasts,openPositions/);
-assert.match(html,/active-lane/);
-assert.match(certified,/pairReports:/);
-assert.match(certified,/mtfForecasts:/);
-assert.match(certified,/selectedPairs:/);
-assert.match(nemotron,/modelContextMatchesConfig/);
-assert.match(nemotron,/controls:modelContext\?\.controls\|\|null/);
-assert.match(nemotron,/mtfForecasts:modelContext\?\.mtfForecasts\|\|\[\]/);
-assert.match(nemotron,/Existing positions are the capital currently occupied in the account/);
+assert.match(html,/id="modelControlPerspective"/);assert.match(html,/id="modelDecisionPerspective"/);assert.match(html,/id="modelPositionPerspective"/);assert.match(html,/id="modelUniversePerspective"/);assert.match(html,/function engineControlPerspective\(\)/);assert.match(html,/function engineScheduleAnalysis\(pair,timeframe\)/);assert.match(html,/function engineMtfForecasts\(\)/);assert.match(html,/function modelPairReports\(\)/);assert.match(html,/tableTf\.value=state\.engineConfig\.timeframe/);assert.match(html,/const output=engineScheduleAnalysis\(pair,timeframe\)/);assert.match(html,/mtfPairDecision\(pair\)/);assert.doesNotMatch(html,/mtfPairDecision\(pair,strategy=state\.selectedScheduleStrategy\)/);assert.match(html,/controls:\{timeframe:controls\.timeframe,strategy:controls\.strategy,confirmationStrategy:controls\.confirmationStrategy,htlLength:controls\.htlLength,filter:controls\.filter,decisionMode:controls\.decisionMode/);assert.match(html,/pairReports,forecasts,mtfForecasts,openPositions/);assert.match(html,/averagePrice:modelContextNumber/);assert.match(html,/marginUsed:modelContextNumber/);assert.match(html,/active-lane/);
+assert.match(certified,/pairReports:/);assert.match(certified,/mtfForecasts:/);assert.match(certified,/selectedPairs:/);assert.match(certified,/ageLastPlan/);assert.match(nemotron,/modelContextMatchesConfig/);assert.match(nemotron,/controls:modelContext\?\.controls\|\|null/);assert.match(nemotron,/mtfForecasts:modelContext\?\.mtfForecasts\|\|\[\]/);assert.match(nemotron,/Existing positions are occupied capital/);
 
 const controls={timeframe:"M5",strategy:"DARE_N",confirmationStrategy:"NAI",htlLength:30,filter:.5,decisionMode:"MTF",configurationSource:"OPTIMIZED",minimumUnits:1000};
-const sanitized=__executionTest.sanitizeModelContext({type:"MODEL_CONTEXT",timeframe:"H1",controls,selectedPairs:["EUR_USD","USD_JPY","BAD_PAIR"],account:{nav:10000,marginAvailable:8000},pairReports:[{pair:"EUR_USD",direction:"BUY",regime:"TREND_ALIGNED",strength:.8}],mtfForecasts:[{pair:"EUR_USD",direction:"BUY",confidence:.75,matches:7,available:9}],openPositions:[{pair:"USD_JPY",direction:"SELL",units:1000,unrealizedPL:-2.5}]});
-assert.deepEqual(sanitized.controls,{...controls});
-assert.equal(sanitized.timeframe,"M5");
-assert.deepEqual(sanitized.selectedPairs,["EUR_USD","USD_JPY"]);
-assert.equal(sanitized.pairReports.length,1);
-assert.equal(sanitized.mtfForecasts.length,1);
-assert.equal(sanitized.openPositions.length,1);
+const sanitized=__executionTest.sanitizeModelContext({type:"MODEL_CONTEXT",timeframe:"H1",controls,selectedPairs:["EUR_USD","USD_JPY","BAD_PAIR"],account:{nav:10000,marginAvailable:8000},pairReports:[{pair:"EUR_USD",direction:"BUY",regime:"TREND_ALIGNED",strength:.8}],mtfForecasts:[{pair:"EUR_USD",direction:"BUY",confidence:.75,matches:7,available:9}],openPositions:[{pair:"USD_JPY",direction:"SELL",units:1000,averagePrice:155.2,currentPrice:155.1,marginUsed:42,unrealizedPL:-2.5}]});
+assert.deepEqual(sanitized.controls,{...controls});assert.equal(sanitized.timeframe,"M5");assert.deepEqual(sanitized.selectedPairs,["EUR_USD","USD_JPY"]);assert.equal(sanitized.pairReports.length,1);assert.equal(sanitized.mtfForecasts.length,1);assert.equal(sanitized.openPositions.length,1);assert.equal(sanitized.openPositions[0].averagePrice,155.2);assert.equal(sanitized.openPositions[0].currentPrice,155.1);assert.equal(sanitized.openPositions[0].marginUsed,42);
 const activeConfig={timeframe:"M5",strategy:"DARE_N",confirmationStrategy:"NAI",htlLength:30,filter:.5,decisionMode:"MTF",configurationSource:"OPTIMIZED"};
-assert.equal(__nemotronTest.modelContextMatchesConfig(sanitized,activeConfig),true);
-assert.equal(__nemotronTest.modelContextMatchesConfig(sanitized,{...activeConfig,decisionMode:"EVENT"}),false);
-assert.equal(__nemotronTest.modelContextMatchesConfig(sanitized,{...activeConfig,timeframe:"M15"}),false);
+assert.equal(__nemotronTest.modelContextMatchesConfig(sanitized,activeConfig),true);assert.equal(__nemotronTest.modelContextMatchesConfig(sanitized,{...activeConfig,decisionMode:"EVENT"}),false);assert.equal(__nemotronTest.modelContextMatchesConfig(sanitized,{...activeConfig,timeframe:"M15"}),false);
 
-console.log("Automated trading controls, MTF Forecast, open-position monitoring, and Capitalization Model context remain in one execution perspective.");
+console.log("Automated trading controls, MTF Forecast, occupied-capital details, AGE reallocation state, and Capitalization Model context remain in one execution perspective.");
