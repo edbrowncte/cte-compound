@@ -2,7 +2,7 @@
   "use strict";
 
   const VERSION="CTE_UNIFIED_EVALUATION_CHART@1.0.0";
-  const finite=value=>Number.isFinite(Number(value));
+  const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
   function drawSeries(ctx,values,start,end,indexToX,valueToY,color,width=1.8){
@@ -30,8 +30,9 @@
     if(!visibleCandles.length)return{visibleStart,visibleEnd,visibleCandles,latestIndex:candles.length-1};
 
     const indicatorSet=options.indicatorSet||{price:[],z:[],osc:[]},indicators=options.indicators||{},hasOscillator=Boolean(indicatorSet.osc?.length),rightIndent=Math.max(0,Number(options.rightIndent)||0),rightAxisWidth=60+rightIndent,margin={top:20,right:rightAxisWidth,bottom:28,left:40},plot={x:margin.left,y:margin.top,w:Math.max(80,width-margin.left-margin.right),h:Math.max(80,height-margin.top-margin.bottom)},pricePlot=hasOscillator?{...plot,h:plot.h*.72}:plot,oscPlot=hasOscillator?{x:plot.x,y:plot.y+plot.h*.78,w:plot.w,h:plot.h*.22}:null,gridEndX=width-60;
-    const priceValues=(indicatorSet.price||[]).flatMap(([key])=>(indicators[key]||[]).slice(visibleStart,visibleEnd).filter(finite).map(Number)),live=finite(options.livePrice)?Number(options.livePrice):NaN;
-    let low=Math.min(...visibleCandles.map(c=>Number(c.low)),...priceValues,...(finite(live)?[live]:[])),high=Math.max(...visibleCandles.map(c=>Number(c.high)),...priceValues,...(finite(live)?[live]:[]));
+    const candleLow=Math.min(...visibleCandles.map(c=>Number(c.low))),candleHigh=Math.max(...visibleCandles.map(c=>Number(c.high))),candleSpan=Math.max(candleHigh-candleLow,Math.abs(candleHigh)*1e-6),plausiblePrice=value=>finite(value)&&Number(value)>=Math.max(Number.EPSILON,candleLow-candleSpan*2)&&Number(value)<=candleHigh+candleSpan*2;
+    const priceValues=(indicatorSet.price||[]).flatMap(([key])=>(indicators[key]||[]).slice(visibleStart,visibleEnd).filter(plausiblePrice).map(Number)),live=finite(options.livePrice)?Number(options.livePrice):NaN;
+    let low=Math.min(candleLow,...priceValues,...(finite(live)?[live]:[])),high=Math.max(candleHigh,...priceValues,...(finite(live)?[live]:[]));
     if(!finite(low)||!finite(high)){low=0;high=1;}const pad=(high-low)*.1||Math.max(Math.abs(high)*1e-6,.00001);low-=pad;high+=pad;
     const priceToY=price=>pricePlot.y+(high-price)/(high-low)*pricePlot.h,barWidth=pricePlot.w/Math.max(1,visibleCandles.length),indexToX=index=>pricePlot.x+(index+.5)*barWidth;
 
@@ -46,7 +47,7 @@
 
     visibleCandles.forEach((c,index)=>{const x=indexToX(index),rising=Number(c.close)>=Number(c.open),stroke=rising?"#48c78e":"#ef6b73";ctx.strokeStyle=stroke;ctx.fillStyle=stroke;ctx.beginPath();ctx.moveTo(x,priceToY(Number(c.high)));ctx.lineTo(x,priceToY(Number(c.low)));ctx.stroke();const bodyTop=priceToY(Math.max(Number(c.open),Number(c.close))),bodyBottom=priceToY(Math.min(Number(c.open),Number(c.close))),bodyWidth=Math.max(1,Math.min(11,barWidth*.6));ctx.fillRect(x-bodyWidth/2,bodyTop,bodyWidth,Math.max(1,bodyBottom-bodyTop));});
 
-    for(const [key,,color] of indicatorSet.price||[])drawSeries(ctx,indicators[key],visibleStart,visibleEnd,indexToX,priceToY,color,1.8);
+    for(const [key,,color] of indicatorSet.price||[])drawSeries(ctx,(indicators[key]||[]).map(value=>plausiblePrice(value)?value:null),visibleStart,visibleEnd,indexToX,priceToY,color,1.8);
 
     const zDefinitions=indicatorSet.z||[],zValues=zDefinitions.flatMap(([key])=>(indicators[key]||[]).slice(visibleStart,visibleEnd).filter(finite).map(Number));
     if(zValues.length){const zMax=Math.max(1,...zValues.map(value=>Math.abs(value)))*1.08,zToY=value=>pricePlot.y+(zMax-value)/(zMax*2)*pricePlot.h;ctx.font="9px ui-monospace,monospace";ctx.textAlign="right";for(let i=0;i<=4;i++){const value=zMax-i*zMax/2,y=zToY(value);ctx.strokeStyle=value===0?"#415267":"#1c2632";ctx.setLineDash(value===0?[4,4]:[]);ctx.beginPath();ctx.moveTo(pricePlot.x,y+.5);ctx.lineTo(gridEndX,y+.5);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#68aee8";ctx.fillText(value.toFixed(2),pricePlot.x-7,y);}ctx.textAlign="left";for(const [key,,color] of zDefinitions)drawSeries(ctx,indicators[key],visibleStart,visibleEnd,indexToX,zToY,color,1.8);}
