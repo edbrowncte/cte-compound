@@ -1,3 +1,5 @@
+import { requireCloudflareAccess } from "./access-auth.js";
+
 const LIVE_OANDA_ORIGIN = "https://api-fxtrade.oanda.com";
 const LIVE_OANDA_STREAM_ORIGIN = "https://stream-fxtrade.oanda.com";
 export { HtlEngine } from "./engine.js";
@@ -218,6 +220,7 @@ export default {
   async fetch(request,env) {
     const url=new URL(request.url);
     try {
+      await requireCloudflareAccess(request,env);
       if(url.pathname.startsWith("/api/")) {
         assertSameOrigin(request);
         if(url.pathname==="/api/oanda/connect"&&request.method==="GET") return await handleConnect(env);

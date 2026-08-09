@@ -64,7 +64,7 @@ export function reallocationDecision({positions=[],requirements={},selectedCandi
     const delta=selectedExpectation.index-samePair.continuation.index;
     return{action:"REVERSE",qualified:true,selected:selectedExpectation,displacement:samePair,delta,threshold:AGE_REALLOCATION_DELTA_INDEX,minimum:AGE_REALLOCATION_MIN_INDEX};
   }
-  const candidates=occupied.filter(item=>item.pair!==selectedCandidate.pair).map(item=>({...item,delta:selectedExpectation.index-item.continuation.index})).filter(item=>selectedExpectation.index>=AGE_REALLOCATION_MIN_INDEX&&item.delta>=AGE_REALLOCATION_DELTA_INDEX).sort((a,b)=>b.delta-a.delta||a.continuation.index-b.continuation.index);
+  const candidates=occupied.filter(item=>item.pair!==selectedCandidate.pair&&item.continuation.disposition!=="OPPOSED_BY_CURRENT_III").map(item=>({...item,delta:selectedExpectation.index-item.continuation.index})).filter(item=>selectedExpectation.index>=AGE_REALLOCATION_MIN_INDEX&&item.delta>=AGE_REALLOCATION_DELTA_INDEX).sort((a,b)=>b.delta-a.delta||a.continuation.index-b.continuation.index);
   const displacement=candidates[0]||null;
   return displacement?{action:"REALLOCATE",qualified:true,selected:selectedExpectation,displacement,delta:displacement.delta,threshold:AGE_REALLOCATION_DELTA_INDEX,minimum:AGE_REALLOCATION_MIN_INDEX}:{action:"DEPLOY_WITHOUT_DISPLACEMENT",qualified:false,selected:selectedExpectation,displacement:null,delta:null,threshold:AGE_REALLOCATION_DELTA_INDEX,minimum:AGE_REALLOCATION_MIN_INDEX};
 }

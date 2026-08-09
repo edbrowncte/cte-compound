@@ -349,6 +349,9 @@
             <div class="heartbeat-item"><span>Latency</span><strong id="NemotronLatency">—</strong></div>
             <div class="heartbeat-item"><span>Daily</span><strong id="NemotronDaily">—</strong></div>
             <div class="heartbeat-item"><span>Total</span><strong id="NemotronTotal">—</strong></div>
+            <div class="heartbeat-item"><span>AGE Action</span><strong id="AgeAction">—</strong></div>
+            <div class="heartbeat-item"><span>Great Expectation</span><strong id="AgeExpectation">—</strong></div>
+            <div class="heartbeat-item"><span>Reallocation Gate</span><strong id="AgeGate">—</strong></div>
           </div>
           <div id="NemotronReason" style="margin-top:8px; color:var(--muted); font-size:9px; line-height:1.35;">Awaiting engine status.</div>
         </div>
@@ -1322,6 +1325,10 @@
       const selectedStr = (data.selectedPairs && data.selectedPairs.length > 0) ? data.selectedPairs.map(formatPair).join(", ") : "—";
       const resolvedAcc = data.resolvedAccountId || "—";
       el("hbCardStats").textContent = `Margin: ${formattedMargin} | Open: ${openCount} | Selected: ${selectedStr} | Resolved Account: ${resolvedAcc}`;
+      const agePlan=data.ageLastPlan||null,ageSelected=agePlan?.selected,ageDisplacement=agePlan?.displacement;
+      if(el("AgeAction"))el("AgeAction").textContent=agePlan?.action||"MONITOR";
+      if(el("AgeExpectation"))el("AgeExpectation").textContent=ageSelected?.index!==undefined&&ageSelected?.index!==null?`${formatPair(ageSelected.pair||"")} · GE ${Number(ageSelected.index).toFixed(1)}${Number.isFinite(Number(ageSelected.expectedPipsPerHour))?` · ${Number(ageSelected.expectedPipsPerHour).toFixed(1)} pips/hr`:""}`:agePlan?.positions?.length?agePlan.positions.map(item=>`${formatPair(item.pair)} ${Number(item.index).toFixed(1)}`).join(" · "):"Awaiting qualified expectation";
+      if(el("AgeGate"))el("AgeGate").textContent=`GE ≥ ${Number(data.ageReallocationMinimumIndex??62).toFixed(0)} · Δ ≥ ${Number(data.ageReallocationDeltaIndex??12).toFixed(0)}${ageDisplacement?.pair?` · vs ${formatPair(ageDisplacement.pair)}`:""}`;
     } catch (error) {
       console.error("Failed to load control status:", error);
     }
@@ -1446,7 +1453,7 @@
       const evaluationAligned=state.evaluationTableTimeframe===controls.timeframe,slots=(evaluationAligned?evaluationRotatorSlots():[]).map(slot=>{const c=slot.candidate;if(!c)return null;return{title:slot.title,pair:c.pair,direction:c.signal>0?"BUY":"SELL",type:c.type,regime:c.regime,strength:modelContextNumber(c.strength),mas:modelContextNumber(c.mas),im:modelContextNumber(c.im),ratio:c.ratio===Infinity?20:modelContextNumber(c.ratio),masRoc:modelContextNumber(c.masRoc),imRoc:modelContextNumber(c.imRoc),ratioRoc:modelContextNumber(c.ratioRoc),eventAngleZ:modelContextNumber(c.eventAngleZ),convexity:modelContextNumber(c.convexity),r2:modelContextNumber(c.r2),pipsPerHour:modelContextNumber(c.pipsPerHour),transitionProbability:modelContextNumber(c.transitionProbability)};}).filter(Boolean);
       const forecasts=Object.entries(state.decisionCandidates||{}).map(([key,c])=>c?{key,pair:c.pair,direction:c.direction>0?"BUY":"SELL",confidence:modelContextNumber(c.confidence),source:c.source||null}:null).filter(Boolean),pairReports=modelPairReports(),mtfForecasts=engineMtfForecasts();
       const readMoney=id=>{const value=Number(String(el(id)?.textContent||"").replaceAll(",",""));return Number.isFinite(value)?value:null;};
-      const openPositions=(state.openPositions||[]).map(position=>{const long=Number(position.long?.units||0),short=Math.abs(Number(position.short?.units||0)),direction=long>0?"BUY":short>0?"SELL":null;return direction?{pair:position.instrument,direction,units:Math.max(long,short),unrealizedPL:modelContextNumber(position.unrealizedPL??(long>0?position.long?.unrealizedPL:position.short?.unrealizedPL))}:null;}).filter(Boolean);
+      const openPositions=(state.openPositions||[]).map(position=>{const long=Number(position.long?.units||0),short=Math.abs(Number(position.short?.units||0)),direction=long>0?"BUY":short>0?"SELL":null,details=long>0?position.long:position.short,price=state.positionPrices.get(position.instrument),current=Number(long>0?price?.bid:price?.ask);return direction?{pair:position.instrument,direction,units:Math.max(long,short),averagePrice:modelContextNumber(details?.averagePrice),currentPrice:modelContextNumber(current),marginUsed:modelContextNumber(position.marginUsed),unrealizedPL:modelContextNumber(position.unrealizedPL??details?.unrealizedPL)}:null;}).filter(Boolean);
       const body={type:"MODEL_CONTEXT",mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",timeframe:controls.timeframe,controls:{timeframe:controls.timeframe,strategy:controls.strategy,confirmationStrategy:controls.confirmationStrategy,htlLength:controls.htlLength,filter:controls.filter,decisionMode:controls.decisionMode,configurationSource:controls.configurationSource,minimumUnits:controls.minimumUnits},selectedPairs:controls.selectedPairs,account:{balance:readMoney("factBalance"),nav:readMoney("factNav"),marginAvailable:readMoney("factMargin")},slots,pairReports,forecasts,mtfForecasts,openPositions};
       try{const response=await fetch("/api/evaluation/log",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify(body)});if(!response.ok)throw new Error("HTTP "+response.status);const node=el("modelContextStatus");if(node)node.textContent=`Model synchronized · ${controls.timeframe} · ${controls.decisionLabel} · ${new Date().toLocaleTimeString()}`;}catch(error){const node=el("modelContextStatus");if(node)node.textContent="Model context pending · "+(error.message||error);}
     },300);
