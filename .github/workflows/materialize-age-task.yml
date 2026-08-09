@@ -1,0 +1,34 @@
+name: Materialize AGE task identity
+
+on:
+  push:
+    branches:
+      - feature/age-administrating-great-expectations
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/age-administrating-great-expectations
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply AGE naming migration
+        run: node scripts/migrate-age-task.mjs
+      - name: Commit AGE runtime identity
+        run: |
+          if git diff --quiet src/engine-nemotron-base.js public/index.html package.json; then
+            echo "No AGE migration diff."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/engine-nemotron-base.js public/index.html package.json
+          git commit -m "feat: name Nemotron AGE administrating great expectations"
+          git push origin HEAD:feature/age-administrating-great-expectations
