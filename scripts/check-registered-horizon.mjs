@@ -18,8 +18,9 @@ checks(engine,[
   [/horizon-strategy-v1/,"registered strategy engine"],
   [/SIX_INDEPENDENT_REGISTERED_HORIZON_STATE_MACHINES/,"six independent strategy contract"],
   [/REGISTERED_HORIZON_STRATEGY_V1_GROSS/,"registered gross validation"],
-  [/REGISTERED_HISTORY_BARS\s*=\s*3000/,"3000-bar performance semantics"],
-  [/OPTIMIZER_VERSION\s*=\s*6/,"optimizer generation 6"],
+  [/REGISTERED_HISTORY_BARS\s*=\s*3000/,"frozen 3000-bar registered performance semantics"],
+  [/OPTIMIZER_VERSION\s*=\s*7/,"optimizer generation 7"],
+  [/OPTIMIZER_HISTORY_BARS\s*=\s*5000/,"5000-bar optimizer history"],
   [/OPPOSITE STRATEGY EVENT · NEXT OPEN/,"registered trade timing"],
   [/spreadAdjustedPerformance:\{status:"SEPARATE_NOT_COMPUTED"/,"gross/spread separation"],
   [/armed:true/,"armed private runtime"],
@@ -27,7 +28,7 @@ checks(engine,[
   [/async reconcile\(/,"active inherited reconciliation"],
   [/async execute\(/,"active inherited automated execution"],
   [/NEMOTRON_CANDIDATE_TOOL@3\.0\.0/,"Nemotron structured integration"],
-  [/MULTI_NEW_ENTRY_CANDIDATES_ONLY/,"Nemotron invocation boundary"],
+  [/CAPITALIZATION_NEW_ENTRY_DISCRETION/,"Nemotron capitalization pair-discretion boundary"],
   [/response_format:\{type:"json_schema"/,"Nemotron constrained structured output"],
   [/transactions\/sinceid/,"lost-response transaction synchronization"],
   [/pendingOrders/,"durable pending-order state"],
@@ -38,4 +39,4 @@ for(const forbidden of [/async reconcile\(/,/async execute\(/,/ONE_RAW_ASSET_REC
   if(forbidden.test(registeredEngine))throw new Error(`Forbidden registered analytical override: ${forbidden}`);
 }
 
-console.log("Registered six-strategy Horizon analytical, performance, armed private execution, OANDA, ledger, and selective Nemotron boundaries verified.");
+console.log("Registered six-strategy Horizon analytical, frozen performance, armed private execution, OANDA, optimizer-v7, ledger, and capitalization Nemotron boundaries verified.");
