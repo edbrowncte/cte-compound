@@ -658,12 +658,8 @@
         </div>
         <p class="event-note" id="eventScheduleStatus">HTL schedule not loaded.</p>
         <p class="event-note" id="eventScheduleInterpretation">Current Event is the active Asset/Inverse crossing; Current Event Open is the completed crossing candle close; Location is AA above average or BA below average; completion columns estimate the active event ending within 5 or 10 bars; Events counts FINAL events; MAE columns measure duration and envelope error; Onset Brier measures the same-direction ≤10-bar probability error; Historical Brier is the rolling historical-frequency benchmark; Next HTL Event and Forecast Envelope describe the next opposite event.</p>
+        <input id="eventStrategy" type="hidden" value="ASSET">
         <div class="chart-toolbar event-chart-toolbar">
-          <label class="field"><span>Currency pair</span><select id="eventChartPair"></select></label>
-          <label class="field"><span>Timeframe</span><select id="eventChartTimeframe"></select></label>
-          <label class="field"><span>Strategy</span><select id="eventStrategy"></select></label>
-          <label class="field"><span>Length</span><input id="eventChartLength" type="number" min="3" max="500" value="10" style="width:70px;"></label>
-          <label class="field"><span>Filter</span><input id="eventChartFilter" type="number" min="0" max="10" step="0.1" value="0" style="width:70px;"></label>
           <button id="refreshEventChart" type="button" disabled>Refresh chart</button>
           <button id="eventZoomOut" type="button">Zoom −</button><button id="eventZoomIn" type="button">Zoom +</button>
           <button id="eventIndentOut" type="button">Indent +</button><button id="eventIndentIn" type="button">Indent −</button>
@@ -1687,9 +1683,15 @@
       el("accountFacts").hidden=false;el("positionsPanel").hidden=false;el("automationPanel").hidden=false;
       setConnectionStatus(`Live OANDA · •••${String(accountId).slice(-3)} · completed midpoint candles`,"connected");
       startPositionMonitor();
-      await Promise.all([loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";}),loadOptimizerRecords(),loadControlStatus().catch(()=>{})]);
-      void loadTradingLedger();void loadEngineStatus();
-      await loadTradeCapacity();await loadChart();void loadSchedule("focused");
+      const reportOptionalFailure=(label,error)=>console.error(`${label} initialization failed:`,error);
+      void loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";reportOptionalFailure("Engine configuration",error);});
+      void loadOptimizerRecords().catch(error=>reportOptionalFailure("Optimizer records",error));
+      void loadControlStatus().catch(error=>reportOptionalFailure("Control status",error));
+      void loadTradingLedger().catch(error=>reportOptionalFailure("Trading ledger",error));
+      void loadEngineStatus().catch(error=>reportOptionalFailure("Engine status",error));
+      void loadTradeCapacity().catch(error=>reportOptionalFailure("Trade capacity",error));
+      await loadChart();
+      void loadSchedule("focused");
     } catch (error) {
       state.connected=false;el("accountFacts").hidden=true;el("positionsPanel").hidden=true;el("automationPanel").hidden=true;stopPositionMonitor();stopAdaptiveMonitor();
       el("oandaAccountState").textContent="Cloudflare secret";el("oandaApiState").textContent="Server managed";
@@ -2068,12 +2070,12 @@
   }
   function selectEventScheduleRow(pair,focusRow=false){
     const row=state.eventRows.find(item=>item.pair===pair);if(!row)return;
-    el("eventPair").value=pair;renderEventSchedule();
+    el("eventPair").value=pair;renderEventDetail(row);
     if(focusRow)requestAnimationFrame(()=>{const target=el("eventScheduleBody").querySelector(`tr[data-pair="${pair}"]`);target?.focus();target?.scrollIntoView({block:"nearest",inline:"nearest"});});
   }
   function eventCausalIndicators(pair,timeframe,length,data){const key=`${pair}|${timeframe}|${length}|${data.length}|${data.at(-1)?.time||""}`;let indicators=state.eventIndicatorCache.get(key);if(!indicators){indicators=causalIndicatorSetFast(data,length);state.eventIndicatorCache.set(key,indicators);while(state.eventIndicatorCache.size>8)state.eventIndicatorCache.delete(state.eventIndicatorCache.keys().next().value);}return indicators;}
   function eventDraw(data,htl,events){
-    if(!data?.length)return;const pair=el("eventChartPair")?.value||el("eventPair")?.value||state.selectedInstrument,timeframe=el("eventChartTimeframe")?.value||el("eventTimeframe")?.value||state.selectedTimeframe,strategy=el("eventStrategy")?.value||state.eventSelectedStrategy||"ASSET",length=clamp(Math.round(Number(el("eventChartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),indicators=unifiedIndicatorSet(pair,timeframe,data,length);
+    if(!data?.length)return;const pair=el("eventPair")?.value||state.selectedInstrument,timeframe=el("eventTimeframe")?.value||state.selectedTimeframe,strategy="ASSET",length=clamp(Math.round(Number(el("eventLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),indicators=unifiedIndicatorSet(pair,timeframe,data,length);
     renderUnifiedChartSurface({canvasId:"eventChart",candles:data,pair,timeframe,strategy,length,visibleBars:state.eventVisibleBars,offsetBars:state.eventOffsetBars,rightIndent:state.eventRightIndent,crosshairEnabled:state.eventCrosshairEnabled,crosshair:state.eventCrosshair,legendId:"eventIndicatorLegend",indicators});
   }
   function eventHistoryCount(){return MAX_ANALYTICAL_HISTORY;}
@@ -2094,7 +2096,7 @@
   }
   async function refreshSelectedEventChart(){
     if(!state.connected||state.eventChartLoading)return;
-    const pair=el("eventChartPair")?.value||state.selectedInstrument,timeframe=el("eventChartTimeframe")?.value||state.selectedTimeframe,length=clamp(Math.trunc(Number(el("eventChartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),button=el("refreshEventChart"),controller=new AbortController();
+    const pair=el("eventPair")?.value||state.selectedInstrument,timeframe=el("eventTimeframe")?.value||state.selectedTimeframe,length=clamp(Math.trunc(Number(el("eventLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),button=el("refreshEventChart"),controller=new AbortController();
     state.eventChartController?.abort();state.eventChartController=controller;state.eventChartLoading=true;button.disabled=true;el("eventMessage").hidden=false;el("eventMessage").textContent=`Refreshing ${formatPair(pair)} ${timeframe} completed candles…`;
     try{const row=await loadEventRow(pair,timeframe,length,controller,100,MAX_ANALYTICAL_HISTORY);renderEventDetail(row);updateDecisionDisplays();el("eventMessage").hidden=true;}
     catch(error){if(error.name!=="AbortError"){el("eventMessage").hidden=false;el("eventMessage").textContent=error.message||"Event chart refresh failed.";}}
@@ -2114,7 +2116,7 @@
       if(!controller.signal.aborted&&failures.size){const retryPairs=[...failures.keys()];status.textContent=`Retrying ${retryPairs.length} unresolved HTL dataset${retryPairs.length===1?"":"s"}…`;await new Promise(resolve=>setTimeout(resolve,800));await runPool(retryPairs,1,pair=>load(pair,70));}
       if(!controller.signal.aborted){
         state.eventFailures=new Map(failures);state.eventLoadedKey=loadKey;const selected=state.eventRows.find(row=>row.pair===selectedPair)||state.eventRows[0];
-        if(selected&&(!state.eventData||el("eventChartPair")?.value===selected.pair&&el("eventChartTimeframe")?.value===timeframe))renderEventDetail(selected);
+        if(selected&&(!state.eventData||el("eventPair")?.value===selected.pair&&el("eventTimeframe")?.value===timeframe))renderEventDetail(selected);
         const unresolved=[...failures.entries()];status.textContent=unresolved.length?`HTL schedule ${state.eventRows.length} / ${INSTRUMENTS.length} loaded · ${unresolved.length} unresolved · ${formatPair(unresolved[0][0])}: ${unresolved[0][1]}`:`HTL schedule loaded · ${state.eventRows.length} / ${INSTRUMENTS.length}${fallbacks?` · ${fallbacks} cached-history fallback${fallbacks===1?"":"s"}`:""}`;
         updateDecisionDisplays();
       }
@@ -2306,7 +2308,7 @@
     el("chartLength").addEventListener("change",refreshAnalyticalChartConfig);
     el("chartFilter").addEventListener("change",refreshAnalyticalChartConfig);
     el("eventStrategy").addEventListener("change",()=>{state.eventSelectedStrategy=el("eventStrategy").value;if(state.eventData)eventDraw(state.eventData,state.eventHtl,state.eventEvents);queuePlatformPreferenceSave();});
-    for(const id of ["eventChartPair","eventChartTimeframe","eventChartLength","eventChartFilter"])el(id)?.addEventListener("change",()=>{queuePlatformPreferenceSave();if(state.connected)void refreshSelectedEventChart();});
+    for(const id of ["eventPair","eventTimeframe","eventLength"])el(id)?.addEventListener("change",()=>{queuePlatformPreferenceSave();if(state.connected)void refreshSelectedEventChart();});
     el("signalMatrix").addEventListener("click",event=>{
       const pairButton=event.target.closest("[data-pair]"); if (pairButton) { selectChart(pairButton.dataset.pair,state.selectedTimeframe); return; }
       const cell=event.target.closest(".signal-cell"); if (cell) selectChart(cell.dataset.instrument,cell.dataset.timeframe);
