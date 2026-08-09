@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { HtlEngine, __executionTest } from "../src/engine-certified-execution.js";
+
+const certifiedSource=await readFile(new URL("../src/engine-certified-execution.js",import.meta.url),"utf8");
+const credentialDeclaration=certifiedSource.indexOf("const{token,accountId:configured}=credentials(this.env);",certifiedSource.indexOf("async tick()"));
+const pendingReversalCall=certifiedSource.indexOf("await this.processPendingReversals(state,token,accountId);",credentialDeclaration);
+assert.ok(credentialDeclaration>=0&&pendingReversalCall>credentialDeclaration,"The certified tick must initialize credentials before processing pending reversals.");
 
 class Storage{constructor(){this.map=new Map();}async get(key){return this.map.get(key);}async put(key,value){this.map.set(key,value);}async delete(key){this.map.delete(key);}async getAlarm(){return null;}async deleteAlarm(){}}
 const storage=new Storage();const engine=new HtlEngine({storage},{OANDA_API_KEY:"x".repeat(40),OANDA_ACCOUNT_ID:"101-001-12345678-001"});engine.write=async entry=>{engine.writes=(engine.writes||[]).concat(entry);};
