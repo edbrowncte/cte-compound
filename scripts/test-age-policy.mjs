@@ -30,11 +30,14 @@ assert.match(certified,/AGE Friday weekend flatten · 3:57 PM Nashville/);
 assert.match(certified,/DEPLOYED_IN_QUALIFIED_POSITIVE_EXPECTATION_OR_WEEKEND_FLAT/);
 assert.match(certified,/AGE_MARKET_REENGAGEMENT/);
 assert.match(certified,/ageWeekendClose:"Friday 15:57 America\/Chicago"/);
-assert.match(nemotron,/AGE_ADMINISTRATING_GREAT_EXPECTATIONS/);
+assert.match(nemotron,/CAPITALIZATION_NEW_ENTRY_DISCRETION/);
+assert.match(nemotron,/AGE_SELECT_BEST_QUALIFIED_EXPECTATION/);
 assert.match(nemotron,/Capital is not strategically held idle while FX markets are open/);
 assert.match(nemotron,/Friday weekend policy is flat from 3:57 PM America\/Chicago/);
 assert.match(html,/Nemotron AGE · Administrating Great Expectations/);
 assert.match(html,/AGE · Capitalization and Account Value Proliferation/);
 
-assert.equal(__nemotronTest.AI_POLICY,"AGE_ADMINISTRATING_GREAT_EXPECTATIONS");
-console.log("AGE open-market engagement mandate and Nashville Friday 15:57 weekend-flat window verified.");
+assert.equal(__nemotronTest.AI_POLICY,"CAPITALIZATION_NEW_ENTRY_DISCRETION");
+assert.equal(__nemotronTest.AI_TASK_NAME,"AGE");
+assert.equal(__nemotronTest.AI_TASK,"ADMINISTRATING_GREAT_EXPECTATIONS");
+console.log("AGE open-market engagement mandate, selective new-entry boundary, and Nashville Friday 15:57 weekend-flat window verified.");
