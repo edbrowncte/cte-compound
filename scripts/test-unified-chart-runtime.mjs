@@ -13,6 +13,8 @@ assert.match(renderer,/indicatorSet\.z/);
 assert.match(renderer,/indicatorSet\.osc/);
 assert.match(renderer,/Intl\.DateTimeFormat/);
 assert.match(renderer,/livePrice/);
+assert.match(renderer,/value!==null&&value!==undefined&&value!==""/);
+assert.match(renderer,/plausiblePrice/);
 
 assert.match(html,/id="chartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="chartStage"/);
 assert.match(html,/id="evalChartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="evalChartStage"/);
@@ -48,5 +50,9 @@ assert.match(analyticalLoad,/loadUnifiedChartCandles\(instrument,timeframe,contr
 
 assert.match(html,/state\.unifiedIndicatorCache\.clear\(\)/);
 assert.match(html,/state\.maximumHistoryKeys\.clear\(\)/);
+assert.match(html,/function chartDataIntegrity\(\)/);
+assert.match(html,/function browserDiagnosticAssessment\(server\)/);
+assert.match(html,/SCHEDULE_COVERAGE_INCOMPLETE/);
+assert.match(html,/setInterval\(\(\)=>\{if\(marketDataReady\(\)&&!document\.hidden&&!state\.scheduleLoading&&state\.scheduleEvaluations\.size<INSTRUMENTS\.length\*TIMEFRAMES\.length\)void loadSchedule\("progressive"\);\},5000\)/);
 
 console.log("One canonical Evaluation-style 5,000-candle causal chart is shared by Analytical, HTL Event, and Evaluation facilities.");
