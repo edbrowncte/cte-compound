@@ -29,6 +29,7 @@ jobs:
           else
             node scripts/migrate-optimizer-shards-event-ledger.mjs
           fi
+          node scripts/migrate-optimizer-shards-test-fallback.mjs
       - name: Install dependencies
         run: npm ci
       - name: Generate Wrangler Types
