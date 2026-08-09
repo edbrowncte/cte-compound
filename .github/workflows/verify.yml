@@ -26,6 +26,7 @@ jobs:
         run: |
           node scripts/fix-platform-migration-syntax.mjs
           node scripts/migrate-platform-composition-indicator-model.mjs
+          node scripts/fix-runtime-optimizer-layer.mjs
       - name: Install dependencies
         run: npm ci
       - name: Generate Wrangler Types
