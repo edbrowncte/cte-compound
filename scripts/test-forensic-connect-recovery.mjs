@@ -23,7 +23,8 @@ globalThis.fetch=async(url)=>{
   throw new Error(`Unexpected upstream fetch ${value}`);
 };
 
-const engineBinding={getByName(){return{fetch:async()=>new Response(JSON.stringify({armed:true,running:false,lastRun:null,lastError:null,optimizerCoverage:280,optimizerTotal:280,optimizerLastError:null,mtfCoverage:280,pendingOrders:0}),{status:200,headers:{"Content-Type":"application/json"}})}}};
+let engineStatus={armed:true,running:false,lastRun:null,lastError:null,optimizerCoverage:280,optimizerTotal:280,optimizerLastError:null,optimizerStorageMode:"SHARDED_PER_DATASET",optimizerPersistenceHealthy:true,mtfCoverage:280,pendingOrders:0};
+const engineBinding={getByName(){return{fetch:async()=>new Response(JSON.stringify(engineStatus),{status:200,headers:{"Content-Type":"application/json"}})}}};
 const envFor=accountId=>({OANDA_API_KEY:token,OANDA_ACCOUNT_ID:accountId,HTL_ENGINE:engineBinding,CF_VERSION_METADATA:{id:"v-test",tag:"sha-test",timestamp:"2026-08-08T18:00:00Z"}});
 
 try{
@@ -47,6 +48,11 @@ try{
 
   // Diagnostics mirror production selection and disclose both token accounts while marking -002 blocked.
   mode="success";calls=[];response=await worker.fetch(browser("/api/platform/diagnostic?instrument=EUR_USD&granularity=M15"),envFor(configuredAlias));assert.equal(response.status,200);payload=await response.json();assert.equal(payload.verdict,"PASS");assert.deepEqual(payload.checks.accountList.value.authorizedSuffixes,["001","002"]);assert.equal(payload.checks.accountList.value.selectedSuffix,"001");assert.equal(payload.checks.accountList.value.blockedMt4Present,true);assert.equal(payload.checks.summary.value.accountSuffix,"001");assert.equal(payload.checks.engine.ok,true);
+
+  // Successful authentication cannot conceal a failed optimizer persistence layer.
+  engineStatus={...engineStatus,optimizerPersistenceHealthy:false,optimizerLastError:"string or blob too big: SQLITE_TOOBIG"};
+  calls=[];response=await worker.fetch(browser("/api/platform/diagnostic?instrument=EUR_USD&granularity=M15"),envFor(configuredAlias));assert.equal(response.status,200);payload=await response.json();assert.equal(payload.verdict,"DEGRADED");assert.equal(payload.checks.credentials.ok,true);assert.equal(payload.checks.optimizer.ok,false);assert.equal(payload.failure.stage,"OPTIMIZER_PERSISTENCE");assert.equal(payload.failure.code,"OPTIMIZER_PERSISTENCE_FAILURE");assert.match(payload.failure.error,/SQLITE_TOOBIG/);
+  engineStatus={...engineStatus,optimizerPersistenceHealthy:true,optimizerLastError:null};
 
   const html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");assert.doesNotMatch(html,/id="connectButton"|>TEST<\/button>|TESTING…|Testing live OANDA connection/);assert.match(html,/connectionRuntime/);assert.match(html,/void connect()/);
   assert.ok(html.includes('function marketDataReady(){return ["ready","degraded"]'));assert.ok(html.includes("Promise.allSettled([loadChart(state.selectedInstrument,state.selectedTimeframe,true),verifyAccount(),probeEngine()])"));assert.ok(html.includes("Market data ready · account verification degraded"));assert.ok(html.includes("function scheduleAccountRecovery()"));assert.ok(html.includes("if(!bootstrap&&!marketDataReady())return false"));const workerSource=await readFile(new URL("../src/worker-base.js",import.meta.url),"utf8");assert.match(workerSource,/function selectLiveAccount/);assert.ok(workerSource.includes('id.endsWith("-001")'));assert.ok(workerSource.includes('id.endsWith("-002")'));assert.match(workerSource,/async function resolveAccount/);assert.match(workerSource,/OANDA_MT4_ACCOUNT_BLOCKED/);assert.ok(workerSource.includes("tradingCritical=[credentialCheck,accountList,summary,candles]"));
