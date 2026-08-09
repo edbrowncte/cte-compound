@@ -4,6 +4,7 @@ import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
 import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
 import { credentials } from "./engine-base.js";
 import { AGE_EXPECTATION_VERSION, AGE_REALLOCATION_MIN_INDEX, AGE_REALLOCATION_DELTA_INDEX, annotateAgeCandidate, continuationExpectation, reallocationDecision } from "./age-expectation.js";
+import { OptimizerRuntimeService } from "./optimizer-runtime-service.js";
 import {
   optimizedOptimizeNext,
   optimizedComputeConfiguration,
@@ -169,6 +170,7 @@ export const __executionTest=Object.freeze({
 export class HtlEngine extends CertifiedAnalyticsEngine{
   async fetch(request){
     const url=new URL(request.url),path=url.pathname;
+    if(path==="/optimizer/tick"&&request.method==="POST")return new Response(JSON.stringify(await new OptimizerRuntimeService(this).run()),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     if(path==="/optimizer"&&request.method==="GET"){
       const records=await loadRuntimeOptimizer(this.ctx.storage);
       return new Response(JSON.stringify({version:RUNTIME_OPTIMIZER_VERSION,optimizerHistoryBars:RUNTIME_OPTIMIZER_HISTORY_BARS,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,records}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
@@ -279,16 +281,10 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
   async status(){
     const status=await super.status();
     const state=(await this.ctx.storage.get("state"))||{};
-    const runtimeOptimizer=await loadRuntimeOptimizer(this.ctx.storage);
+    const optimizerStatus=await new OptimizerRuntimeService(this).status();
     return{
       ...status,
-      optimizerVersion:RUNTIME_OPTIMIZER_VERSION,
-      optimizerHistoryBars:RUNTIME_OPTIMIZER_HISTORY_BARS,
-      optimizerCoverage:Object.keys(runtimeOptimizer).length,
-      optimizerTotal:PAIRS.length*TIMEFRAMES.length,
-      optimizerStorageMode:"SHARDED_PER_DATASET",
-      optimizerPersistenceHealthy:!state.optimizerLastError,
-      optimizerLastError:state.optimizerLastError||null,
+      ...optimizerStatus,
       armed:true,
       executionCertification:"ARMED_PRIVATE_USER",
       executionPolicy:EXECUTION_POLICY_VERSION,
@@ -555,8 +551,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       try{await this.syncTransactions(state,token,accountId);}catch(error){state.transactionSyncError=String(error?.message||error);}
       await this.processPendingReversals(state,token,accountId);
 
-      let optimizer=await loadRuntimeOptimizer(this.ctx.storage);
-      try{optimizer=(await this.optimizeNext(state,token)).records;}catch(error){state.optimizerLastError=String(error?.message||error);}
+      const optimizer=await loadRuntimeOptimizer(this.ctx.storage);
 
       const rotationIndex=Number(state.mtfRotation||0)%TIMEFRAMES.length;
       const rotationTimeframe=TIMEFRAMES[rotationIndex];
