@@ -2046,10 +2046,10 @@
     if(!data?.length)return;const pair=el("eventChartPair")?.value||el("eventPair")?.value||state.selectedInstrument,timeframe=el("eventChartTimeframe")?.value||el("eventTimeframe")?.value||state.selectedTimeframe,strategy=el("eventStrategy")?.value||state.eventSelectedStrategy||"ASSET",length=clamp(Math.round(Number(el("eventChartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),indicators=unifiedIndicatorSet(pair,timeframe,data,length);
     renderUnifiedChartSurface({canvasId:"eventChart",candles:data,pair,timeframe,strategy,length,visibleBars:state.eventVisibleBars,offsetBars:state.eventOffsetBars,rightIndent:state.eventRightIndent,crosshairEnabled:state.eventCrosshairEnabled,crosshair:state.eventCrosshair,legendId:"eventIndicatorLegend",indicators});
   }
-  function eventHistoryCount(length){return clamp(Math.max(650,(Math.max(3,length)*3)+120),650,MAX_ANALYTICAL_HISTORY);}
+  function eventHistoryCount(){return MAX_ANALYTICAL_HISTORY;}
   function eventCachedCandles(pair,timeframe){return bestCachedCandles(scheduleKey(pair,timeframe));}
   async function loadEventRow(pair,timeframe,length,controller,priority=60,requestedCount=null){
-    const desired=clamp(Math.trunc(Number(requestedCount))||eventHistoryCount(length),60,MAX_ANALYTICAL_HISTORY),minimum=Math.min(desired,Math.max(180,(Math.max(3,length)*3)+5)),cached=eventCachedCandles(pair,timeframe);
+    const desired=clamp(Math.trunc(Number(requestedCount))||eventHistoryCount(length),60,MAX_ANALYTICAL_HISTORY),minimum=Math.min(desired,Math.max(1200,(Math.max(3,length)*6)+240)),cached=eventCachedCandles(pair,timeframe);
     if(cached?.length>=desired)return buildEventRow(pair,cached,length);
     try{
       const data=desired===MAX_ANALYTICAL_HISTORY?await loadUnifiedChartCandles(pair,timeframe,controller,priority,priority>=100):completedCandles(await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=${desired}`,controller,priority),pair,timeframe);
