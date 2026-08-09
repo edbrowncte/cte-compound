@@ -15,6 +15,11 @@ import {
 
 const API="https://api-fxtrade.oanda.com";
 const EXECUTION_POLICY_VERSION="CERTIFIED_MULTI_REVERSAL@1.0.0";
+const AGE_POLICY_VERSION="AGE_ADMINISTRATING_GREAT_EXPECTATIONS@1.0.0";
+const AGE_TIME_ZONE="America/Chicago";
+const AGE_FRIDAY_FLATTEN_HOUR=15,AGE_FRIDAY_FLATTEN_MINUTE=57,AGE_SUNDAY_REOPEN_HOUR=16,AGE_SUNDAY_REOPEN_MINUTE=5;
+function ageLocalParts(now=new Date()){const parts=new Intl.DateTimeFormat("en-US",{timeZone:AGE_TIME_ZONE,weekday:"short",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(now),get=type=>parts.find(part=>part.type===type)?.value;return{weekday:get("weekday"),year:Number(get("year")),month:Number(get("month")),day:Number(get("day")),hour:Number(get("hour")),minute:Number(get("minute"))};}
+function ageMarketWindow(now=new Date()){const local=ageLocalParts(now),minutes=local.hour*60+local.minute,fridayFlatten=local.weekday==="Fri"&&minutes>=AGE_FRIDAY_FLATTEN_HOUR*60+AGE_FRIDAY_FLATTEN_MINUTE,saturday=local.weekday==="Sat",sundayClosed=local.weekday==="Sun"&&minutes<AGE_SUNDAY_REOPEN_HOUR*60+AGE_SUNDAY_REOPEN_MINUTE,weekendLock=fridayFlatten||saturday||sundayClosed,flattenWindow=local.weekday==="Fri"&&minutes>=AGE_FRIDAY_FLATTEN_HOUR*60+AGE_FRIDAY_FLATTEN_MINUTE&&minutes<16*60;return{...local,weekendLock,flattenWindow,marketOpen:!weekendLock,policy:AGE_POLICY_VERSION,timeZone:AGE_TIME_ZONE};}
 
 async function callOanda(path,token,init={}){
   const controller=new AbortController();
@@ -141,6 +146,10 @@ function compactCandidate(candidate){
 
 export const __executionTest=Object.freeze({
   EXECUTION_POLICY_VERSION,
+  AGE_POLICY_VERSION,
+  AGE_TIME_ZONE,
+  ageLocalParts,
+  ageMarketWindow,
   sanitizeModelContext,
   positionDirection,
   requirementDirection,
@@ -241,6 +250,25 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
     return optimizedScan(this, token, config, timeframe, optimizer);
   }
 
+  async enforceAgeWeekendPolicy(state,config,window){
+    state.agePolicy=AGE_POLICY_VERSION;state.ageTimeZone=AGE_TIME_ZONE;state.ageWeekendLock=true;state.lastNoOrderReason=`AGE weekend flat · Friday 3:57 PM Nashville policy · ${AGE_TIME_ZONE}`;
+    let closed=0,attempted=0;
+    if(window.flattenWindow){
+      const{token,accountId:configured}=credentials(this.env),accountId=state.resolvedAccountId||await exactLiveAccount(token,configured,state,entry=>this.write(entry,false)),positions=await this.loadPositions(token,accountId),context=this.decisionContext(null,config);
+      for(const position of positions){const existing=positionDirection(position);if(!existing)continue;attempted++;const longUnits=Number(position.long?.units||0),shortUnits=Math.abs(Number(position.short?.units||0)),fill=await this.closePosition(position.instrument,existing,longUnits,shortUnits,token,accountId,null,"AGE Friday weekend flatten · 3:57 PM Nashville",{...context,agePolicy:AGE_POLICY_VERSION,capitalDisposition:"WEEKEND_FLAT"});if(fill)closed++;}
+      state.ageWeekendFlattenAt=new Date().toISOString();state.ageWeekendFlattenAttempted=attempted;state.ageWeekendFlattenClosed=closed;
+      await this.write({type:"AGE_WEEKEND_FLATTEN",agePolicy:AGE_POLICY_VERSION,timeZone:AGE_TIME_ZONE,scheduledLocalTime:"Friday 15:57",attempted,closed,message:`AGE weekend flatten processed ${closed}/${attempted} open positions`},false);
+    }
+    state.lastRun=new Date().toISOString();state.lastError=null;await this.ctx.storage.put("state",state);return{closed,attempted,window};
+  }
+
+  async tick(){
+    const state=(await this.ctx.storage.get("state"))||{events:{},initialized:false},config=await this.config(),window=ageMarketWindow(new Date());
+    if(window.weekendLock){await this.enforceAgeWeekendPolicy(state,config,window);return;}
+    if(state.ageWeekendLock){state.ageWeekendLock=false;state.ageReengagedAt=new Date().toISOString();state.lastNoOrderReason=null;await this.ctx.storage.put("state",state);await this.write({type:"AGE_MARKET_REENGAGEMENT",agePolicy:AGE_POLICY_VERSION,timeZone:AGE_TIME_ZONE,message:"AGE weekend lock released; resume qualified market participation"},false);}
+    return super.tick();
+  }
+
   async status(){
     const status=await super.status();
     const state=(await this.ctx.storage.get("state"))||{};
@@ -257,6 +285,12 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       pendingReversals:Object.keys(state.pendingReversals||{}).length,
       reversalPolicy:"ALL_OPPOSING_EVENTS_INDEPENDENT_NEW_ENTRIES_NEMOTRON_RANKED",
       reconciliationCadence:"new-completed-candle-only",
+      agePolicy:AGE_POLICY_VERSION,
+      ageMandate:"ADMINISTRATING_GREAT_EXPECTATIONS",
+      ageCapitalPolicy:"DEPLOYED_IN_QUALIFIED_POSITIVE_EXPECTATION_OR_WEEKEND_FLAT",
+      ageWeekendClose:"Friday 15:57 America/Chicago",
+      ageWeekendLock:Boolean(state.ageWeekendLock),
+      ageWeekendFlattenAt:state.ageWeekendFlattenAt||null,
     };
   }
 
