@@ -26,7 +26,9 @@ const evaluation=between('<section class="panel chart-panel" id="evalChartPanel"
 controlsInOrder(evaluation,["evalChartPair","evalChartTimeframe","evalChartStrategy","evalChartLength","evalChartFilter","evalRefreshChart","evalZoomOut","evalZoomIn","evalIndentOut","evalIndentIn","evalCrosshairToggle","evalMaximizeChart"],"Evaluation chart");
 
 const eventChart=between('<div class="chart-toolbar event-chart-toolbar">','<div class="indicator-legend" id="eventIndicatorLegend"',"HTL Event chart");
-controlsInOrder(eventChart,["eventChartPair","eventChartTimeframe","eventStrategy","eventChartLength","eventChartFilter","refreshEventChart","eventZoomOut","eventZoomIn","eventIndentOut","eventIndentIn","eventCrosshairToggle","eventMaximize"],"HTL Event chart");
+controlsInOrder(eventChart,["eventStrategy","refreshEventChart","eventZoomOut","eventZoomIn","eventIndentOut","eventIndentIn","eventCrosshairToggle","eventMaximize"],"HTL Event chart");
+for(const deprecated of ["eventChartPair","eventChartTimeframe","eventChartLength","eventChartFilter"])assert.ok(!eventChart.includes(`id="${deprecated}"`),`HTL Event chart must not expose deprecated ${deprecated}`);
+assert.ok(eventChart.includes('id="eventStrategy" type="hidden" value="ASSET"'),"HTL Event chart must be fixed to HTL Asset");
 
 const eventSchedule=between('<section class="panel tab-panel" id="eventPanel"','<div class="chart-toolbar event-chart-toolbar">',"HTL schedule");
 assert.ok(eventSchedule.includes('id="eventPair"'),"HTL schedule must retain its own pair selector");
@@ -35,13 +37,11 @@ assert.ok(eventSchedule.includes('id="eventLength"'),"HTL schedule must retain i
 assert.ok(!eventSchedule.includes('id="eventStrategy"'),"HTL schedule must not own the Event chart strategy selector");
 
 const eventRefresh=between('async function refreshSelectedEventChart()','async function loadEventForecast()',"Event chart refresh");
-for(const token of ['el("eventChartPair")','el("eventChartTimeframe")','el("eventChartLength")'])assert.ok(eventRefresh.includes(token),`Event chart refresh must use ${token}`);
-assert.ok(!eventRefresh.includes('el("eventPair").value'),"Event chart refresh must not use schedule pair");
-assert.ok(!eventRefresh.includes('el("eventTimeframe").value'),"Event chart refresh must not use schedule timeframe");
-assert.ok(!eventRefresh.includes('el("eventLength").value'),"Event chart refresh must not use schedule length");
+for(const token of ['el("eventPair")','el("eventTimeframe")','el("eventLength")'])assert.ok(eventRefresh.includes(token),`Event chart refresh must use authoritative ${token}`);
+for(const deprecated of ["eventChartPair","eventChartTimeframe","eventChartLength","eventChartFilter"])assert.ok(!eventRefresh.includes(deprecated),`Event chart refresh must not use deprecated ${deprecated}`);
 
 const scheduleSelection=between('function selectEventScheduleRow','function eventDraw',"HTL schedule row selection");
-assert.ok(!scheduleSelection.includes("renderEventDetail"),"HTL schedule row selection must not redraw the independent Event chart");
+assert.ok(scheduleSelection.includes("renderEventDetail(row)"),"HTL schedule row selection must redraw the unified HTL Event chart");
 
 const analyticalApply=between('function applyChartDataset','function loadUnifiedChartCandles',"Analytical chart calculation");
 assert.ok(analyticalApply.includes('chartControlConfiguration(instrument,timeframe,state.selectedStrategy,"chartLength","chartFilter")'),"Analytical chart must calculate from its own Length/Filter controls");

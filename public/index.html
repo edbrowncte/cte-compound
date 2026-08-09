@@ -313,6 +313,14 @@
             <span class="status-dot" id="statusDot"></span>
             <span id="connectionStatus">Initializing server-managed live session…</span>
           </div>
+          <div class="account-facts" id="readinessFacts" aria-label="Platform readiness">
+            <div class="fact"><span>Access</span><strong id="readinessAccess">Checking</strong></div>
+            <div class="fact"><span>Market data</span><strong id="readinessMarketData">Checking</strong></div>
+            <div class="fact"><span>Account</span><strong id="readinessAccount">Checking</strong></div>
+            <div class="fact"><span>Analytics</span><strong id="readinessAnalytics">Waiting</strong></div>
+            <div class="fact"><span>Engine</span><strong id="readinessEngine">Waiting</strong></div>
+            <div class="fact"><span>Execution</span><strong id="readinessExecution">Locked</strong></div>
+          </div>
         </div>
       </section>
       <details class="data-details" id="platformDiagnosticDetails">
@@ -659,11 +667,7 @@
         <p class="event-note" id="eventScheduleStatus">HTL schedule not loaded.</p>
         <p class="event-note" id="eventScheduleInterpretation">Current Event is the active Asset/Inverse crossing; Current Event Open is the completed crossing candle close; Location is AA above average or BA below average; completion columns estimate the active event ending within 5 or 10 bars; Events counts FINAL events; MAE columns measure duration and envelope error; Onset Brier measures the same-direction ≤10-bar probability error; Historical Brier is the rolling historical-frequency benchmark; Next HTL Event and Forecast Envelope describe the next opposite event.</p>
         <div class="chart-toolbar event-chart-toolbar">
-          <label class="field"><span>Currency pair</span><select id="eventChartPair"></select></label>
-          <label class="field"><span>Timeframe</span><select id="eventChartTimeframe"></select></label>
-          <label class="field"><span>Strategy</span><select id="eventStrategy"></select></label>
-          <label class="field"><span>Length</span><input id="eventChartLength" type="number" min="3" max="500" value="10" style="width:70px;"></label>
-          <label class="field"><span>Filter</span><input id="eventChartFilter" type="number" min="0" max="10" step="0.1" value="0" style="width:70px;"></label>
+          <input id="eventStrategy" type="hidden" value="ASSET">
           <button id="refreshEventChart" type="button" disabled>Refresh chart</button>
           <button id="eventZoomOut" type="button">Zoom −</button><button id="eventZoomIn" type="button">Zoom +</button>
           <button id="eventIndentOut" type="button">Indent +</button><button id="eventIndentIn" type="button">Indent −</button>
@@ -722,6 +726,16 @@
   const state = {
     connected:false,
     connectionLoading:false,
+    readiness:{
+      access:{status:"checking",detail:"Cloudflare Access"},
+      marketData:{status:"checking",detail:"Completed candles"},
+      account:{status:"checking",detail:"Live account summary"},
+      analytics:{status:"waiting",detail:"Awaiting candles"},
+      engine:{status:"waiting",detail:"Durable Object"},
+      execution:{status:"locked",detail:"Account verification required"}
+    },
+    accountRecoveryTimer:null,
+    accountRecoveryAttempt:0,
     tradeLongAvailable:0,
     tradeShortAvailable:0,
     tradeBusy:false,
@@ -994,12 +1008,12 @@
     const strategyOptions=STRATEGIES.map(item=>`<option value="${item.id}">${item.label}</option>`).join("");
     el("scheduleStrategy").innerHTML=strategyOptions;
     el("chartStrategy").innerHTML=strategyOptions;
-    el("eventStrategy").innerHTML=strategyOptions;
+    el("eventStrategy").value="ASSET";
     el("engineStrategy").innerHTML=strategyOptions;
     el("engineConfirmationStrategy").innerHTML=`<option value="NONE">None</option>${strategyOptions}`;
     el("scheduleStrategy").value=state.selectedScheduleStrategy;
     el("chartStrategy").value=state.selectedStrategy;
-    el("eventStrategy").value=state.eventSelectedStrategy;
+    state.eventSelectedStrategy="ASSET";
     const pairOptions=INSTRUMENTS.map(item=>`<option value="${item}">${formatPair(item)}</option>`).join("");
     el("chartPair").innerHTML=pairOptions;
     el("tradePair").innerHTML=pairOptions;
@@ -1031,6 +1045,24 @@
   function setConnectionStatus(message,type="idle") {
     el("connectionStatus").textContent=message;
     el("statusDot").className=`status-dot ${type==="connected"?"connected":type==="error"?"error":""}`;
+  }
+  const READINESS_LABELS={ready:"Ready",checking:"Checking",degraded:"Degraded",failed:"Failed",waiting:"Waiting",locked:"Locked"};
+  function readinessReady(lane){return state.readiness?.[lane]?.status==="ready";}
+  function marketDataReady(){return ["ready","degraded"].includes(state.readiness?.marketData?.status);}
+  function accountReady(){return readinessReady("account");}
+  function executionReady(){return readinessReady("execution");}
+  function setReadiness(lane,status,detail=""){
+    if(!state.readiness[lane])return;
+    state.readiness[lane]={status,detail,time:new Date().toISOString()};
+    const node=el(`readiness${lane[0].toUpperCase()}${lane.slice(1)}`);
+    if(node){node.textContent=detail?`${READINESS_LABELS[status]||status} · ${detail}`:(READINESS_LABELS[status]||status);node.className=status==="ready"?"positive":status==="failed"||status==="degraded"?"negative":"";}
+    if(lane==="account")state.connected=status==="ready";
+    if(lane==="account"||lane==="engine"){
+      const ready=accountReady()&&readinessReady("engine");
+      state.readiness.execution={status:ready?"ready":"locked",detail:ready?"Account and engine verified":"Account and engine required",time:new Date().toISOString()};
+      const executionNode=el("readinessExecution");if(executionNode){executionNode.textContent=ready?"Ready · Account and engine verified":"Locked · Account and engine required";executionNode.className=ready?"positive":"";}
+    }
+    updateTradeButtons();renderDecisionCandidates();
   }
   async function readApiResponse(response){const text=await response.text(),headerId=response.headers.get("X-CTE-Diagnostic-ID")||response.headers.get("cf-ray")||"";let payload={};if(text){try{payload=JSON.parse(text);}catch{payload={error:`HTTP ${response.status}`,code:"NON_JSON_RESPONSE",stage:"EDGE_OR_RUNTIME",preview:text.replace(/\s+/g," ").slice(0,160)};}}return{payload,diagnosticId:payload.diagnosticId||headerId};}
   function apiFailureMessage(response,payload={},id=""){const parts=[];if(payload.code)parts.push(payload.code);if(payload.stage)parts.push(payload.stage);if(payload.error&&!parts.includes(payload.error))parts.push(payload.error);if(!payload.code&&!payload.error)parts.push(`HTTP ${response.status}`);else if(response.status>=400)parts.push(`HTTP ${response.status}`);if(id)parts.push(`ID ${id}`);return parts.join(" · ")||"Request failed.";}
@@ -1125,11 +1157,11 @@
     el("automationStatus").textContent=`Active · ${state.engineConfig.timeframe} · ${name} · confirmation ${confirmation} · length ${state.engineConfig.htlLength} · filter ${state.engineConfig.filter} · ${state.engineConfig.decisionMode} · ${state.engineConfig.configurationSource}`;
     const tableTf=el("evalTableTfFilter");if(tableTf)tableTf.value=state.engineConfig.timeframe;state.evaluationTableTimeframe=null;
     state.mtfEventCache.clear();renderMtfForecast();updateDecisionDisplays();renderModelOperatingPerspective();
-    if(state.connected){void preloadEvaluationTimeframe(state.engineConfig.timeframe);void loadEvaluationData();queueModelContextPublish();}
+    if(marketDataReady()){void preloadEvaluationTimeframe(state.engineConfig.timeframe);void loadEvaluationData();}if(accountReady())queueModelContextPublish();
   }
 
   function preferenceDateValue(id){return el(id)?.value||"";}
-  function platformPreferencePayload(){return{selectedInstrument:state.selectedInstrument,selectedTimeframe:state.selectedTimeframe,selectedStrategy:state.selectedStrategy,eventSelectedStrategy:el("eventStrategy")?.value||state.eventSelectedStrategy,evaluationSelectedStrategy:el("evalChartStrategy")?.value||state.evaluationSelectedStrategy,selectedScheduleStrategy:state.selectedScheduleStrategy,activeFacility:state.activeFacility,visibleBars:state.visibleBars,rightIndent:state.rightIndent,crosshairEnabled:state.crosshairEnabled,chartLength:el("chartLength")?.value||10,chartFilter:el("chartFilter")?.value||0,eventPair:el("eventPair")?.value||state.selectedInstrument,eventTimeframe:el("eventTimeframe")?.value||state.selectedTimeframe,eventLength:clamp(Math.trunc(Number(el("eventLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),eventStrategy:el("eventStrategy")?.value||state.eventSelectedStrategy,eventChartPair:el("eventChartPair")?.value||state.selectedInstrument,eventChartTimeframe:el("eventChartTimeframe")?.value||state.selectedTimeframe,eventChartLength:el("eventChartLength")?.value||10,eventChartFilter:el("eventChartFilter")?.value||0,eventVisibleBars:state.eventVisibleBars,eventRightIndent:state.eventRightIndent,eventCrosshairEnabled:state.eventCrosshairEnabled,evalChartPair:el("evalChartPair")?.value||state.selectedInstrument,evalChartTimeframe:el("evalChartTimeframe")?.value||state.selectedTimeframe,evalChartLength:el("evalChartLength")?.value||10,evalChartFilter:el("evalChartFilter")?.value||0,microStartDate:preferenceDateValue("microStartDate"),microEndDate:preferenceDateValue("microEndDate"),minimumUnits:minimumUnitAmount()};}
+  function platformPreferencePayload(){return{selectedInstrument:state.selectedInstrument,selectedTimeframe:state.selectedTimeframe,selectedStrategy:state.selectedStrategy,eventSelectedStrategy:"ASSET",evaluationSelectedStrategy:el("evalChartStrategy")?.value||state.evaluationSelectedStrategy,selectedScheduleStrategy:state.selectedScheduleStrategy,activeFacility:state.activeFacility,visibleBars:state.visibleBars,rightIndent:state.rightIndent,crosshairEnabled:state.crosshairEnabled,chartLength:el("chartLength")?.value||10,chartFilter:el("chartFilter")?.value||0,eventPair:el("eventPair")?.value||state.selectedInstrument,eventTimeframe:el("eventTimeframe")?.value||state.selectedTimeframe,eventLength:clamp(Math.trunc(Number(el("eventLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),eventStrategy:"ASSET",eventVisibleBars:state.eventVisibleBars,eventRightIndent:state.eventRightIndent,eventCrosshairEnabled:state.eventCrosshairEnabled,evalChartPair:el("evalChartPair")?.value||state.selectedInstrument,evalChartTimeframe:el("evalChartTimeframe")?.value||state.selectedTimeframe,evalChartLength:el("evalChartLength")?.value||10,evalChartFilter:el("evalChartFilter")?.value||0,microStartDate:preferenceDateValue("microStartDate"),microEndDate:preferenceDateValue("microEndDate"),minimumUnits:minimumUnitAmount()};}
   function setPreferenceControl(id,value){const control=el(id);if(control&&value!==undefined&&value!==null)control.value=String(value);}
   function applyPlatformPreferences(preferences={}){
     const strategyIds=new Set(STRATEGIES.map(item=>item.id));
@@ -1144,7 +1176,7 @@
     state.activeFacility=["analysis","event","performance","evaluation"].includes(preferences.activeFacility)?preferences.activeFacility:"analysis";
     setPreferenceControl("chartPair",state.selectedInstrument);setPreferenceControl("tradePair",state.selectedInstrument);setPreferenceControl("chartTimeframe",state.selectedTimeframe);setPreferenceControl("chartStrategy",state.selectedStrategy);setPreferenceControl("chartLength",preferences.chartLength||10);setPreferenceControl("chartFilter",preferences.chartFilter||0);setPreferenceControl("scheduleStrategy",state.selectedScheduleStrategy);
     setPreferenceControl("eventPair",INSTRUMENTS.includes(preferences.eventPair)?preferences.eventPair:state.selectedInstrument);setPreferenceControl("eventTimeframe",TIMEFRAMES.includes(preferences.eventTimeframe)?preferences.eventTimeframe:state.selectedTimeframe);setPreferenceControl("eventLength",preferences.eventLength||10);setPreferenceControl("eventStrategy",state.eventSelectedStrategy);
-    setPreferenceControl("eventChartPair",INSTRUMENTS.includes(preferences.eventChartPair)?preferences.eventChartPair:(INSTRUMENTS.includes(preferences.eventPair)?preferences.eventPair:state.selectedInstrument));setPreferenceControl("eventChartTimeframe",TIMEFRAMES.includes(preferences.eventChartTimeframe)?preferences.eventChartTimeframe:(TIMEFRAMES.includes(preferences.eventTimeframe)?preferences.eventTimeframe:state.selectedTimeframe));setPreferenceControl("eventChartLength",preferences.eventChartLength||preferences.eventLength||10);setPreferenceControl("eventChartFilter",preferences.eventChartFilter||0);
+    setPreferenceControl("eventPair",INSTRUMENTS.includes(preferences.eventPair)?preferences.eventPair:(INSTRUMENTS.includes(preferences.eventChartPair)?preferences.eventChartPair:state.selectedInstrument));setPreferenceControl("eventTimeframe",TIMEFRAMES.includes(preferences.eventTimeframe)?preferences.eventTimeframe:(TIMEFRAMES.includes(preferences.eventChartTimeframe)?preferences.eventChartTimeframe:state.selectedTimeframe));setPreferenceControl("eventLength",preferences.eventLength||preferences.eventChartLength||10);
     setPreferenceControl("evalChartPair",INSTRUMENTS.includes(preferences.evalChartPair)?preferences.evalChartPair:state.selectedInstrument);setPreferenceControl("evalChartTimeframe",TIMEFRAMES.includes(preferences.evalChartTimeframe)?preferences.evalChartTimeframe:state.selectedTimeframe);setPreferenceControl("evalChartStrategy",state.evaluationSelectedStrategy);setPreferenceControl("evalChartLength",preferences.evalChartLength||10);setPreferenceControl("evalChartFilter",preferences.evalChartFilter||0);
     for(const [id,key] of [["microStartDate","microStartDate"],["microEndDate","microEndDate"]])setPreferenceControl(id,preferences[key]||"");setPreferenceControl("minimumUnits",preferences.minimumUnits||1000);synchronizeMinimumUnits(false);selectFacility(state.activeFacility,false);markSelectedRow();updateChartSummary();drawChart();
   }
@@ -1339,7 +1371,7 @@
   const { MAS_IM_TIMEFRAMES, timeframeHierarchy, calculateMASIMPressure } = CTEMASIM;
 
   async function loadEvaluationData() {
-    if (!state.connected) return;
+    if (!marketDataReady()) return;
     await preloadEvaluationTimeframe(el("evalTableTfFilter").value);
   }
 
@@ -1385,7 +1417,7 @@
   }
 
   async function preloadEvaluationTimeframe(activeTf) {
-    if(!state.connected)return;
+    if(!marketDataReady())return;
     const required=timeframeHierarchy(activeTf),jobs=[];
     for(const pair of INSTRUMENTS)for(const tf of required)if((state.scheduleCandles.get(`${pair}|${tf}`)||[]).length<320)jobs.push({pair,tf});
     if(jobs.length){
@@ -1519,7 +1551,7 @@
   }
 
   async function loadEvalChartData(pair,timeframe){
-    if(!state.connected)return;
+    if(!marketDataReady())return;
     try{
       const priceCache=await ensureEvaluationPairFrames(pair,timeframe),candlesList=await loadUnifiedChartCandles(pair,timeframe,null,95,true),key=`${pair}|${timeframe}`,strategy=el("evalChartStrategy")?.value||state.evaluationSelectedStrategy||state.selectedScheduleStrategy;priceCache[timeframe]=candlesList;state.evalCandles=candlesList;
       const chartConfig=chartControlConfiguration(pair,timeframe,strategy,"evalChartLength","evalChartFilter"),analysis=candlesList.length?analyzeWithConfiguration(candlesList,chartConfig,true):null,activeSignal=analysis?.latest?.[strategy],events=analysis?.series?.[strategy]||[],direction=Number(activeSignal?.direction)||0,metrics=evaluationFramesReady(priceCache,timeframe)?calculateMASIMPressure(pair,timeframe,priceCache,{direction,events}):null;state.evalMasImMetrics=metrics;
@@ -1599,9 +1631,9 @@
   function synchronizeMinimumUnits(persist=true){const minimum=minimumUnitAmount(),control=el("minimumUnits");control.value=String(minimum);for(const id of ["tradeUnits","candidateUnits"]){const input=el(id),amount=Math.trunc(Number((input.value||"").replace(/\D/g,"")));input.min=String(minimum);if(!Number.isFinite(amount)||amount<minimum)input.value=String(minimum);}updateTradeButtons();renderDecisionCandidates();if(persist)queuePlatformPreferenceSave();}
   function candidateUnitAmount(){return Math.trunc(Number((el("candidateUnits").value||"").replace(/\D/g,"")));}
   function openPositionPairs(){return new Set(state.openPositions.filter(position=>Number(position.long?.units||0)!==0||Number(position.short?.units||0)!==0).map(position=>position.instrument));}
-  function renderDecisionCandidates(){const activeLane={EVENT:"A",MTF:"B",COMBINED:"C"}[state.engineConfig.decisionMode]||"A";for(const key of ["A","B","C"]){const candidate=state.decisionCandidates[key],button=el(`candidate${key}`),selected=state.selectedDecisionCandidate===key;button.disabled=!candidate||state.candidateBusy;button.classList.toggle("selected",selected);button.classList.toggle("active-lane",activeLane===key);button.setAttribute("aria-pressed",String(selected));button.querySelector("small").textContent=candidate?(activeLane===key?"Active execution lane":"Selectable alternative"):"No eligible alternative";}const selected=state.decisionCandidates[state.selectedDecisionCandidate],amount=candidateUnitAmount();el("selectedDecisionCandidate").textContent=selected?`${state.selectedDecisionCandidate} · ${formatPair(selected.pair)} · ${signalWord(selected.direction)} · ${formatPct(selected.confidence)}`:"—";el("executeDecisionCandidate").textContent=selected?`Execute ${signalWord(selected.direction)}`:"Execute selected trade";el("executeDecisionCandidate").disabled=!state.connected||state.candidateBusy||!selected||!Number.isFinite(amount)||amount<minimumUnitAmount();}
+  function renderDecisionCandidates(){const activeLane={EVENT:"A",MTF:"B",COMBINED:"C"}[state.engineConfig.decisionMode]||"A";for(const key of ["A","B","C"]){const candidate=state.decisionCandidates[key],button=el(`candidate${key}`),selected=state.selectedDecisionCandidate===key;button.disabled=!candidate||state.candidateBusy;button.classList.toggle("selected",selected);button.classList.toggle("active-lane",activeLane===key);button.setAttribute("aria-pressed",String(selected));button.querySelector("small").textContent=candidate?(activeLane===key?"Active execution lane":"Selectable alternative"):"No eligible alternative";}const selected=state.decisionCandidates[state.selectedDecisionCandidate],amount=candidateUnitAmount();el("selectedDecisionCandidate").textContent=selected?`${state.selectedDecisionCandidate} · ${formatPair(selected.pair)} · ${signalWord(selected.direction)} · ${formatPct(selected.confidence)}`:"—";el("executeDecisionCandidate").textContent=selected?`Execute ${signalWord(selected.direction)}`:"Execute selected trade";el("executeDecisionCandidate").disabled=!executionReady()||state.candidateBusy||!selected||!Number.isFinite(amount)||amount<minimumUnitAmount();}
   function selectDecisionCandidate(key){if(!state.decisionCandidates[key]||state.candidateBusy)return;state.selectedDecisionCandidate=key;el("candidateExecutionStatus").textContent="";renderDecisionCandidates();}
-  async function executeSelectedDecisionCandidate(){const key=state.selectedDecisionCandidate,candidate=state.decisionCandidates[key],amount=candidateUnitAmount();if(!state.connected||state.candidateBusy||!candidate||!Number.isFinite(amount)||amount<minimumUnitAmount())return;state.candidateBusy=true;renderDecisionCandidates();el("candidateExecutionStatus").textContent="Validating selected candidate against live OANDA state…";try{const accountId=el("oandaAccountId").value.trim(),positionsPayload=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/openPositions`),positions=(positionsPayload.positions||[]).filter(position=>Number(position.long?.units||0)!==0||Number(position.short?.units||0)!==0);state.openPositions=positions;renderOpenPositions();updateDecisionDisplays();if(positions.some(position=>position.instrument===candidate.pair))throw new Error(`${formatPair(candidate.pair)} is no longer available; candidates were refreshed.`);const pricing=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/pricing?instruments=${encodeURIComponent(candidate.pair)}&includeUnitsAvailable=true`),available=pricing.prices?.[0]?.unitsAvailable?.default,limit=Math.max(0,Math.trunc(Number(candidate.direction>0?available?.long:available?.short)||0));if(amount<minimumUnitAmount())throw new Error(`Requested units must be at least ${minimumUnitAmount().toLocaleString()}.`);if(amount>limit)throw new Error(`Requested ${amount.toLocaleString()} units exceeds ${signalWord(candidate.direction)} availability ${limit.toLocaleString()}.`);const units=candidate.direction>0?amount:-amount,payload=await oandaPost(`/v3/accounts/${encodeURIComponent(accountId)}/orders`,{order:{instrument:candidate.pair,units:String(units),type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT"}}),fill=payload.orderFillTransaction;el("candidateExecutionStatus").textContent=`${key} · ${signalWord(candidate.direction)} ${amount.toLocaleString()} ${formatPair(candidate.pair)} · ${fill?.price||"filled"} · transaction ${fill?.id||payload.lastTransactionID||"—"}`;state.selectedDecisionCandidate=null;await refreshOpenPositions();await loadTradingLedger();}catch(error){el("candidateExecutionStatus").textContent=error.message||"Selected candidate order failed.";}finally{state.candidateBusy=false;updateDecisionDisplays();renderDecisionCandidates();}}
+  async function executeSelectedDecisionCandidate(){const key=state.selectedDecisionCandidate,candidate=state.decisionCandidates[key],amount=candidateUnitAmount();if(!executionReady()||state.candidateBusy||!candidate||!Number.isFinite(amount)||amount<minimumUnitAmount())return;state.candidateBusy=true;renderDecisionCandidates();el("candidateExecutionStatus").textContent="Validating selected candidate against live OANDA state…";try{const accountId=el("oandaAccountId").value.trim(),positionsPayload=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/openPositions`),positions=(positionsPayload.positions||[]).filter(position=>Number(position.long?.units||0)!==0||Number(position.short?.units||0)!==0);state.openPositions=positions;renderOpenPositions();updateDecisionDisplays();if(positions.some(position=>position.instrument===candidate.pair))throw new Error(`${formatPair(candidate.pair)} is no longer available; candidates were refreshed.`);const pricing=await oanda(`/v3/accounts/${encodeURIComponent(accountId)}/pricing?instruments=${encodeURIComponent(candidate.pair)}&includeUnitsAvailable=true`),available=pricing.prices?.[0]?.unitsAvailable?.default,limit=Math.max(0,Math.trunc(Number(candidate.direction>0?available?.long:available?.short)||0));if(amount<minimumUnitAmount())throw new Error(`Requested units must be at least ${minimumUnitAmount().toLocaleString()}.`);if(amount>limit)throw new Error(`Requested ${amount.toLocaleString()} units exceeds ${signalWord(candidate.direction)} availability ${limit.toLocaleString()}.`);const units=candidate.direction>0?amount:-amount,payload=await oandaPost(`/v3/accounts/${encodeURIComponent(accountId)}/orders`,{order:{instrument:candidate.pair,units:String(units),type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT"}}),fill=payload.orderFillTransaction;el("candidateExecutionStatus").textContent=`${key} · ${signalWord(candidate.direction)} ${amount.toLocaleString()} ${formatPair(candidate.pair)} · ${fill?.price||"filled"} · transaction ${fill?.id||payload.lastTransactionID||"—"}`;state.selectedDecisionCandidate=null;await refreshOpenPositions();await loadTradingLedger();}catch(error){el("candidateExecutionStatus").textContent=error.message||"Selected candidate order failed.";}finally{state.candidateBusy=false;updateDecisionDisplays();renderDecisionCandidates();}}
 
   function dateRange(prefix){const start=el(`${prefix}StartDate`)?.value||"",end=el(`${prefix}EndDate`)?.value||"",startMs=start?Date.parse(`${start}T00:00:00`):-Infinity,endMs=end?Date.parse(`${end}T23:59:59.999`):Infinity;return{start,end,startMs,endMs,valid:startMs<=endMs};}
   function filterByDateRange(rows,prefix,timeKey="time"){const range=dateRange(prefix);return{range,rows:range.valid?rows.filter(row=>{const value=Date.parse(row?.[timeKey]||0);return Number.isFinite(value)&&value>=range.startMs&&value<=range.endMs;}):[]};}
@@ -1670,31 +1702,42 @@
     return normalizeInstrumentCandles(candles,instrument);
   }
 
-  async function connect() {
-    if(state.connected||state.connectionLoading)return;
-    state.connectionLoading=true;
-    if(!state.preferencesLoaded)await loadPlatformPreferences();
-    setConnectionStatus("Initializing server-managed live OANDA session…");
-    try {
+  function scheduleAccountRecovery(){
+    clearTimeout(state.accountRecoveryTimer);
+    const delay=Math.min(60000,5000*(2**Math.min(state.accountRecoveryAttempt++,4)));
+    state.accountRecoveryTimer=setTimeout(()=>{state.accountRecoveryTimer=null;if(!document.hidden&&!accountReady())void verifyAccount();},delay);
+  }
+  async function verifyAccount() {
+    setReadiness("account","checking","Verifying live account summary");
+    try{
       const response=await fetch("/api/oanda/connect",{headers:{"Accept":"application/json"},credentials:"same-origin",cache:"no-store"}),{payload,diagnosticId}=await readApiResponse(response);
       if(!response.ok){const failure=new Error(apiFailureMessage(response,payload,diagnosticId));failure.payload=payload;failure.status=response.status;throw failure;}
-      const accountId=payload.account?.id||"";
-      el("oandaAccountId").value=accountId;applyAccountFacts(payload.account,accountId);
-      el("oandaAccountState").textContent=payload.account?.alias||accountId||"Live account";
-      el("oandaApiState").textContent="Server managed · active";
-      state.connected=true;
-      el("refreshSchedule").disabled=false;el("refreshChart").disabled=false;el("refreshEventChart").disabled=false;el("loadEvents").disabled=false;
+      const accountId=payload.account?.id||"";el("oandaAccountId").value=accountId;applyAccountFacts(payload.account,accountId);
+      el("oandaAccountState").textContent=payload.account?.alias||accountId||"Live account";el("oandaApiState").textContent="Server managed · active";
       el("accountFacts").hidden=false;el("positionsPanel").hidden=false;el("automationPanel").hidden=false;
-      setConnectionStatus(`Live OANDA · •••${String(accountId).slice(-3)} · completed midpoint candles`,"connected");
-      startPositionMonitor();
-      await Promise.all([loadEngineConfig().catch(error=>{el("automationStatus").textContent=error.message||"Configuration unavailable";}),loadOptimizerRecords(),loadControlStatus().catch(()=>{})]);
-      void loadTradingLedger();void loadEngineStatus();
-      await loadTradeCapacity();await loadChart();void loadSchedule("focused");
-    } catch (error) {
-      state.connected=false;el("accountFacts").hidden=true;el("positionsPanel").hidden=true;el("automationPanel").hidden=true;stopPositionMonitor();stopAdaptiveMonitor();
-      el("oandaAccountState").textContent="Cloudflare secret";el("oandaApiState").textContent="Server managed";
-      setConnectionStatus(error.message||"Live OANDA session unavailable.","error");
-    } finally {state.connectionLoading=false;}
+      state.accountRecoveryAttempt=0;clearTimeout(state.accountRecoveryTimer);setReadiness("account","ready",`•••${String(accountId).slice(-3)}`);
+      setConnectionStatus(marketDataReady()?`Market data and account ready · •••${String(accountId).slice(-3)}`:`Account verified · market data unavailable`,marketDataReady()?"connected":"");
+      startPositionMonitor();await loadTradeCapacity();
+      return true;
+    }catch(error){
+      setReadiness("account","failed",error.message||"Account summary unavailable");stopPositionMonitor();
+      el("accountFacts").hidden=true;el("positionsPanel").hidden=true;el("automationPanel").hidden=true;el("oandaAccountState").textContent="Account verification unavailable";el("oandaApiState").textContent="Server managed";
+      setConnectionStatus(marketDataReady()?`Market data ready · account verification degraded · ${error.message||"retry pending"}`:(error.message||"OANDA services unavailable"),marketDataReady()?"connected":"error");
+      scheduleAccountRecovery();return false;
+    }
+  }
+  async function probeEngine(){
+    setReadiness("engine","checking","Loading configuration");
+    try{await loadEngineConfig();setReadiness("engine","ready","Configuration verified");return true;}
+    catch(error){el("automationStatus").textContent=error.message||"Configuration unavailable";setReadiness("engine","failed",error.message||"Configuration unavailable");return false;}
+  }
+  async function connect() {
+    if(state.connectionLoading)return;
+    state.connectionLoading=true;
+    if(!state.preferencesLoaded)await loadPlatformPreferences();
+    setReadiness("access","ready","Application loaded");setConnectionStatus("Probing market data, account, and engine independently…");
+    try{await Promise.allSettled([loadChart(state.selectedInstrument,state.selectedTimeframe,true),verifyAccount(),probeEngine()]);void loadOptimizerRecords();void loadTradingLedger();void loadEngineStatus();if(accountReady())void loadControlStatus().catch(()=>{});if(marketDataReady())void loadSchedule("focused");}
+    finally{state.connectionLoading=false;}
   }
 
   function resetMatrix() {
@@ -1740,9 +1783,9 @@
 
   function orderedScheduleJobs(){const engineTimeframe=state.engineConfig.timeframe,selectedTimeframe=state.selectedTimeframe,selectedPair=state.selectedInstrument;return TIMEFRAMES.flatMap(timeframe=>INSTRUMENTS.map(instrument=>({instrument,timeframe,weight:(instrument===selectedPair?8:0)+(timeframe===engineTimeframe?4:0)+(timeframe===selectedTimeframe?2:0)}))).sort((a,b)=>b.weight-a.weight||TIMEFRAMES.indexOf(a.timeframe)-TIMEFRAMES.indexOf(b.timeframe)||a.instrument.localeCompare(b.instrument));}
   function scheduleJobsForMode(mode){const all=orderedScheduleJobs(),key=job=>scheduleKey(job.instrument,job.timeframe);if(mode==="full")return all;if(mode==="focused")return all.filter(job=>job.instrument===state.selectedInstrument||job.timeframe===state.engineConfig.timeframe||job.timeframe===state.selectedTimeframe);return all.filter(job=>!state.scheduleEvaluations.has(key(job))||(bestCachedCandles(key(job))?.length||0)<scheduleRequestCount(job.instrument,job.timeframe)).sort((a,b)=>(state.scheduleFailures.has(key(a))?1:0)-(state.scheduleFailures.has(key(b))?1:0)).slice(0,6);}
-  function queueProgressiveSchedule(delay=1600){clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=setTimeout(()=>{state.progressiveScheduleTimer=null;if(!state.connected)return;if(state.chartLoading||state.scheduleLoading||document.hidden){queueProgressiveSchedule(2200);return;}void loadSchedule("progressive");},delay);}
+  function queueProgressiveSchedule(delay=1600){clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=setTimeout(()=>{state.progressiveScheduleTimer=null;if(!marketDataReady())return;if(state.chartLoading||state.scheduleLoading||document.hidden){queueProgressiveSchedule(2200);return;}void loadSchedule("progressive");},delay);}
   async function loadSchedule(mode="full") {
-    if(!state.connected)return;
+    if(!marketDataReady())return;
     if(state.scheduleLoading){if(mode==="full")state.scheduleController?.abort();else return;}
     clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=null;
     state.scheduleController?.abort();const controller=new AbortController();state.scheduleController=controller;state.scheduleLoading=true;state.scheduleMode=mode;el("refreshSchedule").disabled=true;
@@ -1754,8 +1797,8 @@
     try{
       if(jobs.length)await runJobs(jobs,mode==="focused"?50:mode==="progressive"?5:15);
       if(!controller.signal.aborted&&mode!=="progressive"){const keys=new Set(jobs.map(job=>scheduleKey(job.instrument,job.timeframe))),retry=[...state.scheduleFailures.values()].filter(job=>keys.has(scheduleKey(job.instrument,job.timeframe))&&job.attempts<2).map(({instrument,timeframe})=>({instrument,timeframe}));if(retry.length){el("progressText").textContent=`Retrying ${retry.length} priority datasets`;await new Promise(resolve=>setTimeout(resolve,1000));await runJobs(retry,mode==="focused"?55:20);}}
-      if(!controller.signal.aborted){const available=state.scheduleEvaluations.size;el("progressFill").style.width=`${available/total*100}%`;el("progressText").textContent=available===total?`Loaded ${available} / ${total} datasets`:mode==="focused"?`Priority ready · ${available} / ${total} datasets · background continuation queued`:`Background ${available} / ${total} · ${state.scheduleFailures.size} unresolved${lastError?` · ${lastError}`:""}`;el("scheduleStamp").textContent=`Last schedule update ${new Date().toLocaleTimeString()} · completed candles only`;renderMtfForecast();queueAutomaticOptimization();if(available===total)startAdaptiveMonitor();else queueProgressiveSchedule();if(mode==="full")setTimeout(()=>{if(state.connected&&!state.chartLoading)void runPlatformDiagnostic(false);},1500);}
-    } finally {if(state.scheduleController===controller){state.scheduleController=null;state.scheduleLoading=false;state.scheduleMode="";el("refreshSchedule").disabled=!state.connected;if(state.connected&&!controller.signal.aborted&&state.scheduleEvaluations.size<total)queueProgressiveSchedule();}}
+      if(!controller.signal.aborted){const available=state.scheduleEvaluations.size;el("progressFill").style.width=`${available/total*100}%`;el("progressText").textContent=available===total?`Loaded ${available} / ${total} datasets`:mode==="focused"?`Priority ready · ${available} / ${total} datasets · background continuation queued`:`Background ${available} / ${total} · ${state.scheduleFailures.size} unresolved${lastError?` · ${lastError}`:""}`;el("scheduleStamp").textContent=`Last schedule update ${new Date().toLocaleTimeString()} · completed candles only`;renderMtfForecast();queueAutomaticOptimization();if(available===total)startAdaptiveMonitor();else queueProgressiveSchedule();if(mode==="full")setTimeout(()=>{if(marketDataReady()&&!state.chartLoading)void runPlatformDiagnostic(false);},1500);}
+    } finally {if(state.scheduleController===controller){state.scheduleController=null;state.scheduleLoading=false;state.scheduleMode="";el("refreshSchedule").disabled=!marketDataReady();if(marketDataReady()&&!controller.signal.aborted&&state.scheduleEvaluations.size<total)queueProgressiveSchedule();}}
   }
 
   function applyChartDataset(instrument,timeframe,candles) {
@@ -1773,14 +1816,14 @@
   }
 
   function chartRequestCount(instrument,timeframe){return MAX_ANALYTICAL_HISTORY;}
-  async function loadChart(instrument=state.selectedInstrument,timeframe=state.selectedTimeframe) {
-    if(!state.connected)return;
+  async function loadChart(instrument=state.selectedInstrument,timeframe=state.selectedTimeframe,bootstrap=false) {
+    if(!bootstrap&&!marketDataReady())return false;
     clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=null;state.chartLoading=true;state.scheduleController?.abort();state.chartController?.abort();await new Promise(resolve=>setTimeout(resolve,0));
     const controller=new AbortController(),count=chartRequestCount(instrument,timeframe);state.chartController=controller;
     el("refreshChart").disabled=true;el("chartMessage").hidden=false;el("chartMessage").textContent=`Loading ${count} completed OANDA candles…`;
-    try {const candles=await loadUnifiedChartCandles(instrument,timeframe,controller,100,true);applyChartDataset(instrument,timeframe,candles);}
-    catch (error) {if(error.name!=="AbortError"&&instrument===state.selectedInstrument&&timeframe===state.selectedTimeframe){const cached=state.chartCache.get(scheduleKey(instrument,timeframe))||state.scheduleCandles.get(scheduleKey(instrument,timeframe));if(cached?.length){applyChartDataset(instrument,timeframe,cached);el("chartMessage").hidden=false;el("chartMessage").textContent=`Showing cached completed candles · ${error.message||"full refresh unavailable"}`;}else{el("chartMessage").hidden=false;el("chartMessage").textContent=error.message||"Chart load failed.";state.chartCandles=[];state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];updateChartSummary();updateCompartments();drawChart();}}}
-    finally {const current=state.chartController===controller;if(current){state.chartController=null;state.chartLoading=false;el("refreshChart").disabled=!state.connected;if(state.connected)queueProgressiveSchedule(1200);}pumpCandleQueue();}
+    try {const candles=await loadUnifiedChartCandles(instrument,timeframe,controller,100,true);applyChartDataset(instrument,timeframe,candles);setReadiness("marketData","ready",`${formatPair(instrument)} ${timeframe}`);setReadiness("analytics","ready",`${candles.length} completed candles`);if(accountReady())setConnectionStatus("Market data and account ready","connected");return true;}
+    catch (error) {if(error.name!=="AbortError"&&instrument===state.selectedInstrument&&timeframe===state.selectedTimeframe){const cached=bestCachedCandles(scheduleKey(instrument,timeframe));if(cached?.length){applyChartDataset(instrument,timeframe,cached);setReadiness("marketData","degraded",`Cached ${formatPair(instrument)} ${timeframe}`);setReadiness("analytics","ready",`${cached.length} cached candles`);el("chartMessage").hidden=false;el("chartMessage").textContent=`Showing cached completed candles · ${error.message||"full refresh unavailable"}`;return true;}else{setReadiness("marketData","failed",error.message||"Candle service unavailable");setReadiness("analytics","waiting","Awaiting candles");el("chartMessage").hidden=false;el("chartMessage").textContent=error.message||"Chart load failed.";state.chartCandles=[];state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];updateChartSummary();updateCompartments();drawChart();return false;}}return false;}
+    finally {const current=state.chartController===controller;if(current){state.chartController=null;state.chartLoading=false;el("refreshChart").disabled=!marketDataReady();el("refreshEventChart").disabled=!marketDataReady();el("loadEvents").disabled=!marketDataReady();el("refreshSchedule").disabled=!marketDataReady();if(marketDataReady())queueProgressiveSchedule(1200);}pumpCandleQueue();}
   }
 
   function updateChartSummary() {
@@ -1827,7 +1870,7 @@
     const key=scheduleKey(state.selectedInstrument,state.selectedTimeframe),cached=state.chartCache.get(key)||state.scheduleCandles.get(key);
     if(cached?.length)try{applyChartDataset(state.selectedInstrument,state.selectedTimeframe,cached);}catch{}
     else{state.chartCandles=[];state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];el("chartMessage").hidden=false;el("chartMessage").textContent="Loading selected completed OANDA candles…";updateChartSummary();updateCompartments();drawChart();}
-    if(state.connected){void startPositionStream(state.openPositions.map(position=>position.instrument));void loadChart(state.selectedInstrument,state.selectedTimeframe);}
+    if(accountReady())void startPositionStream(state.openPositions.map(position=>position.instrument));if(marketDataReady())void loadChart(state.selectedInstrument,state.selectedTimeframe);
     queuePlatformPreferenceSave();
     el("chartPanel").scrollIntoView({behavior:"smooth",block:"start"});
   }
@@ -2055,7 +2098,7 @@
     renderDecisionCandidates();renderModelOperatingPerspective();queueModelContextPublish();
   }
   function renderEventLedgerRows(row,scope="HTL Event Forecast"){const ledger=el("eventLedger");if(!ledger)return;const rows=row?.eventList||[];ledger.innerHTML=rows.slice(-40).reverse().map(event=>`<tr><td>${event.direction>0?"BUY":"SELL"} ${event.number}</td><td>${event.status}</td><td class="${event.result==="WIN"?"positive":event.result==="LOSS"?"negative":""}">${event.result}</td><td class="${event.profitPips>0?"positive":event.profitPips<0?"negative":""}">${Number.isFinite(event.profitPips)?(event.profitPips>0?"+":"")+event.profitPips.toFixed(1):"—"}</td><td>${new Date(event.startTime).toLocaleString()}</td><td>${event.bars}</td><td>${eventFmt(event.high,5)}</td><td>${eventFmt(event.low,5)}</td><td>${eventFmt(event.mean,6)}</td><td>${eventFmt(event.variance,8)}</td><td>${eventFmt(event.slope,7)}</td><td>${eventFmt(event.area,6)}</td><td>${event.sourceCrosses}</td></tr>`).join("")||`<tr><td colspan="13">No mature HTL events for this optimizer dataset.</td></tr>`;const node=el("optimizerEventLedgerScope");if(node)node.textContent=`${scope} · ${row?.pair?formatPair(row.pair):"—"} · ${row?.data?.length||0} completed candles · ${rows.filter(event=>event.status==="FINAL").length} final events`; }
-  async function loadOptimizerEventLedger(){if(!state.connected)return;const pair=state.selectedInstrument,timeframe=state.selectedTimeframe,key=scheduleKey(pair,timeframe),record=state.autoConfigurations.get(key),length=clamp(Math.trunc(Number(record?.settings?.assetLength??record?.config?.ASSET?.length??state.engineConfig?.htlLength??10)),3,MAX_ANALYTICAL_LENGTH),controller=new AbortController(),scope=`Optimizer v${state.optimizerRuntimeVersion||7} · ${timeframe} · HTL Asset length ${length}`;const node=el("optimizerEventLedgerScope");if(node)node.textContent=`Loading ${formatPair(pair)} ${timeframe} optimizer event outcomes…`;try{const row=await loadEventRow(pair,timeframe,length,controller,70,MAX_ANALYTICAL_HISTORY);renderEventLedgerRows(row,scope);}catch(error){if(node)node.textContent=`Event outcomes unavailable · ${error.message||error}`;const ledger=el("eventLedger");if(ledger)ledger.innerHTML=`<tr><td colspan="13">${error.message||"Event outcomes unavailable"}</td></tr>`;}}
+  async function loadOptimizerEventLedger(){if(!marketDataReady())return;const pair=state.selectedInstrument,timeframe=state.selectedTimeframe,key=scheduleKey(pair,timeframe),record=state.autoConfigurations.get(key),length=clamp(Math.trunc(Number(record?.settings?.assetLength??record?.config?.ASSET?.length??state.engineConfig?.htlLength??10)),3,MAX_ANALYTICAL_LENGTH),controller=new AbortController(),scope=`Optimizer v${state.optimizerRuntimeVersion||7} · ${timeframe} · HTL Asset length ${length}`;const node=el("optimizerEventLedgerScope");if(node)node.textContent=`Loading ${formatPair(pair)} ${timeframe} optimizer event outcomes…`;try{const row=await loadEventRow(pair,timeframe,length,controller,70,MAX_ANALYTICAL_HISTORY);renderEventLedgerRows(row,scope);}catch(error){if(node)node.textContent=`Event outcomes unavailable · ${error.message||error}`;const ledger=el("eventLedger");if(ledger)ledger.innerHTML=`<tr><td colspan="13">${error.message||"Event outcomes unavailable"}</td></tr>`;}}
   function renderEventDetail(row){
     if(!row)return;
     state.eventData=row.data;state.eventHtl=row.htl;state.eventEvents=row.eventList;
@@ -2063,17 +2106,17 @@
     el("eventChartInstrument").textContent=formatPair(row.pair);
     el("eventChart").setAttribute("aria-label",`${formatPair(row.pair)} completed OANDA candles with HTL Asset and Inverse Asset event overlays`);
     renderEventLedgerRows(row);
-    el("eventMethod").textContent=`Completed midpoint candles · ${formatPair(row.pair)} · ${el("eventChartTimeframe")?.value||el("eventTimeframe").value} · HTL length ${row.length} · ${row.data.length} candles · ${forecast.completed.length} FINAL events`;
+    el("eventMethod").textContent=`Completed midpoint candles · ${formatPair(row.pair)} · ${el("eventTimeframe").value} · HTL Asset length ${row.length} · ${row.data.length} candles · ${forecast.completed.length} FINAL events`;
     el("eventMessage").hidden=true;eventDraw(row.data,row.htl,row.eventList);renderEventSchedule();
   }
   function selectEventScheduleRow(pair,focusRow=false){
     const row=state.eventRows.find(item=>item.pair===pair);if(!row)return;
-    el("eventPair").value=pair;renderEventSchedule();
+    el("eventPair").value=pair;renderEventDetail(row);renderEventSchedule();
     if(focusRow)requestAnimationFrame(()=>{const target=el("eventScheduleBody").querySelector(`tr[data-pair="${pair}"]`);target?.focus();target?.scrollIntoView({block:"nearest",inline:"nearest"});});
   }
   function eventCausalIndicators(pair,timeframe,length,data){const key=`${pair}|${timeframe}|${length}|${data.length}|${data.at(-1)?.time||""}`;let indicators=state.eventIndicatorCache.get(key);if(!indicators){indicators=causalIndicatorSetFast(data,length);state.eventIndicatorCache.set(key,indicators);while(state.eventIndicatorCache.size>8)state.eventIndicatorCache.delete(state.eventIndicatorCache.keys().next().value);}return indicators;}
   function eventDraw(data,htl,events){
-    if(!data?.length)return;const pair=el("eventChartPair")?.value||el("eventPair")?.value||state.selectedInstrument,timeframe=el("eventChartTimeframe")?.value||el("eventTimeframe")?.value||state.selectedTimeframe,strategy=el("eventStrategy")?.value||state.eventSelectedStrategy||"ASSET",length=clamp(Math.round(Number(el("eventChartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),indicators=unifiedIndicatorSet(pair,timeframe,data,length);
+    if(!data?.length)return;const pair=el("eventPair")?.value||state.selectedInstrument,timeframe=el("eventTimeframe")?.value||state.selectedTimeframe,strategy="ASSET",length=clamp(Math.round(Number(el("eventLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),indicators=unifiedIndicatorSet(pair,timeframe,data,length);
     renderUnifiedChartSurface({canvasId:"eventChart",candles:data,pair,timeframe,strategy,length,visibleBars:state.eventVisibleBars,offsetBars:state.eventOffsetBars,rightIndent:state.eventRightIndent,crosshairEnabled:state.eventCrosshairEnabled,crosshair:state.eventCrosshair,legendId:"eventIndicatorLegend",indicators});
   }
   function eventHistoryCount(){return MAX_ANALYTICAL_HISTORY;}
@@ -2093,16 +2136,16 @@
     }
   }
   async function refreshSelectedEventChart(){
-    if(!state.connected||state.eventChartLoading)return;
-    const pair=el("eventChartPair")?.value||state.selectedInstrument,timeframe=el("eventChartTimeframe")?.value||state.selectedTimeframe,length=clamp(Math.trunc(Number(el("eventChartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),button=el("refreshEventChart"),controller=new AbortController();
+    if(!marketDataReady()||state.eventChartLoading)return;
+    const pair=el("eventPair")?.value||state.selectedInstrument,timeframe=el("eventTimeframe")?.value||state.selectedTimeframe,length=clamp(Math.trunc(Number(el("eventLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),button=el("refreshEventChart"),controller=new AbortController();
     state.eventChartController?.abort();state.eventChartController=controller;state.eventChartLoading=true;button.disabled=true;el("eventMessage").hidden=false;el("eventMessage").textContent=`Refreshing ${formatPair(pair)} ${timeframe} completed candles…`;
     try{const row=await loadEventRow(pair,timeframe,length,controller,100,MAX_ANALYTICAL_HISTORY);renderEventDetail(row);updateDecisionDisplays();el("eventMessage").hidden=true;}
     catch(error){if(error.name!=="AbortError"){el("eventMessage").hidden=false;el("eventMessage").textContent=error.message||"Event chart refresh failed.";}}
-    finally{if(state.eventChartController===controller){state.eventChartController=null;state.eventChartLoading=false;button.disabled=!state.connected;}}
+    finally{if(state.eventChartController===controller){state.eventChartController=null;state.eventChartLoading=false;button.disabled=!marketDataReady();}}
   }
 
   async function loadEventForecast(){
-    if(!state.connected||state.eventScheduleLoading)return;
+    if(!marketDataReady()||state.eventScheduleLoading)return;
     const controller=new AbortController();state.eventScheduleController?.abort();state.eventScheduleController=controller;state.eventScheduleLoading=true;
     const timeframe=el("eventTimeframe").value,length=clamp(Math.trunc(Number(el("eventLength").value)||10),3,MAX_ANALYTICAL_LENGTH),loadKey=`${timeframe}|${length}`,selectedPair=el("eventPair").value||state.selectedInstrument,pairs=[selectedPair,...INSTRUMENTS.filter(pair=>pair!==selectedPair)],status=el("eventScheduleStatus");
     el("loadEvents").disabled=true;state.eventRows=[];state.eventFailures.clear();renderEventSchedule();status.textContent=`Loading HTL schedule 0 / ${INSTRUMENTS.length}`;
@@ -2114,12 +2157,12 @@
       if(!controller.signal.aborted&&failures.size){const retryPairs=[...failures.keys()];status.textContent=`Retrying ${retryPairs.length} unresolved HTL dataset${retryPairs.length===1?"":"s"}…`;await new Promise(resolve=>setTimeout(resolve,800));await runPool(retryPairs,1,pair=>load(pair,70));}
       if(!controller.signal.aborted){
         state.eventFailures=new Map(failures);state.eventLoadedKey=loadKey;const selected=state.eventRows.find(row=>row.pair===selectedPair)||state.eventRows[0];
-        if(selected&&(!state.eventData||el("eventChartPair")?.value===selected.pair&&el("eventChartTimeframe")?.value===timeframe))renderEventDetail(selected);
+        if(selected)renderEventDetail(selected);
         const unresolved=[...failures.entries()];status.textContent=unresolved.length?`HTL schedule ${state.eventRows.length} / ${INSTRUMENTS.length} loaded · ${unresolved.length} unresolved · ${formatPair(unresolved[0][0])}: ${unresolved[0][1]}`:`HTL schedule loaded · ${state.eventRows.length} / ${INSTRUMENTS.length}${fallbacks?` · ${fallbacks} cached-history fallback${fallbacks===1?"":"s"}`:""}`;
         updateDecisionDisplays();
       }
     }catch(error){if(error.name!=="AbortError")status.textContent=error.message||"HTL schedule load failed.";}
-    finally{if(state.eventScheduleController===controller){state.eventScheduleController=null;state.eventScheduleLoading=false;el("loadEvents").disabled=!state.connected;}}
+    finally{if(state.eventScheduleController===controller){state.eventScheduleController=null;state.eventScheduleLoading=false;el("loadEvents").disabled=!marketDataReady();}}
   }
   function renderStrategyConfiguration(){const automatic=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),range=automatic?.range,source=automatic?.source==="COMPUTE_CONFIGURATION"?"Compute Configuration":automatic?.source||"awaiting computation";el("configurationScope").textContent=`${formatPair(state.selectedInstrument)} · ${state.selectedTimeframe} · ${source}${range?.startDate?` · ${range.startDate} — ${range.endDate} · ${range.bars} completed candles`:automatic?` · ${formatTime(automatic.stamp)}`:""}`;el("strategyConfiguration").innerHTML=STRATEGIES.map(strategy=>{const config=automatic?.config?.[strategy.id]||STRATEGY_CONFIG[strategy.id],combined=strategy.id==='COMBO';return `<section class="config-card"><h3>${strategy.label}${automatic?' · AUTO':''}</h3><label class="field"><span>${combined?'Constituent length':'Length'}</span><input data-config-length="${strategy.id}" type="number" min="3" max="200" step="1" value="${config.length}" ${combined?'disabled':''}></label><label class="field"><span>${combined?'Required agreeing strategies':'Filter'}</span><input data-config-filter="${strategy.id}" type="number" min="0" max="${combined?5:10}" step="${combined?1:.01}" value="${config.filter}"></label></section>`;}).join('');}
   function strategyTrades(candles,analysis,id,instrument=state.selectedInstrument){const signals=analysis.series[id]||[],pip=instrument.endsWith('JPY')?100:10000,trades=[];for(let i=0;i<signals.length;i++){const signal=signals[i],opposite=signals.slice(i+1).find(next=>next.direction===-signal.direction);if(!opposite)continue;const entryIndex=Math.min(candles.length-1,signal.index+1),exitIndex=Math.min(candles.length-1,opposite.index+1);if(exitIndex<=entryIndex)continue;const entry=candles[entryIndex].open,exit=candles[exitIndex].open,range=candles.slice(entryIndex,exitIndex+1),net=(exit-entry)*signal.direction*pip,mfe=(signal.direction>0?Math.max(...range.map(c=>c.high))-entry:entry-Math.min(...range.map(c=>c.low)))*pip,mae=(signal.direction>0?entry-Math.min(...range.map(c=>c.low)):Math.max(...range.map(c=>c.high))-entry)*pip;trades.push({net,mfe:Math.max(0,mfe),mae:Math.max(0,mae)});}return trades;}
@@ -2141,7 +2184,7 @@
   function queueAutomaticOptimization(){void loadOptimizerRecords();}
   async function runAutomaticOptimization(){await loadOptimizerRecords();}
   function renderOptimizerRegistry(){const rows=[];for(const [key,value] of state.autoConfigurations){const [pair,timeframe]=key.split("|");for(const strategy of STRATEGIES){const config=value.config?.[strategy.id];if(config)rows.push({pair,timeframe,strategy:strategy.label,source:value.source||"SERVER",computedAt:value.computedAt||null,range:value.range||null,...config,stamp:value.stamp});}}el("optimizerServerStatus").textContent=`v${state.optimizerRuntimeVersion||7} · ${state.optimizerHistoryBars||5000}-bar target · ${state.autoConfigurations.size} / ${INSTRUMENTS.length*TIMEFRAMES.length} datasets`;el("optimizerRegistryBody").innerHTML=rows.sort((a,b)=>a.pair.localeCompare(b.pair)||TIMEFRAMES.indexOf(a.timeframe)-TIMEFRAMES.indexOf(b.timeframe)||a.strategy.localeCompare(b.strategy)).map(row=>`<tr><td>${formatPair(row.pair)}</td><td>${row.timeframe}</td><td>${row.strategy}</td><td>${row.length}</td><td>${row.filter}</td><td>${row.trades??"—"}</td><td>${Number.isFinite(row.net)?row.net.toFixed(1):"—"}</td><td>${Number.isFinite(row.maxDrawdown)?row.maxDrawdown.toFixed(1):"—"}</td><td>${Number.isFinite(row.score)?row.score.toFixed(2):"—"}</td><td>${row.source}${row.range?.bars?` · ${formatTime(row.range.firstCandle)}—${formatTime(row.range.lastCandle)} · ${row.range.bars} bars`:""}</td><td>${formatTime(row.stamp)}</td><td>${formatTime(row.computedAt)}</td></tr>`).join("")||`<tr><td colspan="12">No optimized datasets.</td></tr>`;}
-  async function refreshAdaptiveTimeframe(){if(!state.connected||state.adaptiveBusy||state.chartLoading||state.scheduleLoading||document.hidden)return;state.adaptiveBusy=true;const timeframe=TIMEFRAMES[state.adaptiveRotation++%TIMEFRAMES.length];try{await runPool(INSTRUMENTS,1,async pair=>{try{const count=scheduleRequestCount(pair,timeframe),payload=await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=${count}`),candles=completedCandles(payload,pair,timeframe),key=scheduleKey(pair,timeframe);if(candles.length>=(state.scheduleCandles.get(key)?.length||0))state.scheduleCandles.set(key,candles);const cached=state.autoConfigurations.get(key);state.scheduleEvaluations.set(key,analyzeWithConfiguration(candles,cached?.config||STRATEGY_CONFIG,false));renderScheduleCell(pair,timeframe);}catch{}});el("scheduleStamp").textContent=`Adaptive refresh ${timeframe} · ${new Date().toLocaleTimeString()}`;queueAutomaticOptimization();renderMtfForecast();}finally{state.adaptiveBusy=false;}}
+  async function refreshAdaptiveTimeframe(){if(!marketDataReady()||state.adaptiveBusy||state.chartLoading||state.scheduleLoading||document.hidden)return;state.adaptiveBusy=true;const timeframe=TIMEFRAMES[state.adaptiveRotation++%TIMEFRAMES.length];try{await runPool(INSTRUMENTS,1,async pair=>{try{const count=scheduleRequestCount(pair,timeframe),payload=await oanda(`/v3/instruments/${encodeURIComponent(pair)}/candles?price=M&granularity=${encodeURIComponent(timeframe)}&count=${count}`),candles=completedCandles(payload,pair,timeframe),key=scheduleKey(pair,timeframe);if(candles.length>=(state.scheduleCandles.get(key)?.length||0))state.scheduleCandles.set(key,candles);const cached=state.autoConfigurations.get(key);state.scheduleEvaluations.set(key,analyzeWithConfiguration(candles,cached?.config||STRATEGY_CONFIG,false));renderScheduleCell(pair,timeframe);}catch{}});el("scheduleStamp").textContent=`Adaptive refresh ${timeframe} · ${new Date().toLocaleTimeString()}`;queueAutomaticOptimization();renderMtfForecast();}finally{state.adaptiveBusy=false;}}
   function startAdaptiveMonitor(){clearInterval(state.adaptiveTimer);state.adaptiveTimer=setInterval(refreshAdaptiveTimeframe,300000);}
   function stopAdaptiveMonitor(){clearInterval(state.adaptiveTimer);state.adaptiveTimer=null;state.adaptiveBusy=false;state.optimizationQueue=[];}
   function renderMacroPerformance(){const fmt=(value,digits=2)=>Number.isFinite(value)?Number(value).toFixed(digits):"—",record=state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)),authoritative=Boolean(record?.source==="COMPUTE_CONFIGURATION");if(!authoritative){el("macroPerformanceScope").textContent="Not computed · Run Compute Configuration to load the current completed OANDA candle history";el("macroPerformanceBody").innerHTML='<tr><td colspan="9">Compute Configuration will determine and report the actual first and last completed OANDA candles.</td></tr>';el("computeConfiguration").disabled=!state.connected;return;}const first=record.range?.firstCandle,last=record.range?.lastCandle,bars=Number(record.range?.bars)||0;el("macroPerformanceScope").textContent=`History started ${formatTime(first)} · ended ${formatTime(last)} · ${bars} completed candles · computed ${formatTime(record.computedAt)}`;el("macroPerformanceBody").innerHTML=STRATEGIES.map(strategy=>{const entry=record.config?.[strategy.id]||{},stats={...entry,...entry.grossPerformance};return `<tr><td>${strategy.label}</td><td>${stats.trades??"—"}</td><td>${Number.isFinite(stats.wins)?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${Number(stats.net)>=0?"positive":"negative"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;}).join("");el("computeConfiguration").disabled=!state.connected;}
@@ -2168,10 +2211,11 @@
     }
   }
 
-  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,MAX_ANALYTICAL_LENGTH)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(state.connected&&state.eventLoadedKey!==key&&!state.eventScheduleLoading)void loadEventForecast();if(state.connected&&!state.eventData&&!state.eventChartLoading)void refreshSelectedEventChart();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();void loadOptimizerEventLedger();}if(name==='evaluation'){const activeTf=el("evalTableTfFilter")?.value||"H1",chartPair=el("evalChartPair")?.value||state.selectedInstrument,chartTf=el("evalChartTimeframe")?.value||activeTf;void loadEvaluationData();void loadEvalChartData(chartPair,chartTf);void preloadEvaluationTimeframe(activeTf);setTimeout(()=>{drawEvalCharts();setupSyncedCrosshair();},50);}if(persist)queuePlatformPreferenceSave();}
+  function selectFacility(name,persist=true){state.activeFacility=name;for(const facility of ['analysis','event','performance','evaluation']){const active=name===facility;el(`${facility}Panel`).hidden=!active;el(`${facility}Tab`).setAttribute('aria-selected',String(active));}if(name==='event'){const key=`${el("eventTimeframe").value}|${clamp(Math.trunc(Number(el("eventLength").value)||10),3,MAX_ANALYTICAL_LENGTH)}`;if(state.eventData)requestAnimationFrame(()=>eventDraw(state.eventData,state.eventHtl,state.eventEvents));if(marketDataReady()&&state.eventLoadedKey!==key&&!state.eventScheduleLoading)void loadEventForecast();if(state.connected&&!state.eventData&&!state.eventChartLoading)void refreshSelectedEventChart();}if(name==='performance'){renderStrategyConfiguration();renderMacroPerformance();void loadOptimizerEventLedger();}if(name==='evaluation'){const activeTf=el("evalTableTfFilter")?.value||"H1",chartPair=el("evalChartPair")?.value||state.selectedInstrument,chartTf=el("evalChartTimeframe")?.value||activeTf;void loadEvaluationData();void loadEvalChartData(chartPair,chartTf);void preloadEvaluationTimeframe(activeTf);setTimeout(()=>{drawEvalCharts();setupSyncedCrosshair();},50);}if(persist)queuePlatformPreferenceSave();}
 
   function releaseBrowserSession(){
     state.connected=false;
+    clearTimeout(state.accountRecoveryTimer);state.accountRecoveryTimer=null;
     state.scheduleController?.abort();state.chartController?.abort();state.eventScheduleController?.abort();state.eventChartController?.abort();
     clearTimeout(state.progressiveScheduleTimer);state.progressiveScheduleTimer=null;
     state.scheduleLoading=false;state.scheduleMode="";state.chartLoading=false;state.eventScheduleLoading=false;state.eventChartLoading=false;
@@ -2298,15 +2342,15 @@
     });
     el("refreshSchedule").addEventListener("click",()=>loadSchedule("full"));
     el("refreshChart").addEventListener("click",()=>loadChart());
-    el("scheduleStrategy").addEventListener("change",event=>{state.selectedScheduleStrategy=event.target.value;renderSchedule();renderMtfForecast();if(state.connected){void loadSchedule("focused");queueProgressiveSchedule(200);}queuePlatformPreferenceSave();});
+    el("scheduleStrategy").addEventListener("change",event=>{state.selectedScheduleStrategy=event.target.value;renderSchedule();renderMtfForecast();if(marketDataReady()){void loadSchedule("focused");queueProgressiveSchedule(200);}queuePlatformPreferenceSave();});
     el("chartPair").addEventListener("change",event=>selectChart(event.target.value,state.selectedTimeframe));
     el("chartTimeframe").addEventListener("change",event=>selectChart(state.selectedInstrument,event.target.value));
-    const refreshAnalyticalChartConfig=()=>{state.selectedStrategy=el("chartStrategy").value;if(state.connected&&state.chartCandles.length<chartRequestCount(state.selectedInstrument,state.selectedTimeframe))void loadChart(state.selectedInstrument,state.selectedTimeframe);else if(state.chartCandles.length)applyChartDataset(state.selectedInstrument,state.selectedTimeframe,state.chartCandles);else{updateChartSummary();drawChart();}queuePlatformPreferenceSave();};
+    const refreshAnalyticalChartConfig=()=>{state.selectedStrategy=el("chartStrategy").value;if(marketDataReady()&&state.chartCandles.length<chartRequestCount(state.selectedInstrument,state.selectedTimeframe))void loadChart(state.selectedInstrument,state.selectedTimeframe);else if(state.chartCandles.length)applyChartDataset(state.selectedInstrument,state.selectedTimeframe,state.chartCandles);else{updateChartSummary();drawChart();}queuePlatformPreferenceSave();};
     el("chartStrategy").addEventListener("change",refreshAnalyticalChartConfig);
     el("chartLength").addEventListener("change",refreshAnalyticalChartConfig);
     el("chartFilter").addEventListener("change",refreshAnalyticalChartConfig);
     el("eventStrategy").addEventListener("change",()=>{state.eventSelectedStrategy=el("eventStrategy").value;if(state.eventData)eventDraw(state.eventData,state.eventHtl,state.eventEvents);queuePlatformPreferenceSave();});
-    for(const id of ["eventChartPair","eventChartTimeframe","eventChartLength","eventChartFilter"])el(id)?.addEventListener("change",()=>{queuePlatformPreferenceSave();if(state.connected)void refreshSelectedEventChart();});
+    for(const id of ["eventPair","eventTimeframe","eventLength"])el(id)?.addEventListener("change",()=>{queuePlatformPreferenceSave();if(marketDataReady())void refreshSelectedEventChart();});
     el("signalMatrix").addEventListener("click",event=>{
       const pairButton=event.target.closest("[data-pair]"); if (pairButton) { selectChart(pairButton.dataset.pair,state.selectedTimeframe); return; }
       const cell=event.target.closest(".signal-cell"); if (cell) selectChart(cell.dataset.instrument,cell.dataset.timeframe);

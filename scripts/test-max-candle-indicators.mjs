@@ -11,7 +11,7 @@ assert.match(worker,/Math\.min\(5000,Math\.trunc\(Number\(url\.searchParams\.get
 assert.match(html,/MAX_ANALYTICAL_HISTORY=5000,MAX_ANALYTICAL_LENGTH=500/);
 assert.match(html,/id="chartLength"[^>]*max="500"/);
 assert.match(html,/id="eventLength"[^>]*max="500"/);
-assert.match(html,/id="eventChartLength"[^>]*max="500"/);
+assert.doesNotMatch(html,/id="eventChartLength"/);
 assert.match(html,/id="evalChartLength"[^>]*max="500"/);
 assert.match(html,/function chartRequestCount\(instrument,timeframe\)\{return MAX_ANALYTICAL_HISTORY;\}/);
 assert.match(html,/indicatorWarmupBars\(strategy,length\).*ASSET:4.*DARE:5.*DARE_N:6.*COMBO:5.*NAI:5.*APEX:6/);

@@ -25,7 +25,8 @@ const forecastStart=html.indexOf("async function loadEventForecast",refreshStart
 assert.ok(refreshStart>=0&&forecastStart>refreshStart,"HTL chart/schedule loader functions must both exist");
 const refreshSource=html.slice(refreshStart,forecastStart);
 assert.doesNotMatch(refreshSource,/state\.eventRows/);
-assert.doesNotMatch(refreshSource,/renderEventSchedule\(\)/);
+assert.match(refreshSource,/marketDataReady\(\)/);
+assert.doesNotMatch(refreshSource,/eventChartPair|eventChartTimeframe|eventChartLength|eventChartFilter/);
 assert.match(html,/const runJobs=async\(items,priority\)=>runPool\(items,priority>=50\?2:1/);
 
 console.log("HTL schedule/chart isolation, 5,000-candle event history, causal fallback depth, bounded concurrency, timeout alignment, partial-success retention, and session cache hygiene verified.");
