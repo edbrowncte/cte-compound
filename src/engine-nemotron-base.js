@@ -10,8 +10,9 @@ const AI_TIMEOUT_MS=7000;
 const AI_POLICY="CAPITALIZATION_NEW_ENTRY_DISCRETION";
 const MODEL_CONTEXT_MAX_AGE_MS=10*60*1000;
 
-function modelContextFresh(context){const time=Date.parse(context?.receivedAt||0);return Number.isFinite(time)&&Date.now()-time<=MODEL_CONTEXT_MAX_AGE_MS?context:null;}
-function modelReportForPair(context,pair){return context?.slots?.find(item=>item?.pair===pair)||null;}
+function modelContextMatchesConfig(context,config){if(!context?.controls||!config)return false;const controls=context.controls,sameNumber=(left,right)=>Math.abs(Number(left)-Number(right))<1e-9;return controls.timeframe===config.timeframe&&controls.strategy===config.strategy&&controls.confirmationStrategy===config.confirmationStrategy&&sameNumber(controls.htlLength,config.htlLength)&&sameNumber(controls.filter,config.filter)&&controls.decisionMode===config.decisionMode&&controls.configurationSource===config.configurationSource;}
+function modelContextFresh(context,config=null){const time=Date.parse(context?.receivedAt||0);if(!Number.isFinite(time)||Date.now()-time>MODEL_CONTEXT_MAX_AGE_MS)return null;return config&&!modelContextMatchesConfig(context,config)?null:context;}
+function modelReportForPair(context,pair){return context?.pairReports?.find(item=>item?.pair===pair)||context?.slots?.find(item=>item?.pair===pair)||null;}
 function capitalizationScore(candidate,context=null){const primary=candidate?.configuration?.primary||{},report=modelReportForPair(context,candidate?.pair),confidence=Math.max(0,Math.min(1,Number(candidate?.confidence)||0)),count=Math.max(0,Number(candidate?.count)||0),winRate=Math.max(0,Math.min(1,Number(primary.winRate)||0)),net=Number(primary.net)||0,score=Number(primary.score)||0,drawdown=Math.max(0,Number(primary.maxDrawdown)||0),sample=Math.max(0,Number(primary.trades)||0),structure=Math.max(0,Math.min(1,Number(report?.strength)||0)),fit=Math.max(0,Math.min(1,Number(report?.r2)||0)),velocity=Math.tanh((Number(report?.pipsPerHour)||0)/25),regime=String(report?.regime||""),regimeBonus=regime==="TREND_ALIGNED"?.45:regime==="TRANSITION"?.3:regime==="CHALLENGE"?.1:0;return confidence*3+Math.min(10,count)*.12+winRate+Math.tanh(net/30)+Math.tanh(score/15)-Math.tanh(drawdown/25)+Math.min(1,sample/30)*.5+structure*1.5+fit*.5+velocity*.25+regimeBonus;}
 function deterministicCandidate(candidates,context=null){
   return [...candidates].sort((left,right)=>capitalizationScore(right,context)-capitalizationScore(left,context)||String(left?.pair||"").localeCompare(String(right?.pair||"")))[0]||null;
@@ -81,7 +82,7 @@ function attachNemotron(candidate,{status,reason,latencyMs,recommendedPair,invok
 
 // NEMOTRON_CANDIDATE_TOOL@3.0.0
 export { __platformTest as __horizonTest };
-export const __nemotronTest=Object.freeze({AI_MODEL,AI_TIMEOUT_MS,AI_POLICY,MODEL_CONTEXT_MAX_AGE_MS,capitalizationScore,deterministicCandidate,compactCandidate,parseAiResponse});
+export const __nemotronTest=Object.freeze({AI_MODEL,AI_TIMEOUT_MS,AI_POLICY,MODEL_CONTEXT_MAX_AGE_MS,modelContextMatchesConfig,capitalizationScore,deterministicCandidate,compactCandidate,parseAiResponse});
 
 export class HtlEngine extends HorizonEngine {
   async fetch(request) {
@@ -100,7 +101,7 @@ export class HtlEngine extends HorizonEngine {
     if(!Array.isArray(candidates)||!candidates.length)return null;
     if(candidates.length===1)return candidates[0];
 
-    const engineState=(await this.ctx.storage.get("state"))||{},modelContext=modelContextFresh(engineState.modelContext),fallback=deterministicCandidate(candidates,modelContext),table=candidates.map(candidate=>compactCandidate(candidate,modelContext)),candidatePairs=table.map(item=>item.pair),started=Date.now();
+    const engineState=(await this.ctx.storage.get("state"))||{},modelContext=modelContextFresh(engineState.modelContext,engineState.config||null),fallback=deterministicCandidate(candidates,modelContext),table=candidates.map(candidate=>compactCandidate(candidate,modelContext)),candidatePairs=table.map(item=>item.pair),started=Date.now();
     if(!this.env.AI){
       const reason="Workers AI binding unavailable; deterministic candidate ranking used";
       await this.recordAiDecision({invoked:false,status:"AI_BINDING_UNAVAILABLE",model:AI_MODEL,policy:AI_POLICY,latencyMs:0,candidateCount:candidates.length,candidates:candidatePairs,selectedPair:fallback.pair,reason}).catch(()=>{});
@@ -110,8 +111,8 @@ export class HtlEngine extends HorizonEngine {
     const schema={type:"object",additionalProperties:false,properties:{selectedPair:{type:"string",enum:candidatePairs},reason:{type:"string",maxLength:240}},required:["selectedPair","reason"]};
     const prompt={
       messages:[
-        {role:"system",content:"You are the internal CTE Capitalization Model. Your mandate is Capitalization and Account Value Proliferation. The III analytical suite qualifies signal structure but has no pair-selection discretion; you exercise pair discretion only among the supplied engine-qualified new-entry candidates. Rank risk-adjusted expected contribution to NAV and opportunity cost using multi-timeframe confirmation, optimizer net/score/win-rate/sample support, drawdown, MAS/IM pressure balance, regime, Event Angle Z/convexity, fit and pips-per-hour when available. Existing positions and available margin are context for capital efficiency. Select exactly one supplied candidate. Never invent a pair, change direction, alter units or risk controls, close/reverse positions, or change configuration. Return only the requested structured result."},
-        {role:"user",content:JSON.stringify({task:"select_one_new_entry_candidate_for_capitalization",mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",account:modelContext?.account||null,openPositions:modelContext?.openPositions||[],forecasts:modelContext?.forecasts||[],candidates:table})}
+        {role:"system",content:"You are the internal CTE Capitalization Model. Your mandate is Capitalization and Account Value Proliferation. The III analytical suite qualifies signal structure but has no pair-selection discretion; you exercise pair discretion only among the supplied engine-qualified new-entry candidates. Rank risk-adjusted expected contribution to NAV and opportunity cost using multi-timeframe confirmation, optimizer net/score/win-rate/sample support, drawdown, MAS/IM pressure balance, regime, Event Angle Z/convexity, fit and pips-per-hour when available. Operate strictly from the active saved trading controls supplied in context; the candidate set already reflects that Event, MTF, or Combined execution lane. Existing positions are the capital currently occupied in the account and must be monitored as opportunity-cost context together with NAV and available margin. Select exactly one supplied candidate. Never invent a pair, change direction, alter units or risk controls, close/reverse positions, or change configuration. Return only the requested structured result."},
+        {role:"user",content:JSON.stringify({task:"select_one_new_entry_candidate_for_capitalization",mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",controls:modelContext?.controls||null,selectedPairs:modelContext?.selectedPairs||[],account:modelContext?.account||null,openPositions:modelContext?.openPositions||[],forecasts:modelContext?.forecasts||[],mtfForecasts:modelContext?.mtfForecasts||[],candidates:table})}
       ],
       response_format:{type:"json_schema",json_schema:schema},
       temperature:0,
