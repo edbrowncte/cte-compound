@@ -18,6 +18,8 @@ assert.match(html,/function eventCachedCandles\(pair,timeframe\)/);
 assert.match(html,/await runPool\(pairs,2,pair=>load/);
 assert.match(html,/await runPool\(retryPairs,1,pair=>load/);
 assert.match(html,/state\.eventLoadedKey=loadKey/);
+assert.doesNotMatch(html,/id="eventChartPair"|id="eventChartTimeframe"|id="eventChartLength"|id="eventChartFilter"/);
+assert.match(html,/const pair=el\("eventPair"\)\?\.value\|\|state\.selectedInstrument,timeframe=el\("eventTimeframe"\)\?\.value\|\|state\.selectedTimeframe,length=clamp\(Math\.trunc\(Number\(el\("eventLength"\)\?\.value\)\|\|10\)/);
 assert.match(html,/state\.chartCache\.clear\(\)/);
 assert.match(html,/state\.eventFailures\.clear\(\)/);
 const refreshStart=html.indexOf("async function refreshSelectedEventChart");
