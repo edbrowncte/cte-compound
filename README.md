@@ -6,7 +6,7 @@
 
 - Live OANDA REST and pricing-stream hosts only.
 - OANDA credentials are Cloudflare secrets: `OANDA_ACCOUNT_ID` and `OANDA_API_KEY`.
-- One Durable Object (`HTL_ENGINE`) coordinates completed-candle decisions, optimizer records, persistent state, transaction reconciliation, Nemotron ranking, and the trading ledger.
+- One Durable Object (`HTL_ENGINE`) coordinates completed-candle decisions, persistent state, transaction reconciliation, Nemotron ranking, the trading ledger, and an independently scheduled sharded optimizer service.
 - Workers AI uses `@cf/nvidia/nemotron-3-120b-a12b` only to rank candidates already admitted by deterministic strategy logic.
 - The `OANDA_ENGINE` service binding is currently used only for health reporting.
 
@@ -43,7 +43,7 @@ The permanent `npm run check` gate verifies:
 - 3,000 completed M1 candles for every pair;
 - 84,000 completed candles in total;
 - exact serialized reproduction of all 168 clean performance rows;
-- optimizer generation 6 and the registered gross-performance contract.
+- runtime optimizer generation 7 sharded per pair-timeframe and the registered gross-performance contract.
 
 Frozen clean evidence:
 
