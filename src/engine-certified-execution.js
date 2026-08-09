@@ -286,6 +286,9 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       optimizerHistoryBars:RUNTIME_OPTIMIZER_HISTORY_BARS,
       optimizerCoverage:Object.keys(runtimeOptimizer).length,
       optimizerTotal:PAIRS.length*TIMEFRAMES.length,
+      optimizerStorageMode:"SHARDED_PER_DATASET",
+      optimizerPersistenceHealthy:!state.optimizerLastError,
+      optimizerLastError:state.optimizerLastError||null,
       armed:true,
       executionCertification:"ARMED_PRIVATE_USER",
       executionPolicy:EXECUTION_POLICY_VERSION,
@@ -332,7 +335,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
           if (sameTimeframe && sameDirection) {
             let opt = {};
-            try { opt = (await this.ctx.storage.get("optimizer")) || {}; } catch (e) {}
+            try { opt = await loadRuntimeOptimizer(this.ctx.storage); } catch (e) {}
             let ev = null;
             let settings = null;
             try {
