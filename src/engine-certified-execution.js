@@ -11,7 +11,8 @@ import {
   fullSettings,
   RUNTIME_OPTIMIZER_VERSION,
   RUNTIME_OPTIMIZER_HISTORY_BARS,
-  currentRuntimeOptimizer
+  currentRuntimeOptimizer,
+  loadRuntimeOptimizer
 } from "./optimized-optimizer.js";
 
 const API="https://api-fxtrade.oanda.com";
@@ -169,7 +170,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
   async fetch(request){
     const url=new URL(request.url),path=url.pathname;
     if(path==="/optimizer"&&request.method==="GET"){
-      const records=currentRuntimeOptimizer((await this.ctx.storage.get("optimizer"))||{});
+      const records=await loadRuntimeOptimizer(this.ctx.storage);
       return new Response(JSON.stringify({version:RUNTIME_OPTIMIZER_VERSION,optimizerHistoryBars:RUNTIME_OPTIMIZER_HISTORY_BARS,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,records}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     }
     if(path==="/control/selectedPairs"&&request.method==="POST"){
@@ -278,7 +279,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
   async status(){
     const status=await super.status();
     const state=(await this.ctx.storage.get("state"))||{};
-    const runtimeOptimizer=currentRuntimeOptimizer((await this.ctx.storage.get("optimizer"))||{});
+    const runtimeOptimizer=await loadRuntimeOptimizer(this.ctx.storage);
     return{
       ...status,
       optimizerVersion:RUNTIME_OPTIMIZER_VERSION,
@@ -551,7 +552,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
       try{await this.syncTransactions(state,token,accountId);}catch(error){state.transactionSyncError=String(error?.message||error);}
 
-      let optimizer=currentRuntimeOptimizer((await this.ctx.storage.get("optimizer"))||{});
+      let optimizer=await loadRuntimeOptimizer(this.ctx.storage);
       try{optimizer=(await this.optimizeNext(state,token)).records;}catch(error){state.optimizerLastError=String(error?.message||error);}
 
       const rotationIndex=Number(state.mtfRotation||0)%TIMEFRAMES.length;
