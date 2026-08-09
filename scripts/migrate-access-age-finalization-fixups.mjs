@@ -20,6 +20,9 @@ certified=swap("preserve AGE annotation in durable reversal claims",certified,
 certified=swap("control status AGE telemetry",certified,
 '        modelContextAt:state.modelContext?.receivedAt||null\n      }),',
 '        modelContextAt:state.modelContext?.receivedAt||null,\n        ageExpectationVersion:AGE_EXPECTATION_VERSION,\n        ageReallocationMinimumIndex:AGE_REALLOCATION_MIN_INDEX,\n        ageReallocationDeltaIndex:AGE_REALLOCATION_DELTA_INDEX,\n        ageLastPlan:state.ageLastPlan||null\n      }),');
+certified=swap("AGE reversal status policy",certified,
+'      reversalPolicy:"ALL_OPPOSING_EVENTS_INDEPENDENT_NEW_ENTRIES_NEMOTRON_RANKED",',
+'      reversalPolicy:"AGE_REVERSAL_AND_ALTERNATIVE_EXPECTATIONS_COMPETE",');
 
 html=swap("render AGE heartbeat from control status",html,
 '      el("hbCardStats").textContent = `Margin: ${formattedMargin} | Open: ${openCount} | Selected: ${selectedStr} | Resolved Account: ${resolvedAcc}`;',
