@@ -73,6 +73,7 @@ try{
   await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.querySelector("#compartment-ASSET .badge").textContent!=="—","causal Refresh chart completion");
   assert.notEqual(document.getElementById("metricTime").textContent,"—");
   assert.notEqual(document.querySelector("#compartment-ASSET .badge").textContent,"—");
+  const invalidPayload={instrument:"EUR_USD",granularity:"M15",candles:[{time:"2026-08-09T18:00:00Z",complete:true,mid:{o:"1.1",h:"1.2",l:"0",c:"1.15"}}]};assert.throws(()=>window.completedCandles(invalidPayload,"EUR_USD","M15"),/non-positive 1/);
 
   candleShape="both";document.getElementById("refreshEventChart").click();
   await waitFor(()=>!document.getElementById("refreshEventChart").disabled&&document.getElementById("eventChartInstrument").textContent==="EUR/USD","event chart refresh");
@@ -82,6 +83,7 @@ try{
   assert.ok(document.querySelectorAll("#eventScheduleBody tr[data-pair]").length>=1);
 
   await waitFor(()=>!document.getElementById("refreshSchedule").disabled,"focused schedule completion");
+  document.getElementById("runPlatformDiagnostic").click();await waitFor(()=>document.getElementById("platformDiagnosticStatus").textContent.includes("DEGRADED"),"browser diagnostic must reject incomplete chart/schedule coverage");assert.ok([...document.querySelectorAll(".diagnostic-card.bad strong")].some(node=>/CHART|datasets|completed candles|numerical/i.test(node.textContent)));
   document.getElementById("refreshSchedule").click();
   await waitFor(()=>!document.getElementById("refreshSchedule").disabled,"full schedule completion",20000);
   const scheduleCell=document.querySelector('.signal-cell[data-instrument="EUR_USD"][data-timeframe="M15"][data-side="buy"]');
