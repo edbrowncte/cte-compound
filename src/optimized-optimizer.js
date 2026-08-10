@@ -35,6 +35,7 @@ import {
   candlesForRange,
   currentEvent,
 } from "./horizon-platform-engine.js";
+import { optimizeIoiIomPerformance } from "./ioi-iom-performance.js";
 
 export const RUNTIME_OPTIMIZER_VERSION = 7;
 export const RUNTIME_OPTIMIZER_HISTORY_BARS = 5000;
@@ -215,11 +216,13 @@ export function optimizedOptimizeDataset(data, pair, timeframe = "UNSPECIFIED", 
       candidateFilters: [...FILTER_GRID[strategy]]
     };
   }
+  const ioiIom = optimizeIoiIomPerformance(candles, pair, timeframe, LENGTH_GRID, VALIDATION, STRATEGY_ENGINE_VERSION);
+  Object.assign(config, ioiIom.config);
 
   return {
     settings: normalizeStrategySettings(settings),
     config,
-    grossPerformance: registeredExportRows(finalResult, pair, timeframe)
+    grossPerformance: [...registeredExportRows(finalResult, pair, timeframe), ...ioiIom.rows]
   };
 }
 
