@@ -31,7 +31,7 @@
       else{ctx.moveTo(x,markerY+size);ctx.lineTo(x-size,markerY-size);ctx.lineTo(x+size,markerY-size);}
       ctx.closePath();ctx.fillStyle=direction>0?"#48c78e":"#ef6b73";ctx.fill();
       const labelY=clamp(markerY+(direction>0?12:-12),pricePlot.y+7,pricePlot.y+pricePlot.h-7);
-      ctx.fillText(direction>0?"BUY":"SELL",x,labelY);
+      ctx.fillText(`${direction>0?"BUY":"SELL"}${signal.current?" ACTIVE":""}`,x,labelY);
     }
     ctx.restore();
   }
