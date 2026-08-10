@@ -1,5 +1,5 @@
 import { HtlEngine as HorizonEngine } from "./engine-horizon-base.js";
-import { __platformTest, computeConfiguration as computePlatformConfiguration, optimizeNext as optimizePlatformNext, scan as scanPlatform, currentOptimizer, OPTIMIZER_VERSION, PAIRS } from "./horizon-platform-engine.js";
+import { __platformTest, computeConfiguration as computePlatformConfiguration, optimizeNext as optimizePlatformNext, scan as scanPlatform, loadOptimizerRecords, OPTIMIZER_VERSION, PAIRS } from "./horizon-platform-engine.js";
 import "../public/htl-horizon-contract.js";
 import "../public/horizon-strategy-contract.js";
 import { AGE_EXPECTATION_VERSION, greatExpectation } from "./age-expectation.js";
@@ -95,7 +95,7 @@ export const __nemotronTest=Object.freeze({AI_MODEL,AI_TIMEOUT_MS,AI_POLICY,AI_T
 export class HtlEngine extends HorizonEngine {
   async fetch(request) {
     const path=new URL(request.url).pathname;
-    if(path==="/optimizer"&&request.method==="GET")return response({version:OPTIMIZER_VERSION,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,records:currentOptimizer(await this.ctx.storage.get("optimizer"))});
+    if(path==="/optimizer"&&request.method==="GET")return response({version:OPTIMIZER_VERSION,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,records:await loadOptimizerRecords(this.ctx.storage)});
     if(path==="/compute"&&request.method==="POST"){try{return response(await this.computeConfiguration(await request.json()));}catch(error){return response({error:String(error?.message||error),stage:error?.stage||"compute"},Number(error?.status)||500);}}
     if(path==="/manual-trade-action"&&request.method==="POST"){
       const entry=await request.json().catch(()=>null),allowed=new Set(["MANUAL_TRADE_CLOSE","MANUAL_TRADE_MODIFY","MANUAL_CANDIDATE_ORDER"]);
@@ -146,7 +146,7 @@ export class HtlEngine extends HorizonEngine {
   }
 
   async tick(){const state=(await this.ctx.storage.get("state"))||{};if(state.qualificationVersion!==S.VERSION){Object.assign(state,{events:{},directions:null,requirements:null,lastCandle:null,mtf:{},mtfDecisionDirections:{},mtfRotation:0,initialized:false,calculationVersion:H.VERSION,qualificationVersion:S.VERSION});await this.ctx.storage.put("state",state);await this.write({type:"QUALIFICATION_MIGRATION",calculationVersion:H.VERSION,qualificationVersion:S.VERSION,message:"All strategies now qualify one canonical Asset/Inverse crossing clock"},false);}return super.tick();}
-  async status(){const status=await super.status(),records=currentOptimizer(await this.ctx.storage.get("optimizer")),telemetry=(await this.ctx.storage.get("aiTelemetry"))||{},engineState=(await this.ctx.storage.get("state"))||{};return{...status,optimizerVersion:OPTIMIZER_VERSION,optimizerCoverage:Object.keys(records).length,optimizerTotal:PAIRS.length*10,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,crossingContract:"ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK",strategyContract:"POST_CROSS_STRATEGY_QUALIFICATION",ai:{model:AI_MODEL,binding:Boolean(this.env.AI),policy:AI_POLICY,taskName:AI_TASK_NAME,task:AI_TASK,ageMandate:AGE_MANDATE,expectationVersion:AGE_EXPECTATION_VERSION,mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",capitalPolicy:"DEPLOYED_IN_QUALIFIED_POSITIVE_EXPECTATION_OR_WEEKEND_FLAT",modelContextAt:engineState.modelContext?.receivedAt||null,...telemetry}};}
+  async status(){const status=await super.status(),records=await loadOptimizerRecords(this.ctx.storage),telemetry=(await this.ctx.storage.get("aiTelemetry"))||{},engineState=(await this.ctx.storage.get("state"))||{};return{...status,optimizerVersion:OPTIMIZER_VERSION,optimizerCoverage:Object.keys(records).length,optimizerTotal:PAIRS.length*10,calculationVersion:H.VERSION,qualificationVersion:S.VERSION,crossingContract:"ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK",strategyContract:"POST_CROSS_STRATEGY_QUALIFICATION",ai:{model:AI_MODEL,binding:Boolean(this.env.AI),policy:AI_POLICY,taskName:AI_TASK_NAME,task:AI_TASK,ageMandate:AGE_MANDATE,expectationVersion:AGE_EXPECTATION_VERSION,mandate:"CAPITALIZATION_AND_ACCOUNT_VALUE_PROLIFERATION",capitalPolicy:"DEPLOYED_IN_QUALIFIED_POSITIVE_EXPECTATION_OR_WEEKEND_FLAT",modelContextAt:engineState.modelContext?.receivedAt||null,...telemetry}};}
   async computeConfiguration(value){return computePlatformConfiguration(this,value);}
   async optimizeNext(state,token){return optimizePlatformNext(this,state,token);}
   async scan(token,config,timeframe=config.timeframe,optimizer={}){const rows=await scanPlatform(this,token,config,timeframe,optimizer);return rows.filter(row=>row.event?.qualified===true&&Boolean(row.event?.startTime));}

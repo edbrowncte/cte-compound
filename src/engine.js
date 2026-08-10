@@ -4,7 +4,7 @@ import {
   computeConfiguration as computeRegisteredConfiguration,
   optimizeNext as optimizeRegisteredNext,
   scan as scanRegistered,
-  currentOptimizer,
+  loadOptimizerRecords,
   OPTIMIZER_VERSION,
   PAIRS,
   ANALYTICAL_CERTIFICATION,
@@ -19,7 +19,7 @@ export { __platformTest as __horizonTest };
 export class HtlEngine extends NemotronEngine {
   async fetch(request){
     const path=new URL(request.url).pathname;
-    if(path==="/optimizer"&&request.method==="GET")return response({version:OPTIMIZER_VERSION,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,analyticalCertification:ANALYTICAL_CERTIFICATION,records:currentOptimizer(await this.ctx.storage.get("optimizer"))});
+    if(path==="/optimizer"&&request.method==="GET")return response({version:OPTIMIZER_VERSION,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,analyticalCertification:ANALYTICAL_CERTIFICATION,records:await loadOptimizerRecords(this.ctx.storage)});
     if(path==="/compute"&&request.method==="POST"){try{return response(await this.computeConfiguration(await request.json()));}catch(error){return response({error:String(error?.message||error),stage:error?.stage||"compute"},Number(error?.status)||500);}}
     return super.fetch(request);
   }
@@ -33,7 +33,7 @@ export class HtlEngine extends NemotronEngine {
     return super.tick();
   }
   async status(){
-    const status=await super.status(),records=currentOptimizer(await this.ctx.storage.get("optimizer"));
+    const status=await super.status(),records=await loadOptimizerRecords(this.ctx.storage);
     return{...status,armed:true,optimizerVersion:OPTIMIZER_VERSION,optimizerCoverage:Object.keys(records).length,optimizerTotal:PAIRS.length*10,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,strategyContract:"SIX_INDEPENDENT_REGISTERED_HORIZON_STATE_MACHINES",performanceContract:"3000_BAR_NEXT_OPEN_OPPOSITE_STRATEGY_EVENT_GROSS",analyticalCertification:ANALYTICAL_CERTIFICATION,executionCertification:"ARMED_PRIVATE_USER"};
   }
   async computeConfiguration(value){return computeRegisteredConfiguration(this,value);}

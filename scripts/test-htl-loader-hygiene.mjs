@@ -27,6 +27,9 @@ const refreshSource=html.slice(refreshStart,forecastStart);
 assert.doesNotMatch(refreshSource,/state\.eventRows/);
 assert.match(refreshSource,/marketDataReady\(\)/);
 assert.doesNotMatch(refreshSource,/eventChartPair|eventChartTimeframe|eventChartLength|eventChartFilter/);
-assert.match(html,/const runJobs=async\(items,priority\)=>runPool\(items,priority>=50\?2:1/);
+assert.match(html,/const runJobs=async\(items,priority\)=>runPool\(items,mode==="progressive"\?2:priority>=50\?2:1/);
+assert.doesNotMatch(html,/scheduleJobsForMode[\s\S]{0,1000}\.slice\(0,6\)/);
+assert.match(html,/const missing=\[\],refresh=\[\]/);
+assert.match(html,/return \[\.\.\.missing,\.\.\.refresh\]/);
 
 console.log("HTL schedule/chart isolation, 5,000-candle event history, causal fallback depth, bounded concurrency, timeout alignment, partial-success retention, and session cache hygiene verified.");

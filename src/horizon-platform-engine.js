@@ -14,6 +14,7 @@ import {
 } from "./horizon-registered-performance.js";
 
 export const OPTIMIZER_VERSION = 6;
+export const OPTIMIZER_STORAGE_PREFIX = `optimizer:v${OPTIMIZER_VERSION}:`;
 export const VALIDATION = "REGISTERED_HORIZON_STRATEGY_V1_GROSS";
 export const MAX_COMPUTE_BARS = 5000;
 export const OPTIMIZER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -121,6 +122,8 @@ export function optimizeDataset(data,pair,baseSettings=DEFAULT_STRATEGY_SETTINGS
   return{settings:normalizeStrategySettings(settings),config,grossPerformance:registeredExportRows(finalResult,pair,"UNSPECIFIED")};
 }
 export function currentOptimizer(records){const now=Date.now();return Object.fromEntries(Object.entries(records||{}).filter(([,record])=>record?.version===OPTIMIZER_VERSION&&record?.strategyEngineVersion===STRATEGY_ENGINE_VERSION&&now-Date.parse(record.computedAt||record.stamp||0)<OPTIMIZER_TTL_MS));}
+export async function loadOptimizerRecords(storage,{migrateLegacy=true}={}){const records={},canList=typeof storage.list==="function";if(canList){const listed=await storage.list({prefix:OPTIMIZER_STORAGE_PREFIX});for(const [storageKey,record] of listed)records[storageKey.slice(OPTIMIZER_STORAGE_PREFIX.length)]=record;}const legacy=await storage.get("optimizer");if(legacy&&typeof legacy==="object"){for(const [datasetKey,record] of Object.entries(legacy)){if(record?.version!==OPTIMIZER_VERSION||record?.strategyEngineVersion!==STRATEGY_ENGINE_VERSION)continue;if(!(datasetKey in records)){if(migrateLegacy&&canList)await storage.put(`${OPTIMIZER_STORAGE_PREFIX}${datasetKey}`,record);records[datasetKey]=record;}}if(migrateLegacy&&canList)await storage.delete("optimizer");}return currentOptimizer(records);}
+export async function saveOptimizerRecord(storage,datasetKey,record){await storage.put(`${OPTIMIZER_STORAGE_PREFIX}${datasetKey}`,record);return record;}
 
 export async function computeConfiguration(engine,value={}){
   let stage="validation";
@@ -132,15 +135,15 @@ export async function computeConfiguration(engine,value={}){
     stage="credentials";const apiToken=token(engine.env);stage="oanda-history";const data=hasDateRange?await candlesForRange(pair,apiToken,timeframe,startDate,endDate):await candles(pair,apiToken,timeframe,REGISTERED_HISTORY_BARS);
     if(data.length<150)throw responseError(`Insufficient completed candles for registered Horizon computation: ${data.length}.`);
     stage="registered-horizon-optimization";const optimized=optimizeDataset(data,pair),result=evaluateRegisteredPerformance(data,pair,optimized.settings),stamp=data.at(-1)?.time||new Date().toISOString();
-    stage="durable-storage";const records=(await engine.ctx.storage.get("optimizer"))||{},key=`${pair}|${timeframe}`,record={version:OPTIMIZER_VERSION,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,stamp,computedAt:new Date().toISOString(),source:"COMPUTE_CONFIGURATION",validation:VALIDATION,analyticalCertification:ANALYTICAL_CERTIFICATION,range:{startDate:hasDateRange?startDate:null,endDate:hasDateRange?endDate:null,firstCandle:data[0]?.time||null,lastCandle:data.at(-1)?.time||null,bars:data.length},settings:optimized.settings,config:optimized.config,grossPerformance:registeredExportRows(result,pair,timeframe),spreadAdjustedPerformance:{status:"SEPARATE_NOT_COMPUTED",rows:[]}};
-    records[key]=record;await engine.ctx.storage.put("optimizer",records);return{key,record};
+    stage="durable-storage";const key=`${pair}|${timeframe}`,record={version:OPTIMIZER_VERSION,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,stamp,computedAt:new Date().toISOString(),source:"COMPUTE_CONFIGURATION",validation:VALIDATION,analyticalCertification:ANALYTICAL_CERTIFICATION,range:{startDate:hasDateRange?startDate:null,endDate:hasDateRange?endDate:null,firstCandle:data[0]?.time||null,lastCandle:data.at(-1)?.time||null,bars:data.length},settings:optimized.settings,config:optimized.config,grossPerformance:registeredExportRows(result,pair,timeframe),spreadAdjustedPerformance:{status:"SEPARATE_NOT_COMPUTED",rows:[]}};
+    await saveOptimizerRecord(engine.ctx.storage,key,record);return{key,record};
   }catch(error){if(!error.stage)error.stage=stage;throw error;}
 }
 export async function optimizeNext(engine,state,apiToken){
-  const total=PAIRS.length*TIMEFRAMES.length,index=Number(state.optimizerCycleIndex||0)%total,pair=PAIRS[index%PAIRS.length],timeframe=TIMEFRAMES[Math.floor(index/PAIRS.length)],key=`${pair}|${timeframe}`,records=(await engine.ctx.storage.get("optimizer"))||{},existing=records[key];state.optimizerCycleIndex=(index+1)%total;
+  const total=PAIRS.length*TIMEFRAMES.length,index=Number(state.optimizerCycleIndex||0)%total,pair=PAIRS[index%PAIRS.length],timeframe=TIMEFRAMES[Math.floor(index/PAIRS.length)],key=`${pair}|${timeframe}`,records=await loadOptimizerRecords(engine.ctx.storage),existing=records[key];state.optimizerCycleIndex=(index+1)%total;
   if(existing?.version===OPTIMIZER_VERSION&&existing?.strategyEngineVersion===STRATEGY_ENGINE_VERSION&&existing?.source==="COMPUTE_CONFIGURATION"&&Date.now()-Date.parse(existing.computedAt||0)<OPTIMIZER_TTL_MS){state.optimizerLastDataset=key;state.optimizerLastRun=new Date().toISOString();state.optimizerLastError=null;return{records:currentOptimizer(records),key,record:existing};}
   const data=await candles(pair,apiToken,timeframe,REGISTERED_HISTORY_BARS),optimized=optimizeDataset(data,pair),stamp=data.at(-1)?.time||new Date().toISOString(),result=evaluateRegisteredPerformance(data,pair,optimized.settings),record={version:OPTIMIZER_VERSION,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,stamp,computedAt:new Date().toISOString(),source:"SERVER",validation:VALIDATION,analyticalCertification:ANALYTICAL_CERTIFICATION,range:{startDate:null,endDate:null,firstCandle:data[0]?.time||null,lastCandle:data.at(-1)?.time||null,bars:data.length},settings:optimized.settings,config:optimized.config,grossPerformance:registeredExportRows(result,pair,timeframe),spreadAdjustedPerformance:{status:"SEPARATE_NOT_COMPUTED",rows:[]}};
-  records[key]=record;await engine.ctx.storage.put("optimizer",records);state.optimizerLastDataset=key;state.optimizerLastRun=new Date().toISOString();state.optimizerLastError=null;return{records:currentOptimizer(records),key,record};
+  records[key]=record;await saveOptimizerRecord(engine.ctx.storage,key,record);state.optimizerLastDataset=key;state.optimizerLastRun=new Date().toISOString();state.optimizerLastError=null;return{records:currentOptimizer(records),key,record};
 }
 export async function scan(engine,apiToken,config,timeframe=config.timeframe,optimizer={}){
   const rows=[],errors=[];
