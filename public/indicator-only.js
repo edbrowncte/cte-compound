@@ -1,11 +1,11 @@
 (function installIndicatorOnlyControls(global){
   "use strict";
 
-  const VERSION="CTE_INDICATOR_ONLY_UI@1.2.0";
+  const VERSION="CTE_INDICATOR_ONLY_UI@1.2.1";
   const NORMAL_CONTROL_IDS=["engineTimeframe","engineStrategy","engineConfirmationStrategy","engineHtlLength","engineFilter","engineDecisionMode","engineConfigurationSource","saveEngineConfig","candidateA","candidateB","candidateC","candidateUnits","executeDecisionCandidate","tradePair","tradeUnits","tradeBuy","tradeSell"];
   const STRUCTURAL_IDS=["indicatorOnlyPair","indicatorOnlyTimeframe","indicatorOnlyIndicator","indicatorOnlyLength","indicatorOnlyFilter"];
   const priorDisabled=new Map();
-  let root=null,busy=false,pollTimer=null;
+  let root=null,busy=false,pollTimer=null,unitsSaveTimer=null,unitsDirty=false;
 
   const el=id=>document.getElementById(id);
   const copyOptions=(source,target)=>{if(source&&target)target.innerHTML=[...source.options].map(option=>`<option value="${option.value}">${option.textContent}</option>`).join("");};
@@ -20,16 +20,16 @@
   }
 
   function apply(payload={}){
-    const io=payload.indicatorOnly||{},runtime=payload.indicatorOnlyRuntime||{},enabled=Boolean(io.enabled);
+    const io=payload.indicatorOnly||{},runtime=payload.indicatorOnlyRuntime||{},enabled=Boolean(io.enabled),unitsNode=el("indicatorOnlyUnits"),unitsFocused=Boolean(unitsNode&&document.activeElement===unitsNode);
     if(el("indicatorOnlyPair")&&io.pair)el("indicatorOnlyPair").value=io.pair;
     if(el("indicatorOnlyTimeframe")&&io.timeframe)el("indicatorOnlyTimeframe").value=io.timeframe;
     if(el("indicatorOnlyIndicator")&&io.indicator)el("indicatorOnlyIndicator").value=io.indicator;
     if(el("indicatorOnlyLength")&&io.length!==undefined)el("indicatorOnlyLength").value=String(io.length);
     if(el("indicatorOnlyFilter")&&io.filter!==undefined)el("indicatorOnlyFilter").value=String(io.filter);
-    if(el("indicatorOnlyUnits")&&io.units!==undefined)el("indicatorOnlyUnits").value=String(io.units);
+    if(unitsNode&&io.units!==undefined&&!unitsDirty&&!unitsFocused)unitsNode.value=String(io.units);
     if(el("indicatorOnlyToggle"))el("indicatorOnlyToggle").checked=enabled;
     for(const id of STRUCTURAL_IDS){const node=el(id);if(node)node.disabled=enabled||busy;}
-    const unitsNode=el("indicatorOnlyUnits");if(unitsNode)unitsNode.disabled=busy;
+    if(unitsNode)unitsNode.disabled=busy;
     lockNormal(enabled);
     const status=el("indicatorOnlyStatus");
     if(status){
@@ -41,23 +41,36 @@
   }
 
   async function load(){
+    if(busy)return;
     try{
       const response=await fetch("/api/control/status",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json().catch(()=>({}));
       if(response.ok)apply(payload);
     }catch{}
   }
 
-  async function save(){
+  async function save(options={}){
     if(busy)return;
+    const unitsEdit=Boolean(options.unitsEdit);
     busy=true;
     const requested=control(),status=el("indicatorOnlyStatus");
     if(status)status.textContent="Saving Indicator Only controls…";
+    let saved=false;
     try{
       const response=await fetch("/api/control/selectedPairs",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({indicatorOnly:requested})}),payload=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);
-      await load();
-    }catch(error){if(status)status.textContent=error?.message||"Indicator Only control update failed";await load();}
+      if(unitsEdit)unitsDirty=false;
+      apply(payload);saved=true;
+    }catch(error){if(status)status.textContent=error?.message||"Indicator Only control update failed";}
     finally{busy=false;const active=Boolean(el("indicatorOnlyToggle")?.checked);for(const id of STRUCTURAL_IDS){const node=el(id);if(node)node.disabled=active;}const unitsNode=el("indicatorOnlyUnits");if(unitsNode)unitsNode.disabled=false;lockNormal(active);}
+    if(saved)await load();
+  }
+
+  function scheduleUnitsSave(){
+    unitsDirty=true;
+    if(unitsSaveTimer)clearTimeout(unitsSaveTimer);
+    const unitsNode=el("indicatorOnlyUnits"),value=Number(unitsNode?.value);
+    if(!Number.isFinite(value)||value<1)return;
+    unitsSaveTimer=setTimeout(()=>{unitsSaveTimer=null;void save({unitsEdit:true});},450);
   }
 
   function install(){
@@ -84,9 +97,13 @@
     if(el("engineHtlLength"))el("indicatorOnlyLength").value=el("engineHtlLength").value;
     if(el("engineFilter"))el("indicatorOnlyFilter").value=el("engineFilter").value;
     el("indicatorOnlyToggle").addEventListener("change",save);
-    for(const id of [...STRUCTURAL_IDS,"indicatorOnlyUnits"])el(id).addEventListener("change",save);
+    for(const id of STRUCTURAL_IDS)el(id).addEventListener("change",save);
+    const unitsNode=el("indicatorOnlyUnits");
+    unitsNode.addEventListener("input",scheduleUnitsSave);
+    unitsNode.addEventListener("change",()=>{if(unitsSaveTimer){clearTimeout(unitsSaveTimer);unitsSaveTimer=null;}if(unitsDirty)void save({unitsEdit:true});});
+    unitsNode.addEventListener("blur",()=>{if(unitsDirty&&!busy){if(unitsSaveTimer){clearTimeout(unitsSaveTimer);unitsSaveTimer=null;}void save({unitsEdit:true});}});
     void load();pollTimer=setInterval(()=>{if(!document.hidden)void load();},5000);
-    global.addEventListener?.("pagehide",()=>{if(pollTimer)clearInterval(pollTimer);},{once:true});
+    global.addEventListener?.("pagehide",()=>{if(pollTimer)clearInterval(pollTimer);if(unitsSaveTimer)clearTimeout(unitsSaveTimer);},{once:true});
     return true;
   }
 
