@@ -17,6 +17,25 @@
     ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();
   }
 
+  function drawSignals(ctx,signals,candles,start,end,indexToX,priceToY,pricePlot){
+    if(!Array.isArray(signals)||!signals.length)return;
+    ctx.save();ctx.font="bold 8px ui-monospace,monospace";ctx.textAlign="center";ctx.textBaseline="middle";
+    for(const signal of signals){
+      const absolute=Math.trunc(Number(signal?.index)),direction=Math.sign(Number(signal?.direction)||0);
+      if(!direction||absolute<start||absolute>=end)continue;
+      const candle=candles[absolute];if(!candle)continue;
+      const x=indexToX(absolute-start),anchor=direction>0?Number(candle.low):Number(candle.high);if(!finite(anchor))continue;
+      const candleY=priceToY(anchor),markerY=clamp(candleY+(direction>0?11:-11),pricePlot.y+9,pricePlot.y+pricePlot.h-9),size=5;
+      ctx.beginPath();
+      if(direction>0){ctx.moveTo(x,markerY-size);ctx.lineTo(x-size,markerY+size);ctx.lineTo(x+size,markerY+size);}
+      else{ctx.moveTo(x,markerY+size);ctx.lineTo(x-size,markerY-size);ctx.lineTo(x+size,markerY-size);}
+      ctx.closePath();ctx.fillStyle=direction>0?"#48c78e":"#ef6b73";ctx.fill();
+      const labelY=clamp(markerY+(direction>0?12:-12),pricePlot.y+7,pricePlot.y+pricePlot.h-7);
+      ctx.fillText(direction>0?"BUY":"SELL",x,labelY);
+    }
+    ctx.restore();
+  }
+
   function render(options={}){
     const canvas=options.canvas;
     const candles=Array.isArray(options.candles)?options.candles:[];
@@ -48,6 +67,7 @@
     visibleCandles.forEach((c,index)=>{const x=indexToX(index),rising=Number(c.close)>=Number(c.open),stroke=rising?"#48c78e":"#ef6b73";ctx.strokeStyle=stroke;ctx.fillStyle=stroke;ctx.beginPath();ctx.moveTo(x,priceToY(Number(c.high)));ctx.lineTo(x,priceToY(Number(c.low)));ctx.stroke();const bodyTop=priceToY(Math.max(Number(c.open),Number(c.close))),bodyBottom=priceToY(Math.min(Number(c.open),Number(c.close))),bodyWidth=Math.max(1,Math.min(11,barWidth*.6));ctx.fillRect(x-bodyWidth/2,bodyTop,bodyWidth,Math.max(1,bodyBottom-bodyTop));});
 
     for(const [key,,color] of indicatorSet.price||[])drawSeries(ctx,(indicators[key]||[]).map(value=>plausiblePrice(value)?value:null),visibleStart,visibleEnd,indexToX,priceToY,color,1.8);
+    drawSignals(ctx,options.signals,candles,visibleStart,visibleEnd,indexToX,priceToY,pricePlot);
 
     const zDefinitions=indicatorSet.z||[],zValues=zDefinitions.flatMap(([key])=>(indicators[key]||[]).slice(visibleStart,visibleEnd).filter(finite).map(Number));
     if(zValues.length){const zMax=Math.max(1,...zValues.map(value=>Math.abs(value)))*1.08,zToY=value=>pricePlot.y+(zMax-value)/(zMax*2)*pricePlot.h;ctx.font="9px ui-monospace,monospace";ctx.textAlign="right";for(let i=0;i<=4;i++){const value=zMax-i*zMax/2,y=zToY(value);ctx.strokeStyle=value===0?"#415267":"#1c2632";ctx.setLineDash(value===0?[4,4]:[]);ctx.beginPath();ctx.moveTo(pricePlot.x,y+.5);ctx.lineTo(gridEndX,y+.5);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#68aee8";ctx.fillText(value.toFixed(2),pricePlot.x-7,y);}ctx.textAlign="left";for(const [key,,color] of zDefinitions)drawSeries(ctx,indicators[key],visibleStart,visibleEnd,indexToX,zToY,color,1.8);}
