@@ -12,10 +12,9 @@ for(const forbidden of ['id="evalChartPanel"','id="eventChartPanel"','id="evalCh
 }
 if((html.match(/data-chart-model="canonical-single"/g)||[]).length!==1)throw new Error("Exactly one canonical chart component is required.");
 if((html.match(/<canvas\b/g)||[]).length!==3)throw new Error("Canonical chart must contain main, MAS/IM, and weekly cognition canvases only.");
-const script=html.match(/<script>([\s\S]*)<\/script>/)?.[1];
-if(!script)throw new Error("Inline application script was not found.");
-const result=spawnSync(process.execPath,["--check","-"],{input:script,encoding:"utf8"});
-if(result.status!==0)throw new Error(result.stderr||result.stdout||"Inline JavaScript syntax failed");
+const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(match=>match[1]).filter(script=>script.trim());
+if(!scripts.length)throw new Error("Inline application scripts were not found.");
+for(const script of scripts){const result=spawnSync(process.execPath,["--check","-"],{input:script,encoding:"utf8"});if(result.status!==0)throw new Error(result.stderr||result.stdout||"Inline JavaScript syntax failed");}
 if(/storage\.put\(["']optimizer["']\s*,\s*records\)/.test(html))throw new Error("Legacy optimizer persistence returned.");
 if(/id="connectButton"|>TEST<\/button>|TESTING…|Testing live OANDA connection/.test(html))throw new Error("Operator-facing OANDA TEST/retest workflow remains present.");
 console.log("HTML syntax and one-chart contract verified; trading, diagnostics, schedules, and tables remain.");
