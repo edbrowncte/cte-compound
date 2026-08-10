@@ -28,7 +28,9 @@ for(let index=2;index<candles.length;index++){
 }
 
 const signals=api.crossSignalSeries(candles,[1,2,1,0,2,3],[2,1,1,1,1,2],0);
-assert.deepEqual(Array.from(signals,signal=>signal.direction),[-1,1,-1,1],"cross signals must alternate BUY/SELL only when line ownership changes");
+assert.deepEqual(Array.from(signals,signal=>signal.direction),[-1,1,-1,1,1],"cross signals must preserve transition markers plus the final current-state marker");
+assert.equal(signals.at(-1)?.current,true,"the final same-direction marker must identify the currently active signal");
+assert.deepEqual(Array.from(signals.slice(0,-1),signal=>signal.direction),[-1,1,-1,1],"historical transition signals must alternate only when line ownership changes");
 
 assert.match(source,/CHART_INDICATORS\.IOI=\{price:\[\["ioi","IOI"/,"IOI must own exactly its two chart lines");
 assert.match(source,/CHART_INDICATORS\.IOM=\{price:\[\["ioiMean","IOM Mean"/,"IOM must own exactly its mean and recovered inverse lines");
@@ -39,4 +41,4 @@ assert.match(source,/if\(!CHART_ONLY_IDS\.has\(strategy\)\)return priorRefresh/,
 assert.match(worker,/chart-indicator-ownership\.js[^]*chart-ioi-iom\.js/,"IOI/IOM extension must load after singular chart ownership");
 assert.doesNotMatch(source,/engineStrategy|indicatorOnlyIndicator|scheduleStrategy/,"IOI/IOM must be added only to the Forensic chart selector");
 
-console.log("IOI/IOM chart certification passed: IOI averages instrument/HTL lines, IOM standardizes the IOI mean and recovers its inverse, crossing signals are singularly owned, and only the Forensic chart selector is extended.");
+console.log("IOI/IOM chart certification passed: IOI averages instrument/HTL lines, IOM standardizes the IOI mean and recovers its inverse, transition/current crossing signals are singularly owned, and only the Forensic chart selector is extended.");
