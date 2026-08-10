@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { __indicatorOnlyTest } from "../src/engine-indicator-only.js";
+import { __indicatorOnlyUnitsTest } from "../src/engine-indicator-only-units.js";
 
 const {normalizeIndicatorOnly,indicatorOnlyFingerprint,indicatorOnlyCadenceMs,indicatorOnlySettings}=__indicatorOnlyTest;
+const {normalizeIndicatorOnlyUnits,ioClientOrderId}=__indicatorOnlyUnitsTest;
 
 const normalized=normalizeIndicatorOnly({enabled:true,pair:"EUR_NZD",timeframe:"S5",indicator:"DARE_N",length:27,filter:1.5});
 assert.deepEqual(normalized,{enabled:true,pair:"EUR_NZD",timeframe:"S5",indicator:"DARE_N",length:27,filter:1.5});
+assert.equal(normalizeIndicatorOnlyUnits(undefined),100);
+assert.equal(normalizeIndicatorOnlyUnits(2500),2500);
+assert.equal(normalizeIndicatorOnlyUnits(0),100);
+assert.equal(normalizeIndicatorOnlyUnits(200000000),100000000);
+assert.equal(ioClientOrderId("EUR_USD","event-a"),ioClientOrderId("EUR_USD","event-a"));
+assert.notEqual(ioClientOrderId("EUR_USD","event-a"),ioClientOrderId("EUR_USD","event-b"));
 assert.equal(indicatorOnlyCadenceMs("S5"),5000);
 assert.equal(indicatorOnlyCadenceMs("S30"),30000);
 assert.equal(indicatorOnlyCadenceMs("M1"),60000);
@@ -34,16 +42,29 @@ assert.match(engine,/await this\.ctx\.storage\.setAlarm\(due\)/,"IO must resched
 assert.match(engine,/path==="\/control\/indicatorOnly"&&request\.method==="GET"/,"Worker order authority must have a lightweight Durable Object IO state source");
 assert.doesNotMatch(engine,/ageMarketWindow|reallocationDecision|continuationExpectation|this\.choose\(/,"IO wrapper must not invoke AGE, MTF candidate selection, or normal capital reallocation");
 
+const unitsEngine=fs.readFileSync(new URL("../src/engine-indicator-only-units.js",import.meta.url),"utf8");
+assert.match(unitsEngine,/class HtlEngine extends IndicatorOnlyEngine/,"UNITS must wrap the existing exclusive IO engine rather than replace normal trading logic");
+assert.match(unitsEngine,/state\.indicatorOnlyUnits=units/,"IO units must persist independently of signal-definition controls");
+assert.match(unitsEngine,/ioControl=\{\.\.\.control,units\}/,"IO execution must receive the persisted units value");
+assert.match(unitsEngine,/executeIndicatorOnlyUnits\(candidate,token,accountId,state\)/,"IO must have its own unit-aware entry path");
+assert.match(unitsEngine,/requested>safeCapacity/,"IO must withhold an oversized requested unit amount rather than silently resize it");
+assert.match(unitsEngine,/units:String\(signed\)/,"OANDA IO order must use the configured signed unit amount");
+assert.match(unitsEngine,/indicatorOnlyUnits:normalizeIndicatorOnlyUnits\(candidate\.IO\.units\)/,"ledger decision context must disclose IO units");
+
 const ui=fs.readFileSync(new URL("../public/indicator-only.js",import.meta.url),"utf8");
-for(const id of ["indicatorOnlyToggle","indicatorOnlyPair","indicatorOnlyTimeframe","indicatorOnlyIndicator","indicatorOnlyLength","indicatorOnlyFilter"])assert.match(ui,new RegExp(id));
-assert.match(ui,/Disengage|disabled=enabled\|\|busy|lockNormal\(enabled\)/,"active IO controls must lock competing automated controls");
+for(const id of ["indicatorOnlyToggle","indicatorOnlyPair","indicatorOnlyTimeframe","indicatorOnlyIndicator","indicatorOnlyLength","indicatorOnlyFilter","indicatorOnlyUnits"])assert.match(ui,new RegExp(id));
+assert.match(ui,/STRUCTURAL_IDS/,"IO signal-definition controls must remain a separate locked structural set");
+assert.match(ui,/unitsNode\.disabled=busy/,"UNITS must remain editable while IO is engaged except during persistence");
+assert.match(ui,/· U\$\{io\.units\}/,"IO active status must display the configured units");
+assert.doesNotMatch(ui,/chartPair|chartTimeframe|chartStrategy|chartLength|chartFilter/,"Forensic chart controls and IO controls must remain independent");
+assert.match(ui,/Disengage|disabled=enabled\|\|busy|lockNormal\(enabled\)/,"active IO structural controls must lock competing automated controls");
 assert.match(ui,/\/api\/control\/selectedPairs/,"IO UI must persist through the existing authenticated control route");
 
 const worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8");
-assert.match(worker,/export \{ HtlEngine \} from "\.\/engine-indicator-only\.js"/);
+assert.match(worker,/export \{ HtlEngine \} from "\.\/engine-indicator-only-units\.js"/);
 assert.match(worker,/indicator-only\.js/);
 assert.match(worker,/indicatorOnlyAuthority\(env\)/,"all browser order submissions must query server-side IO authority");
 assert.match(worker,/Disengage IO before submitting any manual or candidate order/,"manual and candidate orders must be rejected while IO is active");
 assert.match(worker,/Order route authority unavailable; order withheld/,"order route must fail closed when IO authority cannot be verified");
 
-console.log("Indicator Only certification passed: exclusive selected-indicator authority, server-side order lock, protected reversal path, and 5s\/30s\/60s cadence are wired without modifying the certified normal engine.");
+console.log("Indicator Only certification passed: separate pair/timeframe/indicator/length/filter/units controls, exact requested IO sizing within directional capacity, exclusive selected-indicator authority, server-side order lock, protected reversal path, and 5s/30s/60s cadence are wired without coupling to the Forensic chart.");

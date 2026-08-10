@@ -3,16 +3,23 @@ import {readFile} from "node:fs/promises";
 const worker=await readFile(new URL("../src/worker.js",import.meta.url),"utf8");
 const execution=await readFile(new URL("../src/engine-certified-execution.js",import.meta.url),"utf8");
 const indicatorOnly=await readFile(new URL("../src/engine-indicator-only.js",import.meta.url),"utf8").catch(()=>"");
+const indicatorOnlyUnits=await readFile(new URL("../src/engine-indicator-only-units.js",import.meta.url),"utf8").catch(()=>"");
 const analytics=await readFile(new URL("../src/engine.js",import.meta.url),"utf8");
 
 const directExport=/export \{ HtlEngine \} from "\.\/engine-certified-execution\.js"/.test(worker);
 const ioExport=/export \{ HtlEngine \} from "\.\/engine-indicator-only\.js"/.test(worker);
-if(!directExport&&!ioExport)throw new Error("Missing Worker Durable Object certified execution export");
-if(ioExport){
+const ioUnitsExport=/export \{ HtlEngine \} from "\.\/engine-indicator-only-units\.js"/.test(worker);
+if(!directExport&&!ioExport&&!ioUnitsExport)throw new Error("Missing Worker Durable Object certified execution export");
+if(ioExport||ioUnitsExport){
   if(!/import \{ HtlEngine as CertifiedHtlEngine \} from "\.\/engine-certified-execution\.js"/.test(indicatorOnly))throw new Error("Indicator Only wrapper must import the certified execution engine");
   if(!/class HtlEngine extends CertifiedHtlEngine/.test(indicatorOnly))throw new Error("Indicator Only Worker must extend the certified execution engine");
   if(!/if\(!control\.enabled\)return super\.tick\(\)/.test(indicatorOnly))throw new Error("Indicator Only disabled state must fall through exactly to the certified engine tick");
   if(!/if\(normalizeIndicatorOnly\(state\?\.indicatorOnly\)\.enabled\)return;/.test(indicatorOnly))throw new Error("Indicator Only active state must suppress normal reconciliation");
+}
+if(ioUnitsExport){
+  if(!/import \{ HtlEngine as IndicatorOnlyEngine/.test(indicatorOnlyUnits))throw new Error("IO units wrapper must import the existing exclusive Indicator Only engine");
+  if(!/class HtlEngine extends IndicatorOnlyEngine/.test(indicatorOnlyUnits))throw new Error("IO units Worker must extend the existing exclusive Indicator Only engine");
+  if(!/executeIndicatorOnlyUnits/.test(indicatorOnlyUnits))throw new Error("IO units wrapper must provide an isolated unit-aware execution path");
 }
 
 const required=[
@@ -35,4 +42,5 @@ for(const[pattern,label]of required)if(!pattern.test(execution))throw new Error(
 if(/class HtlEngine extends/.test(execution)&&!/from "\.\/engine\.js"/.test(execution))throw new Error("Execution layer must extend the certified analytical engine entry point");
 if(!/SIX_INDEPENDENT_REGISTERED_HORIZON_STATE_MACHINES/.test(analytics))throw new Error("Certified six-strategy analytical contract is missing");
 if(/BLOCKED_PENDING_USER_DEPLOYMENT_APPROVAL/.test(execution))throw new Error("Private execution must not be deployment-blocked");
-console.log(`Certified analytical inheritance, AGE v2 Great Expectation reallocation, selected-reversal recovery, completed-candle boundaries, and ${ioExport?"Indicator Only wrapper":"direct certified Worker"} verified.`);
+const topology=ioUnitsExport?"Indicator Only units wrapper over exclusive IO":ioExport?"Indicator Only wrapper":"direct certified Worker";
+console.log(`Certified analytical inheritance, AGE v2 Great Expectation reallocation, selected-reversal recovery, completed-candle boundaries, and ${topology} verified.`);
