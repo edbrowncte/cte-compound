@@ -15,6 +15,9 @@ assert.match(renderer,/Intl\.DateTimeFormat/);
 assert.match(renderer,/livePrice/);
 assert.match(renderer,/value!==null&&value!==undefined&&value!==""/);
 assert.match(renderer,/plausiblePrice/);
+assert.match(renderer,/function drawSignals\(/);
+assert.match(renderer,/options\.signals/);
+assert.match(renderer,/\?"BUY":"SELL"/);
 
 assert.match(html,/id="chartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="chartStage"/);
 assert.match(html,/id="evalChartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="evalChartStage"/);
@@ -34,10 +37,13 @@ const evaluation=between("function drawEvalCharts()","function drawOscillatorCha
 for(const [name,segment] of [["Analytical",analytical],["Event",event],["Evaluation",evaluation]]){
   assert.match(segment,/renderUnifiedChartSurface\(/,`${name} must delegate to the canonical renderer`);
   assert.doesNotMatch(segment,/getContext\(/,`${name} must not maintain a private canvas renderer`);
+  assert.match(segment,/signals/,`${name} must provide causal BUY and SELL markers`);
 }
 assert.match(analytical,/unifiedIndicatorSet\(pair,timeframe,state\.chartCandles,length\)/);
 assert.match(event,/unifiedIndicatorSet\(pair,timeframe,data,length\)/);
 assert.match(evaluation,/unifiedIndicatorSet\(pair,timeframe,state\.evalCandles,length\)/);
+assert.match(html,/function indicatorSignalSeries\(candles,indicators,strategy,filter=0\)/);
+assert.match(html,/signals:state\.chartCausalSeries/);
 
 const evalLoad=between("async function loadEvalChartData(pair,timeframe)","function drawEvalCharts()","evaluation load");
 assert.match(evalLoad,/loadUnifiedChartCandles\(pair,timeframe,null,95,true\)/);
