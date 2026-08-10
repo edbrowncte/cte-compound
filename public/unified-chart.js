@@ -1,7 +1,8 @@
 (function installUnifiedChart(global){
   "use strict";
 
-  const VERSION="CTE_UNIFIED_EVALUATION_CHART@1.0.0";
+  const VERSION="CTE_UNIFIED_EVALUATION_CHART@1.1.0";
+  const MAX_VISIBLE_BARS=5000;
   const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
@@ -45,7 +46,7 @@
     canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#080c12";ctx.fillRect(0,0,width,height);
     if(!candles.length)return{visibleStart:0,visibleEnd:0,visibleCandles:[],latestIndex:-1};
 
-    const visibleBars=clamp(Math.trunc(Number(options.visibleBars)||120),30,300),offset=clamp(Math.trunc(Number(options.offsetBars)||0),0,Math.max(0,candles.length-visibleBars)),visibleEnd=candles.length-offset,visibleStart=Math.max(0,visibleEnd-visibleBars),visibleCandles=candles.slice(visibleStart,visibleEnd);
+    const maxVisibleBars=Math.max(30,Math.min(MAX_VISIBLE_BARS,candles.length)),visibleBars=clamp(Math.trunc(Number(options.visibleBars)||120),30,maxVisibleBars),offset=clamp(Math.trunc(Number(options.offsetBars)||0),0,Math.max(0,candles.length-visibleBars)),visibleEnd=candles.length-offset,visibleStart=Math.max(0,visibleEnd-visibleBars),visibleCandles=candles.slice(visibleStart,visibleEnd);
     if(!visibleCandles.length)return{visibleStart,visibleEnd,visibleCandles,latestIndex:candles.length-1};
 
     const indicatorSet=options.indicatorSet||{price:[],z:[],osc:[]},indicators=options.indicators||{},hasOscillator=Boolean(indicatorSet.osc?.length),leftIndent=Math.max(0,Number(options.leftIndent)||0),rightIndent=Math.max(0,Number(options.rightIndent)||0),rightAxisWidth=60+rightIndent,margin={top:20,right:rightAxisWidth,bottom:28,left:40+leftIndent},plot={x:margin.left,y:margin.top,w:Math.max(80,width-margin.left-margin.right),h:Math.max(80,height-margin.top-margin.bottom)},pricePlot=hasOscillator?{...plot,h:plot.h*.72}:plot,oscPlot=hasOscillator?{x:plot.x,y:plot.y+plot.h*.78,w:plot.w,h:plot.h*.22}:null,gridEndX=width-60;
@@ -82,5 +83,5 @@
     return{visibleStart,visibleEnd,visibleCandles,latestIndex:candles.length-1,pricePlot,plot,indexToX,priceToY};
   }
 
-  global.CTEUnifiedChart=Object.freeze({VERSION,render});
+  global.CTEUnifiedChart=Object.freeze({VERSION,MAX_VISIBLE_BARS,render});
 })(globalThis);
