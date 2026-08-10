@@ -14,12 +14,16 @@ const INSTRUMENTS = new Set([
 const GRANULARITIES = new Set(["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]);
 const JSON_HEADERS = {"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
 const candleCache=new Map();
-const CANDLE_CACHE_MAX_ENTRIES=32,CANDLE_CACHE_MAX_BARS=60000;
+// Retain the complete 28 × 10 schedule universe plus selected-chart history.
+// The previous 32-entry ceiling forced almost every browser reload to refetch
+// 248 schedule datasets even while OANDA and the engine were healthy.
+const CANDLE_CACHE_MAX_ENTRIES=320,CANDLE_CACHE_MAX_BARS=220000;
 function candleCacheBarCount(){let total=0;for(const entry of candleCache.values())total+=Array.isArray(entry?.value?.candles)?entry.value.candles.length:0;return total;}
 function trimCandleCache(protectedKey=null){let bars=candleCacheBarCount();while(candleCache.size>CANDLE_CACHE_MAX_ENTRIES||bars>CANDLE_CACHE_MAX_BARS){const candidate=[...candleCache.keys()].find(key=>key!==protectedKey);if(!candidate)break;const entry=candleCache.get(candidate);bars-=Array.isArray(entry?.value?.candles)?entry.value.candles.length:0;candleCache.delete(candidate);}}
 function setCandleCache(key,entry){candleCache.delete(key);candleCache.set(key,entry);trimCandleCache(key);}
 function touchCandleCache(key,entry){candleCache.delete(key);candleCache.set(key,entry);}
 const OANDA_REQUEST_TIMEOUT_MS=15000,OANDA_CONCURRENCY_MODE="RUNTIME_MANAGED_NO_CROSS_REQUEST_QUEUE";
+const MAX_OPEN_POSITIONS=5;
 let oandaActive=0,oandaLastStart=0;
 const oandaTelemetry={requests:0,retries:0,timeouts:0,networkFailures:0,failures:0,statuses:{},lastFailure:null};
 
@@ -161,7 +165,25 @@ function normalizeManualOrder(value) {
 async function handleManualOrder(request,env) {
   const {token,accountId:configuredAccountId}=credentials(env),accountId=await resolveAccount(token,configuredAccountId);
   const body=normalizeManualOrder(await request.json().catch(()=>null));
-  return json(await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/orders`,token,{method:"POST",body:JSON.stringify(body)}));
+  const instrument=body.order.instrument,units=Number(body.order.units),requested=Math.abs(units);
+  const [positionsPayload,preferencesResponse]=await Promise.all([
+    oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/openPositions`,token,{stage:"MANUAL_ORDER_POSITION_POLICY",maxAttempts:1}),
+    env.HTL_ENGINE.getByName("live").fetch("https://engine/preferences")
+  ]);
+  const positions=(positionsPayload.positions||[]).filter(position=>Number(position.long?.units||0)!==0||Number(position.short?.units||0)!==0);
+  if(positions.some(position=>position.instrument===instrument))throw decorateError(new Error("The currency pair already has an open OANDA position."),{status:409,code:"PAIR_POSITION_LIMIT",stage:"MANUAL_ORDER_POLICY",retryable:false});
+  if(positions.length>=MAX_OPEN_POSITIONS)throw decorateError(new Error(`The ${MAX_OPEN_POSITIONS}-position portfolio limit is active.`),{status:409,code:"PORTFOLIO_POSITION_LIMIT",stage:"MANUAL_ORDER_POLICY",retryable:false});
+  const preferences=await preferencesResponse.json().catch(()=>({})),minimumUnits=Math.max(1,Math.trunc(Number(preferences.minimumUnits)||1000));
+  if(requested<minimumUnits)throw decorateError(new Error(`Requested units ${requested} are below minimum units ${minimumUnits}.`),{status:409,code:"MINIMUM_UNITS_POLICY",stage:"MANUAL_ORDER_POLICY",retryable:false});
+  const pricing=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/pricing?instruments=${instrument}&includeUnitsAvailable=true`,token,{stage:"MANUAL_ORDER_CAPACITY",maxAttempts:1}),available=pricing.prices?.[0]?.unitsAvailable?.default,capacity=Math.max(0,Math.trunc(Number(units>0?available?.long:available?.short)||0));
+  if(requested>capacity)throw decorateError(new Error(`Requested units ${requested} exceed directional availability ${capacity}.`),{status:409,code:"DIRECTIONAL_CAPACITY_EXCEEDED",stage:"MANUAL_ORDER_POLICY",retryable:false});
+  const clientOrderId=`cte-manual-${crypto.randomUUID()}`;
+  body.order.clientExtensions={id:clientOrderId,tag:"cte-manual",comment:"Validated CTE Compound manual order"};
+  const result=await oandaRequest(`/v3/accounts/${encodeURIComponent(accountId)}/orders`,token,{method:"POST",body:JSON.stringify(body),stage:"MANUAL_ORDER_SUBMIT",maxAttempts:1}),fill=result.orderFillTransaction;
+  if(!fill)throw decorateError(new Error(result.orderRejectTransaction?.rejectReason||result.orderCancelTransaction?.reason||"OANDA returned no order fill."),{status:409,code:"MANUAL_ORDER_NOT_FILLED",stage:"MANUAL_ORDER_SUBMIT",retryable:false});
+  const ledgerResponse=await env.HTL_ENGINE.getByName("live").fetch(new Request("https://engine/manual-trade-action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"MANUAL_ORDER",pair:instrument,direction:units>0?"BUY":"SELL",units:requested,price:fill.price||null,transaction:fill.id||result.lastTransactionID||null,clientOrderId,message:"Manual order filled after account, position, minimum-units and capacity policy validation"})}));
+  result.cteLedgerRecorded=ledgerResponse.ok;
+  return json(result);
 }
 
 async function handleCandles(env,url) {

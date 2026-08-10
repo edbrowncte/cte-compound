@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 const worker=await readFile(new URL("../src/worker-base.js",import.meta.url),"utf8");
-assert.match(worker,/CANDLE_CACHE_MAX_ENTRIES=32,CANDLE_CACHE_MAX_BARS=60000/);
+assert.match(worker,/CANDLE_CACHE_MAX_ENTRIES=320,CANDLE_CACHE_MAX_BARS=220000/);
 assert.match(worker,/function candleCacheBarCount\(\)/);
 assert.match(worker,/function trimCandleCache\(protectedKey=null\)/);
 assert.match(worker,/function setCandleCache\(key,entry\)/);
