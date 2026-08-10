@@ -18,7 +18,7 @@ assert.equal(DIRECTIONAL_OWNERSHIP_VERSION,"ALTERNATING_DIRECTIONAL_OWNERSHIP@1.
 
 const candles=Array.from({length:8},(_,index)=>({time:`t${index}`,open:1+index*.001,high:1+index*.0015,low:1+index*.0005,close:1+index*.001,complete:true}));
 const trades=buildRegisteredTrades(candles,owned,"EUR_USD");
-assert.equal(trades.length,2,"same-direction repeats must be removed before registered trades are built");
+assert.equal(trades.length,2,"same-direction indicator repeats must be removed before performance trades are built");
 assert.deepEqual(trades.map(trade=>trade.direction),[1,-1]);
 
 const source=fs.readFileSync(new URL("../public/directional-ownership.js",import.meta.url),"utf8"),worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8"),optimizer=fs.readFileSync(new URL("../src/optimized-optimizer.js",import.meta.url),"utf8");
@@ -46,10 +46,10 @@ assert.deepEqual(Array.from(captured.signals.slice(0,-1),signal=>signal.directio
 assert.equal(captured.signals.at(-1).current,true);
 assert.match(worker,/chart-ioi-iom\.js[^]*directional-ownership\.js[^]*ioi-iom-performance\.js/);
 assert.match(optimizer,/applyDirectionalOwnershipPerformance/);
-assert.match(optimizer,/const finalResult=evaluateRegisteredPerformance\(candles,pair,settings\),directionalResult=applyDirectionalOwnershipPerformance\(finalResult,pair\),config=\{\}/,"directional performance must be derived after the execution optimizer has selected settings");
-assert.match(optimizer,/entryFor\(strategy,settings,finalResult\.strategies\[strategy\]\.stats\)/,"six-strategy execution config metrics must continue using the original registered optimizer result");
+assert.match(optimizer,/const finalResult=evaluateRegisteredPerformance\(candles,pair,settings\),directionalResult=applyDirectionalOwnershipPerformance\(finalResult,pair\),config=\{\}/,"ownership-normalized performance must be derived only after the existing six-indicator configuration optimizer has selected settings");
+assert.match(optimizer,/entryFor\(strategy,settings,finalResult\.strategies\[strategy\]\.stats\)/,"existing six-indicator configuration metrics must remain based on the original registered result");
 assert.match(optimizer,/registeredExportRows\(directionalResult,pair,timeframe\)/,"Macro performance rows must use directional ownership results");
 assert.match(optimizer,/directionalOwnershipVersion:DIRECTIONAL_OWNERSHIP_VERSION/);
 
 for(const label of ["HTL Asset","DARE(N)","DARE","COMBO","NAI","APEX","IOI","IOM"])assert.ok(label.length>0);
-console.log("Universal directional ownership certification passed for HTL Asset, DARE(N), DARE, COMBO, NAI, APEX, IOI, and IOM: repeated same-direction events are ignored until the opposite direction takes ownership in Macro performance and unified chart markers, while the checksum-hydrated registered core and six-strategy execution optimizer metrics remain unchanged.");
+console.log("Universal indicator directional ownership certification passed for HTL Asset, DARE(N), DARE, COMBO, NAI, APEX, IOI, and IOM: repeated same-direction signals are ignored until the opposite signal takes ownership in Macro performance and unified chart markers, while the checksum-hydrated registered core and existing six-indicator configuration metrics remain unchanged.");
