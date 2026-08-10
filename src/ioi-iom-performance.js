@@ -4,7 +4,7 @@ import { buildRegisteredTrades, summarizeRegisteredTrades } from "./horizon-regi
 export const IOI_IOM_PERFORMANCE_VERSION="IOI_IOM_REGISTERED_PERFORMANCE@1.0.0";
 export const IOI_IOM_STRATEGIES=Object.freeze(["IOI","IOM"]);
 
-const finite=value=>Number.isFinite(Number(value));
+const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
 
 function crossDirection(left,right,index){
   if(index<1)return 0;
