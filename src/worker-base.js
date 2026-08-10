@@ -257,5 +257,5 @@ export default {
       return errorResponse(error);
     }
   },
-  async scheduled(_event,env,ctx){ctx.waitUntil((async()=>{const engine=env.HTL_ENGINE.getByName("live");await engine.fetch(new Request("https://engine/tick",{method:"POST"}));await engine.fetch(new Request("https://engine/optimizer/tick",{method:"POST"}));})());}
+  async scheduled(_event,env,ctx){const engine=env.HTL_ENGINE.getByName("live"),tradingTick=engine.fetch(new Request("https://engine/tick",{method:"POST"})),optimizerTick=engine.fetch(new Request("https://engine/optimizer/tick",{method:"POST"}));ctx.waitUntil(Promise.allSettled([tradingTick,optimizerTick]).then(results=>{const rejected=results.filter(result=>result.status==="rejected");if(rejected.length)throw new AggregateError(rejected.map(result=>result.reason),"Scheduled engine tasks failed independently.");}));}
 };
