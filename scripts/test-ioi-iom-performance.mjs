@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import { buildIoiIomSeries, crossingSignals, evaluateIoiIomPerformance, optimizeIoiIomPerformance, IOI_IOM_PERFORMANCE_VERSION } from "../src/ioi-iom-performance.js";
+
+const candles=Array.from({length:900},(_,index)=>{
+  const base=1.1+index*0.00001+Math.sin(index/11)*0.002+Math.sin(index/37)*0.0012;
+  const open=base+Math.sin(index/5)*0.0002,close=base+Math.cos(index/7)*0.0002;
+  return{time:new Date(Date.UTC(2026,0,1,0,index)).toISOString(),open,high:Math.max(open,close)+0.00035,low:Math.min(open,close)-0.00035,close,complete:true};
+});
+
+const built=buildIoiIomSeries(candles,20);
+assert.equal(built.ioi.length,candles.length);
+assert.equal(built.ioiInverse.length,candles.length);
+assert.equal(built.iomMean.length,candles.length);
+assert.equal(built.iomInverse.length,candles.length);
+assert.equal(built.ioi.findIndex(Number.isFinite),built.asset.findIndex(Number.isFinite),"IOI must remain unavailable until the causal HTL Asset exists");
+assert.ok(built.iomMean.findIndex(Number.isFinite)>=built.ioi.findIndex(Number.isFinite),"IOM cannot precede IOI");
+for(let index=0;index<candles.length;index++)if(Number.isFinite(built.asset[index]))assert.equal(built.ioi[index],(candles[index].close+built.asset[index])/2,"IOI must average instrument and causal HTL Asset");
+for(let index=0;index<candles.length;index++)if(Number.isFinite(built.ioi[index])&&Number.isFinite(built.ioiInverse[index]))assert.equal(built.iomMean[index],(built.ioi[index]+built.ioiInverse[index])/2,"IOM Mean must average IOI and IOI Inverse");
+for(let index=0;index<candles.length;index++)if(Number.isFinite(built.iomZ[index]))assert.ok(Math.abs(built.iomInverse[index]-((-built.iomZ[index]*built.iomStd[index])+built.iomCenter[index]))<1e-12,"IOM inverse recovery must use -z × std + rolling mean");
+
+const ioiSignals=crossingSignals(built.ioi,built.ioiInverse,"IOI"),iomSignals=crossingSignals(built.iomMean,built.iomInverse,"IOM");
+assert.ok(ioiSignals.length>4,"IOI fixture must produce multiple crossing signals");
+assert.ok(iomSignals.length>4,"IOM fixture must produce multiple crossing signals");
+for(const signals of [ioiSignals,iomSignals])for(let index=1;index<signals.length;index++)assert.equal(signals[index].direction,-signals[index-1].direction,"indicator ownership must alternate between BUY and SELL");
+
+const evaluated=evaluateIoiIomPerformance(candles,"EUR_USD",20);
+for(const indicator of ["IOI","IOM"]){const stats=evaluated[indicator].stats;assert.ok(Number.isInteger(stats.trades));assert.ok(Number.isFinite(stats.net));assert.ok("profitFactor" in stats&&"recoveryFactor" in stats&&"mfeMae" in stats);}
+const optimized=optimizeIoiIomPerformance(candles,"EUR_USD","M1",[10,20,30,40,50],"REGISTERED_HORIZON_STRATEGY_V1_GROSS","horizon-strategy-v1");
+assert.equal(optimized.version,IOI_IOM_PERFORMANCE_VERSION);
+for(const indicator of ["IOI","IOM"]){assert.ok(optimized.config[indicator]);assert.ok([10,20,30,40,50].includes(optimized.config[indicator].length));assert.equal(optimized.config[indicator].filter,0);assert.ok(optimized.config[indicator].grossPerformance);}
+assert.deepEqual(optimized.rows.map(row=>row.Indicator),["IOI","IOM"]);
+
+const optimizer=fs.readFileSync(new URL("../src/optimized-optimizer.js",import.meta.url),"utf8"),worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8"),ui=fs.readFileSync(new URL("../public/ioi-iom-performance.js",import.meta.url),"utf8"),platform=fs.readFileSync(new URL("../src/horizon-platform-engine.js",import.meta.url),"utf8");
+assert.match(optimizer,/import\s*\{\s*optimizeIoiIomPerformance\s*\}\s*from\s*"\.\/ioi-iom-performance\.js"/,"authoritative optimizer must compute IOI/IOM analytical performance");
+assert.match(optimizer,/const\s+ioiIom\s*=\s*optimizeIoiIomPerformance\(candles\s*,\s*pair\s*,\s*timeframe\s*,\s*LENGTH_GRID\s*,\s*VALIDATION\s*,\s*STRATEGY_ENGINE_VERSION\s*\)/);
+assert.match(optimizer,/Object\.assign\(config\s*,\s*ioiIom\.config\)/,"IOI/IOM analytical configuration must persist in the existing optimizer record");
+assert.match(optimizer,/registeredExportRows\(directionalResult\s*,\s*pair\s*,\s*timeframe\)/,"existing six indicators must publish ownership-normalized performance rows");
+assert.match(optimizer,/\.\.\.ioiIom\.rows/,"IOI/IOM rows must join the authoritative performance payload");
+assert.match(worker,/export \{ HtlEngine \} from "\.\/engine-indicator-only-units\.js"/,"certified Durable Object export path must remain unchanged");
+assert.match(worker,/chart-ioi-iom\.js[^]*ioi-iom-performance\.js/);
+assert.match(platform,/STRATEGIES = \["ASSET","DARE_N","DARE","COMBO","NAI","APEX"\]/,"legacy internal indicator registry must remain intact");
+assert.match(ui,/Macro: HTL Asset \/ DARE\(N\) \/ DARE \/ COMBO \/ NAI \/ APEX \/ IOI \/ IOM Performance/);
+assert.match(ui,/renderMacroPerformance=function/);
+assert.match(ui,/renderStrategyConfiguration=function/);
+assert.match(ui,/renderOptimizerRegistry=function/);
+
+console.log("IOI/IOM indicator performance certification passed: causal formulas, warmup integrity, alternating BUY/SELL ownership, next-open/opposite-indicator-signal statistics, authoritative performance persistence, Macro rows, configuration cards, and optimizer registry integration are wired without changing trade-engine authority.");

@@ -1,12 +1,12 @@
 (function installIOIIOMChartIndicators(global){
   "use strict";
 
-  const VERSION="CTE_CHART_IOI_IOM@1.0.0";
+  const VERSION="CTE_CHART_IOI_IOM@1.0.2";
   const CHART_ONLY_IDS=new Set(["IOI","IOM"]);
   const PREFERENCE_KEY="cte-compound.chart-only-indicator";
   const cache=new Map();
 
-  const isFinite=value=>Number.isFinite(Number(value));
+  const isFinite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
 
   function pairAverage(left=[],right=[]){
     const size=Math.max(left.length||0,right.length||0);
@@ -32,13 +32,13 @@
   }
 
   function crossSignalSeries(candles=[],left=[],right=[],filter=0){
-    const threshold=Math.max(0,Number(filter)||0),signals=[];let prior=0;
+    const threshold=Math.max(0,Number(filter)||0),signals=[];let owner=0,current=0;
     for(let index=0;index<candles.length;index++){
       const spread=isFinite(left[index])&&isFinite(right[index])?Number(left[index])-Number(right[index]):NaN,direction=Number.isFinite(spread)?spread>threshold?1:spread<-threshold?-1:0:0;
-      if(direction&&direction!==prior)signals.push({index,direction,time:candles[index]?.time,price:candles[index]?.close,current:false});
-      prior=direction;
+      current=direction;
+      if(direction&&direction!==owner){signals.push({index,direction,time:candles[index]?.time,price:candles[index]?.close,current:false});owner=direction;}
     }
-    const lastIndex=candles.length-1;if(prior&&lastIndex>=0&&signals.at(-1)?.index!==lastIndex)signals.push({index:lastIndex,direction:prior,time:candles[lastIndex]?.time,price:candles[lastIndex]?.close,current:true});
+    const lastIndex=candles.length-1;if(current&&lastIndex>=0&&signals.at(-1)?.index!==lastIndex)signals.push({index:lastIndex,direction:current,time:candles[lastIndex]?.time,price:candles[lastIndex]?.close,current:true});
     return signals;
   }
 
