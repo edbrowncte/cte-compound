@@ -13,7 +13,7 @@ assert.match(html,/MAX_CANDLE_REQUESTS=2,MAX_BACKGROUND_CANDLE_REQUESTS=2,CANDLE
 assert.match(html,/candleQueue\.some\(job=>job\.priority>=50\)/);
 assert.match(html,/foreground=next\.priority>=50/);
 assert.match(html,/function eventHistoryCount\(\)\{return MAX_ANALYTICAL_HISTORY;\}/);
-assert.match(html,/minimum=Math\.min\(desired,Math\.max\(1200,\(Math\.max\(3,length\)\*6\)\+240\)\)/);
+assert.match(html,/minimum=Math\.min\(desired,Math\.max\(180,\(Math\.max\(3,length\)\*6\)\+240\)\)/);
 assert.match(html,/function eventCachedCandles\(pair,timeframe\)/);
 assert.match(html,/await runPool\(pairs,2,pair=>load/);
 assert.match(html,/await runPool\(retryPairs,1,pair=>load/);
