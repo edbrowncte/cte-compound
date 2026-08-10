@@ -1,7 +1,7 @@
 (function installDirectionalOwnership(global){
   "use strict";
 
-  const VERSION="CTE_DIRECTIONAL_OWNERSHIP@1.0.0";
+  const VERSION="CTE_DIRECTIONAL_OWNERSHIP@1.0.1";
 
   function normalizeSignals(signals=[],candles=[]){
     const output=[];let owner=0,currentMarker=null;
@@ -13,12 +13,10 @@
       if(direction===owner)continue;
       output.push({...raw,index,direction,current:false});owner=direction;
     }
-    if(currentMarker&&currentMarker.direction!==owner){output.push({...currentMarker,current:true});owner=currentMarker.direction;}
-    const lastIndex=(candles?.length||0)-1;
-    if(owner&&lastIndex>=0){
-      const last=output.at(-1);
-      if(last?.index===lastIndex&&last.direction===owner)last.current=true;
-      else output.push({index:lastIndex,direction:owner,time:candles[lastIndex]?.time,price:candles[lastIndex]?.close,current:true,ownership:VERSION});
+    if(currentMarker&&(!owner||currentMarker.direction!==owner)){
+      output.push({...currentMarker,current:true});owner=currentMarker.direction;
+    }else if(output.length){
+      output[output.length-1]={...output.at(-1),current:true};
     }
     return output;
   }
