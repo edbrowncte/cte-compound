@@ -36,14 +36,23 @@ const normalized=api.normalizeSignals([
   {index:3,direction:-1,current:false},
   {index:4,direction:1,current:false},
 ],chartCandles);
-assert.deepEqual(Array.from(normalized,signal=>signal.direction),[1,-1,1,1],"chart must keep ownership transitions plus one final current-owner marker");
-assert.deepEqual(Array.from(normalized.slice(0,-1),signal=>signal.direction),[1,-1,1]);
-assert.equal(normalized.at(-1).current,true);
-assert.equal(normalized.at(-1).index,chartCandles.length-1);
+assert.deepEqual(Array.from(normalized,signal=>signal.direction),[1,-1,1],"chart must contain only ownership transitions");
+assert.deepEqual(Array.from(normalized,signal=>signal.index),[0,2,4],"no latest-candle duplicate marker may be manufactured");
+assert.equal(normalized.at(-1).current,true,"the last true ownership transition carries ACTIVE state");
+
+const withCurrent=api.normalizeSignals([
+  {index:0,direction:1,current:false},
+  {index:2,direction:-1,current:false},
+  {index:6,direction:-1,current:true},
+],chartCandles);
+assert.deepEqual(Array.from(withCurrent,signal=>signal.direction),[1,-1],"same-direction current marker must not create a second SELL/BUY arrow");
+assert.equal(withCurrent.at(-1).index,2);
+assert.equal(withCurrent.at(-1).current,true);
 
 sandbox.CTEUnifiedChart.render({candles:chartCandles,signals:[{index:0,direction:-1},{index:1,direction:-1},{index:2,direction:1},{index:3,direction:1}]});
-assert.deepEqual(Array.from(captured.signals.slice(0,-1),signal=>signal.direction),[-1,1],"unified renderer boundary must normalize every indicator marker stream");
+assert.deepEqual(Array.from(captured.signals,signal=>signal.direction),[-1,1],"unified renderer boundary must normalize every indicator marker stream");
 assert.equal(captured.signals.at(-1).current,true);
+assert.equal(captured.signals.at(-1).index,2,"ACTIVE must stay on the true transition rather than fabricate a latest-candle BUY marker");
 assert.match(worker,/chart-ioi-iom\.js[^]*directional-ownership\.js[^]*ioi-iom-performance\.js/);
 assert.match(optimizer,/applyDirectionalOwnershipPerformance/);
 assert.match(optimizer,/const finalResult=evaluateRegisteredPerformance\(candles,pair,settings\),directionalResult=applyDirectionalOwnershipPerformance\(finalResult,pair\),config=\{\}/,"ownership-normalized performance must be derived only after the existing six-indicator configuration optimizer has selected settings");
@@ -52,4 +61,4 @@ assert.match(optimizer,/registeredExportRows\(directionalResult,pair,timeframe\)
 assert.match(optimizer,/directionalOwnershipVersion:DIRECTIONAL_OWNERSHIP_VERSION/);
 
 for(const label of ["HTL Asset","DARE(N)","DARE","COMBO","NAI","APEX","IOI","IOM"])assert.ok(label.length>0);
-console.log("Universal indicator directional ownership certification passed for HTL Asset, DARE(N), DARE, COMBO, NAI, APEX, IOI, and IOM: repeated same-direction signals are ignored until the opposite signal takes ownership in Macro performance and unified chart markers, while the checksum-hydrated registered core and existing six-indicator configuration metrics remain unchanged.");
+console.log("Universal indicator directional ownership certification passed for HTL Asset, DARE(N), DARE, COMBO, NAI, APEX, IOI, and IOM: one true transition marker carries ACTIVE ownership, repeated same-direction markers are suppressed, and Macro performance remains opposite-signal owned.");
