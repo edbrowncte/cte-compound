@@ -1,7 +1,7 @@
 (function installChartIndicatorOwnership(global){
   "use strict";
 
-  const VERSION="CTE_CHART_INDICATOR_OWNERSHIP@1.0.0";
+  const VERSION="CTE_CHART_INDICATOR_OWNERSHIP@1.0.1";
 
   function ownedDefinition(strategy){
     const selected=CHART_INDICATORS[strategy]||CHART_INDICATORS.ASSET;
@@ -78,9 +78,27 @@
     requestAnimationFrame(()=>drawWeeklyCognition(state.selectedInstrument,state.evalMasImMetrics));
   }
 
+  function removeDuplicateChartMetadataRow(){
+    const panel=el("chartPanel");if(!panel)return false;
+    const required=["CURRENCY PAIR","TIMEFRAME","STRATEGY","LENGTH","FILTER"];
+    for(const node of [...panel.querySelectorAll("div")]){
+      if(node.classList.contains("chart-toolbar")||node.classList.contains("chart-summary")||node.id==="indicatorLegend")continue;
+      if(node.querySelector("select,input,button,canvas"))continue;
+      const labels=[...node.querySelectorAll("span")].map(item=>String(item.textContent||"").trim().toUpperCase());
+      if(!required.every(label=>labels.includes(label)))continue;
+      node.remove();return true;
+    }
+    return false;
+  }
+
   const legend=el("indicatorLegend");if(legend)legend.setAttribute("aria-label","Selected indicator legend and selected-indicator signals");
   const chartPanel=el("chartPanel"),subtitle=chartPanel?.querySelector(".panel-title p");if(subtitle)subtitle.textContent="One synchronized completed-candle chart · selected indicator exclusively owns its overlay and BUY/SELL signals · attached price/time crosshair.";
+  removeDuplicateChartMetadataRow();
   synchronizeWeeklyBar();
+  if(chartPanel&&typeof MutationObserver!=="undefined"){
+    const metadataObserver=new MutationObserver(()=>removeDuplicateChartMetadataRow());metadataObserver.observe(chartPanel,{childList:true,subtree:true});
+    global.addEventListener?.("pagehide",()=>metadataObserver.disconnect(),{once:true});
+  }
   if(typeof ResizeObserver!=="undefined"){
     const observer=new ResizeObserver(synchronizeWeeklyBar),stage=el("chartStage");if(stage)observer.observe(stage);
     global.addEventListener?.("pagehide",()=>observer.disconnect(),{once:true});
@@ -88,5 +106,5 @@
   document.addEventListener?.("fullscreenchange",synchronizeWeeklyBar);
   global.addEventListener?.("resize",synchronizeWeeklyBar);
 
-  global.CTEChartIndicatorOwnership=Object.freeze({VERSION,selectedIndicatorSet,ownedDefinition,synchronizeWeeklyBar});
+  global.CTEChartIndicatorOwnership=Object.freeze({VERSION,selectedIndicatorSet,ownedDefinition,synchronizeWeeklyBar,removeDuplicateChartMetadataRow});
 })(globalThis);
