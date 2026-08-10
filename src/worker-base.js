@@ -2,7 +2,7 @@ import { requireCloudflareAccess } from "./access-auth.js";
 
 const LIVE_OANDA_ORIGIN = "https://api-fxtrade.oanda.com";
 const LIVE_OANDA_STREAM_ORIGIN = "https://stream-fxtrade.oanda.com";
-const RELEASE_CONTRACT="CTE_COMPOUND_CAPITALIZATION_CHARTS@1.0.0";
+const RELEASE_CONTRACT="CTE_COMPOUND_CURRENT_RELEASE@2.0.0";
 const RELEASE_ENFORCEMENT="ENFORCE_CURRENT_RELEASE";
 export { HtlEngine } from "./engine.js";
 
