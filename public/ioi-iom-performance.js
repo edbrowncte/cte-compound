@@ -1,14 +1,14 @@
 (function installIOIIOMPerformance(global){
   "use strict";
 
-  const VERSION="CTE_IOI_IOM_PERFORMANCE_UI@1.0.0";
+  const VERSION="CTE_IOI_IOM_PERFORMANCE_UI@1.0.1";
   const EXTRA=Object.freeze([
     {id:"IOI",label:"IOI · Indicator Only Indicator"},
     {id:"IOM",label:"IOM · Indicator Only Mean"}
   ]);
   const MACRO_TITLE="Macro: HTL Asset / DARE(N) / DARE / COMBO / NAI / APEX / IOI / IOM Performance";
 
-  const finite=value=>Number.isFinite(Number(value));
+  const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
   const fmt=(value,digits=2)=>finite(value)?Number(value).toFixed(digits):"—";
   const currentRecord=()=>typeof state!=="undefined"&&typeof scheduleKey==="function"?state.autoConfigurations.get(scheduleKey(state.selectedInstrument,state.selectedTimeframe)):null;
   const analyticalStrategies=()=>[...(typeof STRATEGIES!=="undefined"?STRATEGIES:[]),...EXTRA];
@@ -23,7 +23,7 @@
     const body=document.getElementById("macroPerformanceBody");if(!body)return;
     body.innerHTML=analyticalStrategies().map(strategy=>{
       const entry=record.config?.[strategy.id]||{},stats={...entry,...entry.grossPerformance},needsCompute=EXTRA.some(item=>item.id===strategy.id)&&!record.config?.[strategy.id];
-      return `<tr data-strategy="${strategy.id}"><td>${strategy.label}</td><td>${needsCompute?"Recompute":stats.trades??"—"}</td><td>${finite(stats.wins)?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${Number(stats.net)>=0?"positive":"negative"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;
+      return `<tr data-strategy="${strategy.id}"><td>${strategy.label}</td><td>${needsCompute?"Recompute":stats.trades??"—"}</td><td>${finite(stats.wins)?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${finite(stats.net)&&Number(stats.net)<0?"negative":"positive"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;
     }).join("");
   }
 
