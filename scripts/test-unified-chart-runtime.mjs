@@ -37,7 +37,7 @@ const analytical=between("function drawChart()","// Canonical HTL series constru
 const event=between("function eventDraw(data,htl,events)","function eventHistoryCount","event draw");
 const evaluation=between("function drawEvalCharts()","function drawOscillatorChart","evaluation draw");
 for(const [name,segment] of [["Analytical",analytical],["Event",event],["Evaluation",evaluation]]){
-  assert.match(segment,/renderUnifiedChartSurface\(/,`${name} must delegate to the canonical renderer`);
+  assert.match(segment,/drawCapitalizationChartSurface\(/,`${name} must delegate to the Capitalization chart surface`);
   assert.doesNotMatch(segment,/getContext\(/,`${name} must not maintain a private canvas renderer`);
   assert.match(segment,/signals/,`${name} must provide causal BUY and SELL markers`);
 }
@@ -53,19 +53,23 @@ assert.match(html,/current:true/);
 assert.doesNotMatch(certificationManifests,/public\/(?:index\.html|unified-chart\.js)/);
 
 const evalLoad=between("async function loadEvalChartData(pair,timeframe)","function drawEvalCharts()","evaluation load");
-assert.match(evalLoad,/loadUnifiedChartCandles\(pair,timeframe,null,95,true\)/);
+assert.match(evalLoad,/bestCachedCandles\(key\)/);
+assert.match(evalLoad,/loadUnifiedChartCandles\(pair,timeframe,null,95,false\)/);
 assert.match(evalLoad,/priceCache\[timeframe\]=candlesList/);
 assert.match(evalLoad,/unified 5,000-candle chart/);
 const eventLoad=between("async function loadEventRow","async function refreshSelectedEventChart","event load");
 assert.match(eventLoad,/desired===MAX_ANALYTICAL_HISTORY\?await loadUnifiedChartCandles/);
 const analyticalLoad=between("async function loadChart","function updateChartSummary","analytical load");
-assert.match(analyticalLoad,/loadUnifiedChartCandles\(instrument,timeframe,controller,100,true\)/);
+assert.match(analyticalLoad,/loadUnifiedChartCandles\(instrument,timeframe,controller,100,force\)/);
+assert.match(html,/refreshChart"\)\.addEventListener\("click",\(\)=>loadChart\(state\.selectedInstrument,state\.selectedTimeframe,false,true\)\)/);
 const appliedDataset=between("function applyChartDataset","async function loadUnifiedChartCandles","applied chart dataset");
 assert.match(appliedDataset,/setReadiness\("marketData","ready"/);
 assert.match(appliedDataset,/state\.scheduleEvaluations\.set\(key,analyzeWithConfiguration/);
 assert.match(appliedDataset,/queueProgressiveSchedule\(0\)/);
 
 assert.match(html,/state\.unifiedIndicatorCache\.clear\(\)/);
+assert.match(html,/function normalizeUnifiedIndicators\(candles,indicators=\{\}\)/);
+assert.match(html,/function drawCapitalizationChartSurface\(options\)/);
 assert.match(html,/state\.maximumHistoryKeys\.clear\(\)/);
 assert.match(html,/function chartDataIntegrity\(\)/);
 assert.match(html,/function browserDiagnosticAssessment\(server\)/);

@@ -48,21 +48,21 @@ assert.ok(analyticalApply.includes('chartControlConfiguration(instrument,timefra
 
 const evalLoad=between('async function loadEvalChartData','function drawEvalCharts',"Evaluation chart calculation");
 assert.ok(evalLoad.includes('chartControlConfiguration(pair,timeframe,strategy,"evalChartLength","evalChartFilter")'),"Evaluation chart must calculate from its own Strategy/Length/Filter controls");
-assert.ok(evalLoad.includes('loadUnifiedChartCandles(pair,timeframe,null,95,true)'),"Evaluation chart must load its own pair/timeframe through the canonical maximum-history loader");
+assert.ok(evalLoad.includes('loadUnifiedChartCandles(pair,timeframe,null,95,false)'),"Evaluation chart must reuse completed cached candles before a background maximum-history upgrade");
 
 const evalDraw=between('function drawEvalCharts()','function drawOscillatorChart',"Evaluation chart draw");
 assert.ok(evalDraw.includes('const pair=el("evalChartPair")?.value||state.selectedInstrument'),"Evaluation chart must resolve its own pair");
 assert.ok(evalDraw.includes('timeframe=el("evalChartTimeframe")?.value||state.selectedTimeframe'),"Evaluation chart must resolve its own timeframe");
 assert.ok(evalDraw.includes('strategy=el("evalChartStrategy")?.value||state.evaluationSelectedStrategy'),"Evaluation chart must resolve its own indicator");
-assert.ok(evalDraw.includes('renderUnifiedChartSurface('),"Evaluation chart must delegate rendering to the canonical shared chart surface");
+assert.ok(evalDraw.includes('drawCapitalizationChartSurface('),"Evaluation chart must delegate rendering to the shared Capitalization chart surface");
 assert.ok(evalDraw.includes('pair,timeframe,strategy,length'),"Evaluation chart must pass its own controls into the canonical renderer");
 assert.ok(!evalDraw.includes('state.chartCandles'),"Evaluation chart must not render the Analytical Compound candle array");
 assert.ok(!evalDraw.includes('state.eventData'),"Evaluation chart must not render the HTL Event candle array");
 
 const analyticalDraw=between('function drawChart()','// Canonical HTL series construction.',"Analytical chart draw");
-assert.ok(analyticalDraw.includes('renderUnifiedChartSurface('),"Analytical chart must use the same canonical renderer as Evaluation");
+assert.ok(analyticalDraw.includes('drawCapitalizationChartSurface('),"Analytical chart must use the same Capitalization surface as Evaluation");
 const eventDraw=between('function eventDraw(data,htl,events)','function eventHistoryCount',"HTL Event chart draw");
-assert.ok(eventDraw.includes('renderUnifiedChartSurface('),"HTL Event chart must use the same canonical renderer as Evaluation");
+assert.ok(eventDraw.includes('drawCapitalizationChartSurface('),"HTL Event chart must use the same Capitalization surface as Evaluation");
 
 const evaluationBindings=between('// Evaluation panel event listeners','const evaluationHeaders = [',"Evaluation bindings");
 const tableFilter=between('if (el("evalTableTfFilter")) {','const sortHeaders=[',"Evaluation table filter");
