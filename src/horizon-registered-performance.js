@@ -7,7 +7,6 @@ import {
 
 export const REGISTERED_PERFORMANCE_VERSION = "registered-horizon-performance-v1";
 export const REGISTERED_HISTORY_BARS = 3000;
-export const DIRECTIONAL_OWNERSHIP_VERSION = "ALTERNATING_DIRECTIONAL_OWNERSHIP@1.0.0";
 export const STRATEGY_LABELS = Object.freeze({
   ASSET: "HTL Asset",
   DARE_N: "DARE(N)",
@@ -30,19 +29,6 @@ function signalArrays(evaluation) {
     NAI: evaluation.diagnostics.nai.events,
     APEX: evaluation.diagnostics.apexEvents,
   };
-}
-
-export function alternatingOwnershipSignals(signalsInput = []) {
-  const output = [];
-  let owner = 0;
-  for (const signal of Array.isArray(signalsInput) ? signalsInput : []) {
-    const direction = Math.sign(Number(signal?.direction));
-    const signalIndex = Number(signal?.signalIndex ?? signal?.index);
-    if (!direction || !Number.isInteger(signalIndex) || direction === owner) continue;
-    output.push({ ...signal, signalIndex, direction });
-    owner = direction;
-  }
-  return output;
 }
 
 function createTrade(candles, signal, nextSignal, pipScale) {
@@ -80,17 +66,15 @@ function createTrade(candles, signal, nextSignal, pipScale) {
     holdingBars: Math.max(1, exitIndex - entryIndex),
     source: signal.source || null,
     audit: "OPPOSITE STRATEGY EVENT · NEXT OPEN",
-    ownership: DIRECTIONAL_OWNERSHIP_VERSION,
   };
 }
 
 export function buildRegisteredTrades(candlesInput, signals, pair) {
   const candles = normalizeCandles(candlesInput);
   const pipScale = pipScaleForPair(pair);
-  const ownedSignals = alternatingOwnershipSignals(signals);
   const trades = [];
-  for (let index = 0; index < ownedSignals.length - 1; index += 1) {
-    const trade = createTrade(candles, ownedSignals[index], ownedSignals[index + 1], pipScale);
+  for (let index = 0; index < signals.length - 1; index += 1) {
+    const trade = createTrade(candles, signals[index], signals[index + 1], pipScale);
     if (trade) trades.push(trade);
   }
   return trades;
@@ -157,21 +141,18 @@ export function evaluateRegisteredPerformance(rawCandles, pair, inputSettings = 
   const signals = signalArrays(evaluation);
   const strategies = {};
   for (const strategy of Object.keys(STRATEGY_LABELS)) {
-    const ownedSignals = alternatingOwnershipSignals(signals[strategy]);
-    const trades = buildRegisteredTrades(evaluation.candles, ownedSignals, pair);
+    const trades = buildRegisteredTrades(evaluation.candles, signals[strategy], pair);
     strategies[strategy] = {
       strategy,
       label: STRATEGY_LABELS[strategy],
-      signals: ownedSignals,
+      signals: signals[strategy],
       trades,
       stats: summarizeRegisteredTrades(trades),
-      ownership: DIRECTIONAL_OWNERSHIP_VERSION,
     };
   }
   return {
     strategyEngineVersion: STRATEGY_ENGINE_VERSION,
     performanceVersion: REGISTERED_PERFORMANCE_VERSION,
-    ownershipVersion: DIRECTIONAL_OWNERSHIP_VERSION,
     historyBars: evaluation.candles.length,
     settings,
     completedCandleTime: evaluation.completedCandleTime,
@@ -213,7 +194,6 @@ export function registeredExportRows(result, pair, timeframe) {
       "APEX length": result.settings.apexLength,
       "APEX threshold": result.settings.apexFilter,
       "As of": result.completedCandleTime,
-      "Directional ownership": DIRECTIONAL_OWNERSHIP_VERSION,
     };
   });
 }
