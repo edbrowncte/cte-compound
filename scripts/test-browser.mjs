@@ -83,6 +83,7 @@ try{
   assert.ok(document.querySelectorAll("#eventScheduleBody tr[data-pair]").length>=1);
 
   await waitFor(()=>!document.getElementById("refreshSchedule").disabled,"focused schedule completion");
+  assert.ok(window.scheduleJobsForMode("progressive").length>6,"Progressive schedule must drain the remaining coverage instead of replaying six timer-dependent jobs");
   document.getElementById("runPlatformDiagnostic").click();await waitFor(()=>document.getElementById("platformDiagnosticStatus").textContent.includes("DEGRADED"),"browser diagnostic must reject incomplete chart/schedule coverage");assert.ok([...document.querySelectorAll(".diagnostic-card.bad strong")].some(node=>/CHART|datasets|completed candles|numerical/i.test(node.textContent)));
   document.getElementById("refreshSchedule").click();
   await waitFor(()=>!document.getElementById("refreshSchedule").disabled,"full schedule completion",20000);
