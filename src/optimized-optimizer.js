@@ -40,6 +40,7 @@ import { optimizeIoiIomPerformance } from "./ioi-iom-performance.js";
 export const RUNTIME_OPTIMIZER_VERSION = 7;
 export const RUNTIME_OPTIMIZER_HISTORY_BARS = 5000;
 export const RUNTIME_OPTIMIZER_STORAGE_PREFIX = `optimizer:v${RUNTIME_OPTIMIZER_VERSION}:`;
+export const DIRECTIONAL_OWNERSHIP_VERSION = "ALTERNATING_DIRECTIONAL_OWNERSHIP@1.0.0";
 
 export function runtimeOptimizerStorageKey(datasetKey){return `${RUNTIME_OPTIMIZER_STORAGE_PREFIX}${datasetKey}`;}
 export async function loadRuntimeOptimizer(storage,{migrateLegacy=true}={}){
@@ -60,6 +61,30 @@ export async function saveRuntimeOptimizerRecord(storage,datasetKey,record){awai
 export function currentRuntimeOptimizer(records){
   const now=Date.now();
   return Object.fromEntries(Object.entries(records||{}).filter(([,record])=>record?.version===RUNTIME_OPTIMIZER_VERSION&&record?.strategyEngineVersion===STRATEGY_ENGINE_VERSION&&now-Date.parse(record?.computedAt||record?.stamp||0)<OPTIMIZER_TTL_MS));
+}
+
+export function alternatingOwnershipSignals(signalsInput=[]){
+  const output=[];let owner=0;
+  for(const raw of Array.isArray(signalsInput)?signalsInput:[]){
+    const direction=Math.sign(Number(raw?.direction)),signalIndex=Number(raw?.signalIndex??raw?.index);
+    if(!direction||!Number.isInteger(signalIndex)||direction===owner)continue;
+    output.push({...raw,signalIndex,direction});owner=direction;
+  }
+  return output;
+}
+
+function ownedPerformance(candlesInput,signals,pair){
+  const ownedSignals=alternatingOwnershipSignals(signals),trades=buildRegisteredTrades(candlesInput,ownedSignals,pair);
+  return{signals:ownedSignals,trades,stats:summarizeRegisteredTrades(trades),ownership:DIRECTIONAL_OWNERSHIP_VERSION};
+}
+
+function applyDirectionalOwnershipPerformance(result,pair){
+  const performanceCandles=result?.evaluation?.candles||[];
+  const strategies=Object.fromEntries(Object.entries(result?.strategies||{}).map(([strategy,item])=>{
+    const owned=ownedPerformance(performanceCandles,item?.signals||[],pair);
+    return[strategy,{...item,...owned}];
+  }));
+  return{...result,strategies,ownershipVersion:DIRECTIONAL_OWNERSHIP_VERSION};
 }
 
 const responseError = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -129,8 +154,8 @@ export function optimizedOptimizeDataset(data, pair, timeframe = "UNSPECIFIED", 
   const normalizedBase = normalizeStrategySettings(baseSettings);
   const candles = normalizeCandles(data);
   const best = {};
+  const statsFor=signals=>ownedPerformance(candles,signals,pair).stats;
 
-  // Precompute baseline htl (assetLength = 50)
   const htl_50 = buildIntegratedHtlAsset(candles, normalizedBase.assetLength);
   const dareSignals_50 = buildDareSignals(candles, htl_50);
 
@@ -141,7 +166,6 @@ export function optimizedOptimizeDataset(data, pair, timeframe = "UNSPECIFIED", 
 
     for (const length of lengths) {
       for (const filter of filters) {
-        // Construct settings for this candidate
         const settings = {
           ...normalizedBase,
           assetLength: strategy === "ASSET" || strategy === "DARE" || strategy === "COMBO" ? length : normalizedBase.assetLength,
@@ -156,40 +180,28 @@ export function optimizedOptimizeDataset(data, pair, timeframe = "UNSPECIFIED", 
         let stats;
         if (strategy === "ASSET") {
           const htl = length === normalizedBase.assetLength ? htl_50 : buildIntegratedHtlAsset(candles, length);
-          const trades = buildRegisteredTrades(candles, htl.signals, pair);
-          stats = summarizeRegisteredTrades(trades);
+          stats = statsFor(htl.signals);
         } else if (strategy === "DARE") {
           const htl = length === normalizedBase.assetLength ? htl_50 : buildIntegratedHtlAsset(candles, length);
           const dareSignals = length === normalizedBase.assetLength ? dareSignals_50 : buildDareSignals(candles, htl);
-          const trades = buildRegisteredTrades(candles, dareSignals, pair);
-          stats = summarizeRegisteredTrades(trades);
+          stats = statsFor(dareSignals);
         } else if (strategy === "DARE_N") {
           const dareN = buildDareNPackage(htl_50, length, filter);
-          const trades = buildRegisteredTrades(candles, dareN.events, pair);
-          stats = summarizeRegisteredTrades(trades);
+          stats = statsFor(dareN.events);
         } else if (strategy === "NAI") {
           const nai = buildNaiPackage(htl_50, length, filter);
-          const trades = buildRegisteredTrades(candles, nai.events, pair);
-          stats = summarizeRegisteredTrades(trades);
+          stats = statsFor(nai.events);
         } else if (strategy === "APEX") {
           const apexCore = buildIntegratedIIICore(candles, length);
           const apexEvents = buildCausalApexEvents(apexCore.zup, apexCore.puz, filter);
-          const trades = buildRegisteredTrades(candles, apexEvents, pair);
-          stats = summarizeRegisteredTrades(trades);
+          stats = statsFor(apexEvents);
         } else if (strategy === "COMBO") {
-          // COMBO uses normalizedBase entirely
           const result = evaluateRegisteredPerformance(candles, pair, normalizedBase);
-          stats = result.strategies.COMBO.stats;
+          stats = statsFor(result.strategies.COMBO.signals);
         }
 
-        const candidate = {
-          settings,
-          entry: entryFor(strategy, settings, stats)
-        };
-
-        if (!selected || candidate.entry.score > selected.entry.score) {
-          selected = candidate;
-        }
+        const candidate = {settings,entry: entryFor(strategy, settings, stats)};
+        if (!selected || candidate.entry.score > selected.entry.score) selected = candidate;
       }
     }
     best[strategy] = selected;
@@ -207,22 +219,25 @@ export function optimizedOptimizeDataset(data, pair, timeframe = "UNSPECIFIED", 
     csf: normalizedBase.csf
   };
 
-  const finalResult = evaluateRegisteredPerformance(candles, pair, settings);
+  const finalResult = applyDirectionalOwnershipPerformance(evaluateRegisteredPerformance(candles, pair, settings),pair);
   const config = {};
   for (const strategy of STRATEGIES) {
     config[strategy] = {
       ...entryFor(strategy, settings, finalResult.strategies[strategy].stats),
       candidateLengths: [...LENGTH_GRID],
-      candidateFilters: [...FILTER_GRID[strategy]]
+      candidateFilters: [...FILTER_GRID[strategy]],
+      directionalOwnershipVersion:DIRECTIONAL_OWNERSHIP_VERSION
     };
   }
   const ioiIom = optimizeIoiIomPerformance(candles, pair, timeframe, LENGTH_GRID, VALIDATION, STRATEGY_ENGINE_VERSION);
+  for(const strategy of ["IOI","IOM"])if(ioiIom.config[strategy])ioiIom.config[strategy].directionalOwnershipVersion=DIRECTIONAL_OWNERSHIP_VERSION;
   Object.assign(config, ioiIom.config);
 
   return {
     settings: normalizeStrategySettings(settings),
     config,
-    grossPerformance: [...registeredExportRows(finalResult, pair, timeframe), ...ioiIom.rows]
+    grossPerformance: [...registeredExportRows(finalResult, pair, timeframe), ...ioiIom.rows],
+    directionalOwnershipVersion:DIRECTIONAL_OWNERSHIP_VERSION
   };
 }
 
@@ -236,9 +251,7 @@ export async function optimizedComputeConfiguration(engine, value = {}) {
     const hasDateRange = Boolean(startDate || endDate);
     if (!PAIRS.includes(pair)) throw responseError("Invalid Compute Configuration currency pair.");
     if (!TIMEFRAMES.includes(timeframe)) throw responseError("Invalid Compute Configuration timeframe.");
-    if (hasDateRange && (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate))) {
-      throw responseError("Both dates are required when an explicit range is supplied.");
-    }
+    if (hasDateRange && (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate))) throw responseError("Both dates are required when an explicit range is supplied.");
     stage = "credentials";
     const apiToken = token(engine.env);
     stage = "oanda-history";
@@ -254,6 +267,7 @@ export async function optimizedComputeConfiguration(engine, value = {}) {
       version: RUNTIME_OPTIMIZER_VERSION,
       strategyEngineVersion: STRATEGY_ENGINE_VERSION,
       performanceVersion: REGISTERED_PERFORMANCE_VERSION,
+      directionalOwnershipVersion:optimized.directionalOwnershipVersion,
       stamp,
       computedAt: new Date().toISOString(),
       source: "COMPUTE_CONFIGURATION",
@@ -303,6 +317,7 @@ export async function optimizedOptimizeNext(engine, state, apiToken) {
     version: RUNTIME_OPTIMIZER_VERSION,
     strategyEngineVersion: STRATEGY_ENGINE_VERSION,
     performanceVersion: REGISTERED_PERFORMANCE_VERSION,
+    directionalOwnershipVersion:optimized.directionalOwnershipVersion,
     stamp,
     computedAt: new Date().toISOString(),
     source: "SERVER",
@@ -332,8 +347,7 @@ export async function optimizedOptimizeNext(engine, state, apiToken) {
 export async function optimizedScan(engine, apiToken, config, timeframe = config.timeframe, optimizer = {}) {
   const rows = [];
   const errors = [];
-  const concurrencyLimit = 4; // Fetch up to 4 pairs concurrently
-
+  const concurrencyLimit = 4;
   const queue = [...PAIRS];
   const workers = Array(concurrencyLimit).fill(null).map(async () => {
     while (queue.length > 0) {
@@ -342,17 +356,7 @@ export async function optimizedScan(engine, apiToken, config, timeframe = config
         const settings = fullSettings(engine, config, optimizer, pair, timeframe);
         const data = await candles(pair, apiToken, timeframe);
         const event = currentEvent(data, pair, timeframe, config.strategy, settings);
-        if (event) {
-          rows.push({
-            pair,
-            event,
-            configuration: {
-              primary: engine.pairConfig(config, optimizer, pair, timeframe).primary,
-              settings,
-              strategyEngineVersion: STRATEGY_ENGINE_VERSION
-            }
-          });
-        }
+        if (event) rows.push({pair,event,configuration:{primary:engine.pairConfig(config, optimizer, pair, timeframe).primary,settings,strategyEngineVersion:STRATEGY_ENGINE_VERSION}});
       } catch (error) {
         errors.push({ pair, error: String(error?.message || error) });
       }
@@ -360,15 +364,6 @@ export async function optimizedScan(engine, apiToken, config, timeframe = config
   });
 
   await Promise.all(workers);
-
-  if (errors.length) {
-    await engine.write({
-      type: "SCAN_PARTIAL",
-      timeframe,
-      strategyEngineVersion: STRATEGY_ENGINE_VERSION,
-      message: `${timeframe}: ${rows.length} pairs loaded, ${errors.length} failed`,
-      failures: errors
-    }, false);
-  }
+  if (errors.length) await engine.write({type:"SCAN_PARTIAL",timeframe,strategyEngineVersion:STRATEGY_ENGINE_VERSION,message:`${timeframe}: ${rows.length} pairs loaded, ${errors.length} failed`,failures:errors}, false);
   return rows;
 }
