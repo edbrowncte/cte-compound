@@ -1,13 +1,13 @@
 {
   "format": "cte-compound-registered-horizon-implementation-manifest-v1",
-  "payload_sha256": "03c0dd071a8ce42c7ccffce318d5b6f65e1a149edb6aefa9475aa2eba3db9bd1",
-  "archive_sha256": "fe5fbe99cbfbeab2bfc1d10602e56890e0ded301315ba52123a12ae26640bf2c",
-  "encoded_sha256": "06cd4139ba9c43cad278fddd081d312f7000965bdd9b69d8c6ee3fb099deccb0",
+  "payload_sha256": "fb65f9bb480b26437c4ea29d8428453bc9a7cf00b396af1f9d4249eff3e8a251",
+  "archive_sha256": "6b9ee8cb8801280c087744cce55b1ca0b9e46e7543b156429dd3a07925b8a95a",
+  "encoded_sha256": "ad479773c75ab73205b88990e91a9da5cf701339319cb983d7a6d4a0b0f25ba3",
   "part_count": 3,
   "file_hashes": {
     "src/horizon-registered-performance.js": "0b1e5ecc2b9cf0bc9cd3921cf4ca0dbdbe1ea2ab716212f776d3a04d202f13c1",
-    "src/horizon-platform-engine.js": "d766fca5e00fea5aa8c8d81193c4abc4663d70630bacc26d09b3413e6cce7c41",
-    "src/engine.js": "1cea1a5d6dfb4b42c614e545b670f1435dc7a44c62e0465c38d5d0472e75ee6a",
+    "src/horizon-platform-engine.js": "f5ef305a762b7e86a856ded5144b6658030a96092934fa1b101ec81464dba483",
+    "src/engine.js": "e3ef0e21c261c018cf735a124521850d93fcd732a15a7c85764eb6dde571d5b5",
     "test/fixtures/horizon-strategy-parity.json": "7d6be96d1e995db9c715c47169ba4dae163c0494a6fdeb4366203697f2dea135",
     "test/fixtures/horizon-strategy-parity-snapshot.json": "b8e63ff78b7e30c53f08aa08647e29f010e0717837f376fd10637578c2ce74a6",
     "test/registered-strategy-parity-snapshot.test.js": "d644dee27b0c3fbbe46204106c3dce882a1b4ee0323a4891eace6f21b09a9714",
