@@ -13,6 +13,8 @@ assert.equal(built.ioi.length,candles.length);
 assert.equal(built.ioiInverse.length,candles.length);
 assert.equal(built.iomMean.length,candles.length);
 assert.equal(built.iomInverse.length,candles.length);
+assert.equal(built.ioi.findIndex(Number.isFinite),built.asset.findIndex(Number.isFinite),"IOI must remain unavailable until the causal HTL Asset exists");
+assert.ok(built.iomMean.findIndex(Number.isFinite)>=built.ioi.findIndex(Number.isFinite),"IOM cannot precede IOI");
 for(let index=0;index<candles.length;index++)if(Number.isFinite(built.asset[index]))assert.equal(built.ioi[index],(candles[index].close+built.asset[index])/2,"IOI must average instrument and causal HTL Asset");
 for(let index=0;index<candles.length;index++)if(Number.isFinite(built.ioi[index])&&Number.isFinite(built.ioiInverse[index]))assert.equal(built.iomMean[index],(built.ioi[index]+built.ioiInverse[index])/2,"IOM Mean must average IOI and IOI Inverse");
 for(let index=0;index<candles.length;index++)if(Number.isFinite(built.iomZ[index]))assert.ok(Math.abs(built.iomInverse[index]-((-built.iomZ[index]*built.iomStd[index])+built.iomCenter[index]))<1e-12,"IOM inverse recovery must use -z × std + rolling mean");
@@ -29,14 +31,17 @@ assert.equal(optimized.version,IOI_IOM_PERFORMANCE_VERSION);
 for(const strategy of ["IOI","IOM"]){assert.ok(optimized.config[strategy]);assert.ok([10,20,30,40,50].includes(optimized.config[strategy].length));assert.equal(optimized.config[strategy].filter,0);assert.ok(optimized.config[strategy].grossPerformance);}
 assert.deepEqual(optimized.rows.map(row=>row.Indicator),["IOI","IOM"]);
 
-const engine=fs.readFileSync(new URL("../src/engine-ioi-iom-performance.js",import.meta.url),"utf8"),worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8"),ui=fs.readFileSync(new URL("../public/ioi-iom-performance.js",import.meta.url),"utf8");
-assert.match(engine,/super\.computeConfiguration\(value\)/,"IOI/IOM analytics must extend the existing authoritative Compute Configuration result");
-assert.match(engine,/runtimeOptimizerStorageKey\(result\.key\)/,"augmented IOI/IOM configuration must persist in the same optimizer record");
-assert.match(worker,/engine-ioi-iom-performance\.js/);
+const optimizer=fs.readFileSync(new URL("../src/optimized-optimizer.js",import.meta.url),"utf8"),worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8"),ui=fs.readFileSync(new URL("../public/ioi-iom-performance.js",import.meta.url),"utf8"),strategyEngine=fs.readFileSync(new URL("../src/horizon-platform-engine.js",import.meta.url),"utf8");
+assert.match(optimizer,/import \{ optimizeIoiIomPerformance \} from "\.\/ioi-iom-performance\.js"/,"authoritative optimizer must own IOI/IOM computation");
+assert.match(optimizer,/const ioiIom = optimizeIoiIomPerformance\(candles, pair, timeframe, LENGTH_GRID, VALIDATION, STRATEGY_ENGINE_VERSION\)/);
+assert.match(optimizer,/Object\.assign\(config, ioiIom\.config\)/,"IOI/IOM config must be persisted through the existing optimizer record");
+assert.match(optimizer,/grossPerformance: \[\.\.\.registeredExportRows\(finalResult, pair, timeframe\), \.\.\.ioiIom\.rows\]/,"IOI/IOM rows must join the authoritative gross performance payload");
+assert.match(worker,/export \{ HtlEngine \} from "\.\/engine-indicator-only-units\.js"/,"certified Durable Object export path must remain unchanged");
 assert.match(worker,/chart-ioi-iom\.js[^]*ioi-iom-performance\.js/);
+assert.match(strategyEngine,/STRATEGIES = \["ASSET","DARE_N","DARE","COMBO","NAI","APEX"\]/,"automated execution strategy registry must remain six strategies");
 assert.match(ui,/Macro: HTL Asset \/ DARE\(N\) \/ DARE \/ COMBO \/ NAI \/ APEX \/ IOI \/ IOM Performance/);
 assert.match(ui,/renderMacroPerformance=function/);
 assert.match(ui,/renderStrategyConfiguration=function/);
 assert.match(ui,/renderOptimizerRegistry=function/);
 
-console.log("IOI/IOM performance certification passed: causal formulas, crossing trades, next-open/opposite-signal statistics, Compute Configuration persistence, Macro rows, configuration cards, and optimizer registry integration are wired without adding IOI/IOM to automated execution strategies.");
+console.log("IOI/IOM performance certification passed: causal formulas, warmup integrity, crossing trades, next-open/opposite-signal statistics, authoritative optimizer persistence, Macro rows, configuration cards, and optimizer registry integration are wired while the certified execution export and six-strategy automated registry remain unchanged.");
