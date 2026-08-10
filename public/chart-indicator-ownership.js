@@ -1,7 +1,7 @@
 (function installChartIndicatorOwnership(global){
   "use strict";
 
-  const VERSION="CTE_CHART_INDICATOR_OWNERSHIP@1.0.1";
+  const VERSION="CTE_CHART_INDICATOR_OWNERSHIP@1.0.2";
 
   function ownedDefinition(strategy){
     const selected=CHART_INDICATORS[strategy]||CHART_INDICATORS.ASSET;
@@ -12,10 +12,47 @@
     };
   }
 
+  function selectedCross(left,right,index){
+    if(index<1||!Array.isArray(left)||!Array.isArray(right))return 0;
+    const values=[left[index],right[index],left[index-1],right[index-1]];
+    if(!values.every(Number.isFinite))return 0;
+    if(left[index]>right[index]&&left[index-1]<=right[index-1])return 1;
+    if(left[index]<right[index]&&left[index-1]>=right[index-1])return -1;
+    return 0;
+  }
+
+  function selectedHtlCausal(data,length){
+    const series=htlCore(data,length),families=[
+      ["HL2_UPR",series?.hl2,series?.upr],
+      ["MUI_UI",series?.mui,series?.ui],
+      ["ZUI_IUZ",series?.zui,series?.iuz]
+    ],validFamilies=families.filter(([,left,right])=>Array.isArray(left)&&Array.isArray(right)),crosses=new Map();
+    if(!validFamilies.length)throw new Error("HTL source families are unavailable for the selected chart");
+    if(validFamilies.length!==families.length){
+      const missing=families.filter(([,left,right])=>!Array.isArray(left)||!Array.isArray(right)).map(([name])=>name);
+      console.warn(`Selected HTL chart skipped unavailable source family: ${missing.join(", ")}`);
+    }
+    for(let index=1;index<data.length;index++){
+      const vote=validFamilies.reduce((sum,[,left,right])=>sum+selectedCross(left,right,index),0);
+      if(vote)crosses.set(index,{index,direction:Math.sign(vote)});
+    }
+    const asset=Array(data.length).fill(null),inverse=Array(data.length).fill(null),assetMean=Array(data.length).fill(null),sourceTotal=Array(data.length).fill(0);let active=null,total=0;
+    const begin=event=>({index:event.index,direction:event.direction,price:event.direction>0?data[event.index].high:data[event.index].low,extremeIndex:event.index});
+    const update=(episode,index)=>{const candle=data[index];if(!candle)return;const price=episode.direction>0?candle.high:candle.low;if((episode.direction>0&&price>episode.price)||(episode.direction<0&&price<episode.price)){episode.price=price;episode.extremeIndex=index;}};
+    const first=Math.max(1,length*3-1),denominator=length*(length+1)/2;
+    for(let index=0;index<data.length;index++){
+      const event=crosses.get(index);if(event){total++;if(!active||event.direction!==active.direction)active=begin(event);}
+      if(active)update(active,index);sourceTotal[index]=total;if(index<first||!active)continue;
+      asset[index]=active.price;const start=index-length+1;if(start<0)continue;const window=asset.slice(start,index+1);
+      if(window.length!==length||!window.every(Number.isFinite))continue;const current=asset[index],mean=window.reduce((sum,value,position)=>sum+(position+1)*value,0)/denominator,average=window.reduce((sum,value)=>sum+value,0)/length,deviation=Math.sqrt(window.reduce((sum,value)=>sum+(value-average)**2,0)/length);assetMean[index]=mean;inverse[index]=deviation>0?(2*mean)-current:null;
+    }
+    return{asset,inverse,assetMean,sourceTotal,series,causal:true};
+  }
+
   function selectedIndicatorSet(candles,length,strategy){
     const data=Array.isArray(candles)?candles:[],resolvedLength=clamp(Math.round(Number(length)||10),3,MAX_ANALYTICAL_LENGTH),id=CHART_INDICATORS[strategy]?strategy:"ASSET";
     if(!data.length)return normalizeUnifiedIndicators(data,{});
-    const htl=htlCausal(data,resolvedLength),selected={};
+    const htl=selectedHtlCausal(data,resolvedLength),selected={};
 
     if(id==="ASSET"){
       selected.asset=htl.asset;
@@ -53,17 +90,21 @@
 
   canonicalChartDefinition=function(strategy){return ownedDefinition(strategy);};
 
+  function drawAuxiliarySurfaces(pair){
+    try{drawOscillatorChart();}catch(error){console.error("MAS / IM auxiliary chart render failed:",error);}
+    try{drawWeeklyCognition(pair,state.evalMasImMetrics);}catch(error){console.error("Weekly cognition auxiliary chart render failed:",error);}
+  }
+
   drawChart=function(){
     const pair=state.selectedInstrument,timeframe=state.selectedTimeframe,strategy=state.selectedStrategy,length=clamp(Math.round(Number(el("chartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),filter=Math.max(0,Number(el("chartFilter")?.value)||0),indicators=selectedIndicatorSet(state.chartCandles,length,strategy),signals=indicatorSignalSeries(state.chartCandles,indicators,strategy,filter);
     drawCapitalizationChartSurface({canvasId:"chart",messageId:"chartMessage",candles:state.chartCandles,pair,timeframe,strategy,length,visibleBars:state.visibleBars,offsetBars:state.offsetBars,rightIndent:state.rightIndent,crosshairEnabled:state.crosshairEnabled,crosshair:state.crosshair,legendId:"indicatorLegend",indicators,signals});
-    drawOscillatorChart();
-    drawWeeklyCognition(pair,state.evalMasImMetrics);
+    drawAuxiliarySurfaces(pair);
   };
 
   drawEvalCharts=function(){
     const pair=el("evalChartPair")?.value||state.selectedInstrument,timeframe=el("evalChartTimeframe")?.value||state.selectedTimeframe,strategy=el("evalChartStrategy")?.value||state.evaluationSelectedStrategy||"ASSET",length=clamp(Math.round(Number(el("evalChartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),filter=Math.max(0,Number(el("evalChartFilter")?.value)||0),indicators=selectedIndicatorSet(state.evalCandles,length,strategy),signals=indicatorSignalSeries(state.evalCandles,indicators,strategy,filter);
     drawCapitalizationChartSurface({canvasId:"evalChart",messageId:"evalChartMessage",candles:state.evalCandles,pair,timeframe,strategy,length,visibleBars:state.evalVisibleBars,offsetBars:state.evalOffsetBars,rightIndent:state.evalRightIndent,crosshairEnabled:state.evalCrosshairEnabled,crosshair:state.evalCrosshair,legendId:"evalIndicatorLegend",indicators,signals});
-    drawOscillatorChart();
+    try{drawOscillatorChart();}catch(error){console.error("MAS / IM evaluation auxiliary render failed:",error);}
   };
 
   function synchronizeWeeklyBar(){
@@ -75,7 +116,7 @@
     aside.style.minHeight="0";
     if(body){body.style.height=`${Math.max(120,height-headerHeight)}px`;body.style.minHeight="0";}
     canvas.style.height="100%";
-    requestAnimationFrame(()=>drawWeeklyCognition(state.selectedInstrument,state.evalMasImMetrics));
+    requestAnimationFrame(()=>{try{drawWeeklyCognition(state.selectedInstrument,state.evalMasImMetrics);}catch(error){console.error("Weekly cognition resize render failed:",error);}});
   }
 
   function removeDuplicateChartMetadataRow(){
@@ -106,5 +147,5 @@
   document.addEventListener?.("fullscreenchange",synchronizeWeeklyBar);
   global.addEventListener?.("resize",synchronizeWeeklyBar);
 
-  global.CTEChartIndicatorOwnership=Object.freeze({VERSION,selectedIndicatorSet,ownedDefinition,synchronizeWeeklyBar,removeDuplicateChartMetadataRow});
+  global.CTEChartIndicatorOwnership=Object.freeze({VERSION,selectedIndicatorSet,selectedHtlCausal,ownedDefinition,synchronizeWeeklyBar,removeDuplicateChartMetadataRow});
 })(globalThis);
