@@ -69,7 +69,8 @@ function assertSameOrigin(request) {
   if(site&&!['same-origin','same-site','none'].includes(site)) throw Object.assign(new Error("Cross-site request rejected."),{status:403});
 }
 
-function acquireOandaSlot(){oandaActive++;}\nfunction releaseOandaSlot(){oandaActive=Math.max(0,oandaActive-1);}
+function acquireOandaSlot(){oandaActive++;}
+function releaseOandaSlot(){oandaActive=Math.max(0,oandaActive-1);}
 
 async function oandaRequest(path,token,init={}) {
   await acquireOandaSlot();
