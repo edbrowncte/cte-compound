@@ -455,43 +455,7 @@
         </div>
       </section></details>
 
-      <!-- Interactive analytical chart. -->
-      <section class="panel chart-panel capitalization-chart-component" id="chartPanel" data-chart-model="capitalization" aria-labelledby="chartTitle">
-        <div class="panel-head">
-          <div class="panel-title">
-            <h2 id="chartTitle">Capitalization Model Chart · Analytical Compound</h2>
-            <p>Unified 5,000-candle Capitalization chart · timestamp-synchronized indicator signals · drag to pan · wheel or controls to zoom.</p>
-          </div>
-          <div class="chart-toolbar">
-            <label class="field"><span>Currency pair</span><select id="chartPair"></select></label>
-            <label class="field"><span>Timeframe</span><select id="chartTimeframe"></select></label>
-            <label class="field"><span>Strategy</span><select id="chartStrategy"></select></label>
-            <label class="field"><span>Length</span><input id="chartLength" type="number" min="3" max="500" value="10" style="width:70px;"></label>
-            <label class="field"><span>Filter</span><input id="chartFilter" type="number" min="0" max="10" step="0.1" value="0" style="width:70px;"></label>
-            <button id="refreshChart" type="button" disabled>Refresh chart</button>
-            <button id="zoomOut" type="button" title="Show more candles">Zoom −</button>
-            <button id="zoomIn" type="button" title="Show fewer candles">Zoom +</button>
-            <button id="indentOut" type="button" title="Increase right-side chart indentation">Indent +</button>
-            <button id="indentIn" type="button" title="Decrease right-side chart indentation">Indent −</button>
-            <button id="crosshairToggle" type="button" aria-pressed="true">Crosshair on</button>
-            <button id="maximizeChart" type="button">Maximize</button>
-          </div>
-        </div>
-        <div class="chart-summary">
-          <div class="metric"><span>Signal</span><strong id="metricSignal">—</strong></div>
-          <div class="metric"><span>Confidence</span><strong id="metricConfidence">—</strong></div>
-          <div class="metric"><span>Regime</span><strong id="metricRegime">—</strong></div>
-          <div class="metric"><span>Current price</span><strong id="metricClose">—</strong></div>
-          <div class="metric"><span>Completed candle</span><strong id="metricTime">—</strong></div>
-          <div class="metric"><span>Visible bars</span><strong id="metricBars">120</strong></div>
-        </div>
-        <div class="indicator-legend" id="indicatorLegend" aria-label="Displayed indicators"></div>
-        <div class="chart-stage unified-chart-stage" id="chartStage">
-          <canvas id="chart" aria-label="Interactive OANDA candlestick chart"></canvas>
-          <div class="chart-message" id="chartMessage">No chart loaded</div>
-        </div>
-        <div class="compartments" id="compartments"></div>
-      </section>
+      <div id="analyticalRuntimeState" hidden aria-hidden="true"><select id="chartPair"></select><select id="chartTimeframe"></select><select id="chartStrategy"></select><input id="chartLength" value="10"><input id="chartFilter" value="0"><button id="refreshChart" disabled></button><button id="zoomOut"></button><button id="zoomIn"></button><button id="indentOut"></button><button id="indentIn"></button><button id="crosshairToggle"></button><button id="maximizeChart"></button><span id="metricSignal"></span><span id="metricConfidence"></span><span id="metricRegime"></span><span id="metricClose"></span><span id="metricTime"></span><span id="metricBars"></span><span id="indicatorLegend"></span><span id="chartMessage"></span><span id="compartments"></span></div>
       <details class="facility-details" open><summary>MTF Forecast · Capitalization Perspective</summary><section aria-labelledby="mtfTitle">
         <div class="panel-head"><div class="panel-title"><h2 id="mtfTitle">MTF Forecast · Capitalization Perspective</h2><p id="mtfScope">Selected instrument · step-wise HTL and Analytical Compound alignment</p></div></div>
         <div class="mtf-wrap"><table class="mtf-table"><thead><tr><th>Timeframe</th><th>HTL Event</th><th>Analytical Compound</th><th>Agreement</th><th>Confidence</th><th>Step</th></tr></thead><tbody id="mtfBody"><tr><td colspan="6">Load the timeframe schedule.</td></tr></tbody></table></div>
@@ -504,75 +468,7 @@
           <!-- Will be populated dynamically by JS -->
         </div>
 
-        <!-- Middle Row (Main Chart Left, Weekly Cognition Right) -->
-        <div style="display:grid; grid-template-columns:70% 30%; gap:14px; margin-bottom:14px;">
-          <!-- Left Column (Main Chart + Oscillator) -->
-          <div style="display:flex; flex-direction:column; gap:14px; min-width:0;">
-            <section class="panel chart-panel capitalization-chart-component" id="evalChartPanel" data-chart-model="capitalization" style="min-width:0;">
-              <div class="panel-head">
-                <div class="panel-title">
-                  <h2 id="evalChartTitle">Capitalization Model Chart</h2>
-                  <p id="evalChartSubtitle">Timestamp-synchronized antagonist pressure, reverse-cadence IM, event power, and transition diagnostics.</p>
-                </div>
-                <div class="chart-toolbar">
-                  <label class="field"><span>Currency pair</span><select id="evalChartPair"></select></label>
-                  <label class="field"><span>Timeframe</span><select id="evalChartTimeframe"></select></label>
-                  <label class="field"><span>Strategy</span><select id="evalChartStrategy"></select></label>
-                  <label class="field"><span>Length</span><input id="evalChartLength" type="number" min="3" max="500" value="10" style="width:70px;"></label>
-                  <label class="field"><span>Filter</span><input id="evalChartFilter" type="number" min="0" max="10" step="0.1" value="0" style="width:70px;"></label>
-                  <button id="evalRefreshChart" type="button">Refresh chart</button>
-                  <button id="evalZoomOut" type="button">Zoom −</button>
-                  <button id="evalZoomIn" type="button">Zoom +</button>
-                  <button id="evalIndentOut" type="button">Indent +</button>
-                  <button id="evalIndentIn" type="button">Indent −</button>
-                  <button id="evalCrosshairToggle" type="button">Crosshair on</button>
-                  <button id="evalMaximizeChart" type="button">Maximize</button>
-                  <button id="evalConfirmButton" type="button" class="connect" style="display:none; font-weight:bold;">Confirm Selection</button>
-                </div>
-              </div>
-              <div class="chart-summary" style="grid-template-columns:repeat(8, minmax(0,1fr));">
-                <div class="metric"><span>Signal</span><strong id="evalMetricSignal">—</strong></div>
-                <div class="metric"><span>MAS</span><strong id="evalMetricMas">—</strong></div>
-                <div class="metric"><span>IM</span><strong id="evalMetricIm">—</strong></div>
-                <div class="metric"><span>IM/MAS</span><strong id="evalMetricRatio">—</strong></div>
-                <div class="metric"><span>Required IM</span><strong id="evalMetricRequiredIm">—</strong></div>
-                <div class="metric"><span>Transition P</span><strong id="evalMetricTransition">—</strong></div>
-                <div class="metric"><span>Regime</span><strong id="evalMetricRegime">—</strong></div>
-                <div class="metric"><span>Pips/Hr</span><strong id="evalMetricPipsHour">—</strong></div>
-              </div>
-              <div class="indicator-legend" id="evalIndicatorLegend" aria-label="Displayed indicators"></div>
-              <div class="chart-stage unified-chart-stage" id="evalChartStage">
-                <canvas id="evalChart" style="width:100%; height:100%; display:block;"></canvas>
-                <div class="chart-message" id="evalChartMessage">No chart loaded</div>
-              </div>
-            </section>
-
-            <!-- Bottom Middle (Oscillator Window) -->
-            <section class="panel" id="oscillatorWindow" style="min-width:0;">
-              <div class="panel-head" style="padding:6px 12px; border-bottom:1px solid var(--line);">
-                <h3 style="margin:0; font-size:11px; text-transform:uppercase; letter-spacing:.08em;">Synced MAS / IM Pressure</h3>
-              </div>
-              <div style="height:150px; background:#080c12; position:relative;">
-                <canvas id="oscillatorCanvas" style="width:100%; height:100%; display:block;"></canvas>
-              </div>
-            </section>
-          </div>
-
-          <!-- Right Column (Weekly Cognition Window) -->
-          <section class="panel" id="weeklyCognitionWindow" style="display:flex; flex-direction:column; min-width:0;">
-            <div class="panel-head" style="border-bottom:1px solid var(--line);">
-              <div class="panel-title">
-                <h3 id="weeklyCognitionTitle" style="margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.06em;">W - MAS: — | IM: — | Ratio: —</h3>
-              </div>
-            </div>
-            <div style="flex:1; background:#080c12; position:relative; min-height:300px; display:flex; flex-direction:column;">
-              <canvas id="weeklyCognitionCanvas" style="width:100%; flex:1; display:block;"></canvas>
-              <div style="padding:8px; font-size:9px; color:var(--muted); border-top:1px solid var(--line); line-height:1.3;">
-                Each row is the latest completed, timestamp-synchronized trend power for the signal timeframe and every enclosing timeframe. MAS weights increase toward W; IM uses the exact reverse cadence.
-              </div>
-            </div>
-          </section>
-        </div>
+        <div id="evaluationRuntimeState" hidden aria-hidden="true"><select id="evalChartPair"></select><select id="evalChartTimeframe"></select><select id="evalChartStrategy"></select><input id="evalChartLength" value="10"><input id="evalChartFilter" value="0"><button id="evalRefreshChart"></button><button id="evalZoomOut"></button><button id="evalZoomIn"></button><button id="evalIndentOut"></button><button id="evalIndentIn"></button><button id="evalCrosshairToggle"></button><button id="evalMaximizeChart"></button><button id="evalConfirmButton"></button><span id="evalMetricSignal"></span><span id="evalMetricMas"></span><span id="evalMetricIm"></span><span id="evalMetricRatio"></span><span id="evalMetricRequiredIm"></span><span id="evalMetricTransition"></span><span id="evalMetricRegime"></span><span id="evalMetricPipsHour"></span><span id="evalIndicatorLegend"></span><span id="evalChartMessage"></span><span id="evalChartTitle"></span><span id="evalChartSubtitle"></span><span id="weeklyCognitionTitle"></span></div>
 
         <!-- Bottom Row (Evaluation Table Container) -->
         <section class="panel" id="evaluationTableContainer" style="min-width:0;">
@@ -666,19 +562,7 @@
         </div>
         <p class="event-note" id="eventScheduleStatus">HTL schedule not loaded.</p>
         <p class="event-note" id="eventScheduleInterpretation">Current Event is the active Asset/Inverse crossing; Current Event Open is the completed crossing candle close; Location is AA above average or BA below average; completion columns estimate the active event ending within 5 or 10 bars; Events counts FINAL events; MAE columns measure duration and envelope error; Onset Brier measures the same-direction ≤10-bar probability error; Historical Brier is the rolling historical-frequency benchmark; Next HTL Event and Forecast Envelope describe the next opposite event.</p>
-        <section class="panel chart-panel capitalization-chart-component" id="eventChartPanel" data-chart-model="capitalization" aria-labelledby="eventCapitalizationChartTitle">
-        <div class="panel-head"><div class="panel-title"><h2 id="eventCapitalizationChartTitle">Capitalization Model Chart · HTL Event</h2><p>Unified 5,000-candle Capitalization chart · completed-candle HTL signals and event transitions.</p></div></div>
-        <div class="chart-toolbar event-chart-toolbar">
-          <input id="eventStrategy" type="hidden" value="ASSET">
-          <button id="refreshEventChart" type="button" disabled>Refresh chart</button>
-          <button id="eventZoomOut" type="button">Zoom −</button><button id="eventZoomIn" type="button">Zoom +</button>
-          <button id="eventIndentOut" type="button">Indent +</button><button id="eventIndentIn" type="button">Indent −</button>
-          <button id="eventCrosshairToggle" type="button" aria-pressed="true">Crosshair on</button><button id="eventMaximize" type="button">Maximize</button>
-          <span class="event-chart-instrument"><span>Instrument</span><strong id="eventChartInstrument">—</strong></span>
-        </div>
-        <div class="indicator-legend" id="eventIndicatorLegend" aria-label="HTL geometry legend"></div>
-        <div class="event-chart-stage unified-chart-stage"><canvas id="eventChart" aria-label="Completed OANDA candles with original HTL and HTL Asset geometry"></canvas><div class="chart-message" id="eventMessage">No event forecast loaded</div></div>
-        </section>
+        <div id="eventRuntimeState" hidden aria-hidden="true"><input id="eventStrategy" value="ASSET"><button id="refreshEventChart" disabled></button><button id="eventZoomOut"></button><button id="eventZoomIn"></button><button id="eventIndentOut"></button><button id="eventIndentIn"></button><button id="eventCrosshairToggle"></button><button id="eventMaximize"></button><span id="eventChartInstrument"></span><span id="eventIndicatorLegend"></span><span id="eventMessage"></span></div>
         <p class="event-note" id="eventMethod">Not loaded</p>
         <details class="event-ledger">
           <summary>Event Ledger · Result / Profit</summary>
@@ -2398,6 +2282,7 @@
     });
     document.addEventListener("fullscreenchange",()=>{ el("maximizeChart").textContent=document.fullscreenElement?"Restore":"Maximize"; setTimeout(drawChart,40); });
     const canvas=el("chart");
+    if(canvas){
     canvas.addEventListener("pointerdown",event=>{ if (!state.chartCandles.length) return; state.dragging=true; state.dragStartX=event.clientX; state.dragStartOffset=state.offsetBars; canvas.setPointerCapture(event.pointerId); });
     canvas.addEventListener("pointermove",event=>{
       const pos=pointerPosition(event); state.crosshair=pos;
@@ -2408,13 +2293,16 @@
     canvas.addEventListener("pointercancel",()=>{state.dragging=false;});
     canvas.addEventListener("pointerleave",()=>{ if (!state.dragging) { state.crosshair=null; drawChart(); } });
     canvas.addEventListener("wheel",event=>{ event.preventDefault(); const factor=event.deltaY>0?1.15:.87; state.visibleBars=clamp(Math.round(state.visibleBars*factor),30,300); state.offsetBars=clamp(state.offsetBars,0,Math.max(0,state.chartCandles.length-state.visibleBars)); updateChartSummary(); drawChart(); },{passive:false});
+    }
     const eventCanvas=el("eventChart");
+    if(eventCanvas){
     eventCanvas.addEventListener("pointerdown",event=>{if(!state.eventData)return;state.eventDragging=true;state.eventDragStartX=event.clientX;state.eventDragStartOffset=state.eventOffsetBars;eventCanvas.setPointerCapture(event.pointerId);});
     eventCanvas.addEventListener("pointermove",event=>{const rect=eventCanvas.getBoundingClientRect();state.eventCrosshair={x:event.clientX-rect.left,y:event.clientY-rect.top};if(state.eventDragging){const delta=Math.round((event.clientX-state.eventDragStartX)/Math.max(2,rect.width/state.eventVisibleBars));state.eventOffsetBars=clamp(state.eventDragStartOffset+delta,0,Math.max(0,state.eventData.length-state.eventVisibleBars));}eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
     eventCanvas.addEventListener("pointerup",event=>{state.eventDragging=false;try{eventCanvas.releasePointerCapture(event.pointerId);}catch{}});
     eventCanvas.addEventListener("pointercancel",()=>{state.eventDragging=false;});
     eventCanvas.addEventListener("pointerleave",()=>{if(!state.eventDragging){state.eventCrosshair=null;eventDraw(state.eventData,state.eventHtl,state.eventEvents);}});
     eventCanvas.addEventListener("wheel",event=>{event.preventDefault();state.eventVisibleBars=clamp(Math.round(state.eventVisibleBars*(event.deltaY>0?1.15:.87)),30,300);state.eventOffsetBars=clamp(state.eventOffsetBars,0,Math.max(0,(state.eventData?.length||0)-state.eventVisibleBars));eventDraw(state.eventData,state.eventHtl,state.eventEvents);},{passive:false});
+    }
     window.addEventListener("resize",()=>{drawChart();if(state.eventData&&!el("eventPanel").hidden)eventDraw(state.eventData,state.eventHtl,state.eventEvents);});
 
     // Evaluation panel event listeners

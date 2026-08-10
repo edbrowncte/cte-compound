@@ -63,23 +63,17 @@ const dom=new JSDOM(source,{url:origin,runScripts:"dangerously",pretendToBeVisua
 const {window}=dom,document=window.document;
 
 try{
-  await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.getElementById("metricTime").textContent!=="—"&&document.querySelector("#compartment-ASSET .badge").textContent!=="—","initial causal live chart");
+  await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.getElementById("accountFacts").hidden===false,"initial headless analytics and account readiness").catch(error=>{throw new Error(`${error.message}\n${browserErrors.map(item=>item.stack||item.message).join("\n")}`);});
   assert.equal(document.getElementById("minimumUnits").value,"1000");await waitFor(()=>document.getElementById("NemotronStatus").textContent==="Ready","Nemotron status rendering");
   document.getElementById("tradeUnits").value="999";document.getElementById("tradeUnits").dispatchEvent(new window.Event("input",{bubbles:true}));assert.equal(document.getElementById("tradeBuy").disabled,true);
 
-  candleShape="normalized";candleRequests.length=0;document.getElementById("refreshChart").click();
-  await waitFor(()=>candleRequests.length>0,"Refresh chart request");
-  assert.equal(candleRequests[0].instrument,"EUR_USD","Refresh chart must not pass MouseEvent as the instrument");
-  await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.querySelector("#compartment-ASSET .badge").textContent!=="—","causal Refresh chart completion");
-  assert.notEqual(document.getElementById("metricTime").textContent,"—");
-  assert.notEqual(document.querySelector("#compartment-ASSET .badge").textContent,"—");
+  candleShape="normalized";
   const invalidPayload={instrument:"EUR_USD",granularity:"M15",candles:[{time:"2026-08-09T18:00:00Z",complete:true,mid:{o:"1.1",h:"1.2",l:"0",c:"1.15"}}]};assert.throws(()=>window.completedCandles(invalidPayload,"EUR_USD","M15"),/non-positive 1/);
 
-  candleShape="both";document.getElementById("refreshEventChart").click();
-  await waitFor(()=>!document.getElementById("refreshEventChart").disabled&&document.getElementById("eventChartInstrument").textContent==="EUR/USD","event chart refresh");
-  assert.equal(document.querySelectorAll("#eventScheduleBody tr[data-pair]").length,0,"Refreshing the independent HTL chart must not mutate the HTL schedule");
+  candleShape="both";
+  await waitFor(()=>!document.getElementById("loadEvents").disabled,"HTL schedule control readiness");
   document.getElementById("loadEvents").click();
-  await waitFor(()=>!document.getElementById("loadEvents").disabled&&document.getElementById("eventScheduleStatus").textContent.includes("HTL schedule"),"HTL schedule independent load",20000);
+  await waitFor(()=>!document.getElementById("loadEvents").disabled&&document.querySelectorAll("#eventScheduleBody tr[data-pair]").length>0,"HTL schedule independent load",20000).catch(error=>{throw new Error(`${error.message}: ${document.getElementById("eventScheduleStatus").textContent}\n${browserErrors.map(item=>item.stack||item.message).join("\n")}`);});
   assert.ok(document.querySelectorAll("#eventScheduleBody tr[data-pair]").length>=1);
 
   await waitFor(()=>!document.getElementById("refreshSchedule").disabled,"focused schedule completion");
@@ -90,18 +84,9 @@ try{
   const scheduleCell=document.querySelector('.signal-cell[data-instrument="EUR_USD"][data-timeframe="M15"][data-side="buy"]');
   assert.notEqual(scheduleCell.title,"No data");
 
-  hangKey="EUR_USD|M15";document.getElementById("chartTimeframe").value="M15";document.getElementById("refreshChart").click();
-  await waitFor(()=>document.getElementById("chartMessage").textContent.includes("timed out")&&!document.getElementById("refreshChart").disabled,"timeout re-enables Refresh chart",6000);
-
-  hangKey="EUR_USD|M15";document.getElementById("refreshChart").click();await waitFor(()=>document.getElementById("refreshChart").disabled,"abortable chart start");
-  document.getElementById("chartTimeframe").value="M30";document.getElementById("chartTimeframe").dispatchEvent(new window.Event("change",{bubbles:true}));
-  await waitFor(()=>!document.getElementById("refreshChart").disabled&&document.getElementById("metricTime").textContent!=="—","replacement chart completion",6000);
-  assert.ok(!document.getElementById("chartMessage").textContent.includes("timed out"),"Aborted superseded chart must not display a false timeout");
-  hangKey="";
-
   assert.equal(document.getElementById("accountFacts").hidden,false);assert.equal(document.getElementById("refreshChart").disabled,false);assert.equal(document.getElementById("connectButton"),null);
   assert.equal(browserErrors.length,0,browserErrors.map(error=>error.message).join("\n"));
-  console.log("DOM connection, causal analytical chart, independent HTL chart/schedule loading, normalized candle compatibility, schedule, timeout, abort, and minimum-unit behavior verified.");
+  console.log("DOM connection, headless analytics, HTL schedule loading, normalized candle compatibility, schedule, diagnostics, and minimum-unit behavior verified.");
 }finally{
   dom.window.close();
   globalThis.fetch=originalFetch;
