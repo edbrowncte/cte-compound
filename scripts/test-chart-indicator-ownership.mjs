@@ -4,7 +4,7 @@ import fs from "node:fs";
 const ownership=fs.readFileSync(new URL("../public/chart-indicator-ownership.js",import.meta.url),"utf8");
 const worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8");
 
-assert.match(ownership,/CTE_CHART_INDICATOR_OWNERSHIP@1\.0\.0/);
+assert.match(ownership,/CTE_CHART_INDICATOR_OWNERSHIP@1\.0\.1/);
 assert.match(ownership,/canonicalChartDefinition=function\(strategy\)\{return ownedDefinition\(strategy\);\}/,"chart definition must be the selected indicator only");
 assert.doesNotMatch(ownership,/fan=CHART_INDICATORS\.ASSET|price:\[\.\.\.fan/,"HTL Asset must not be injected into every indicator selection");
 assert.match(ownership,/if\(id==="ASSET"\)\{\s*selected\.asset=htl\.asset;\s*selected\.inverse=htl\.inverse;/s,"HTL Asset must have a self-contained selected-indicator path");
@@ -14,10 +14,14 @@ assert.doesNotMatch(comboBlock,/\["asset"|\["inverse"/,"COMBO display must not c
 assert.match(ownership,/drawChart=function\(\)\{[\s\S]*selectedIndicatorSet\(state\.chartCandles,length,strategy\)[\s\S]*indicatorSignalSeries\(state\.chartCandles,indicators,strategy,filter\)/,"main chart overlay and signals must come from the same selected indicator");
 assert.match(ownership,/drawEvalCharts=function\(\)\{[\s\S]*selectedIndicatorSet\(state\.evalCandles,length,strategy\)[\s\S]*indicatorSignalSeries\(state\.evalCandles,indicators,strategy,filter\)/,"evaluation chart overlay and signals must come from the same selected indicator");
 assert.match(ownership,/selected indicator exclusively owns its overlay and BUY\/SELL signals/,"visible chart copy must state the ownership contract");
+assert.match(ownership,/function removeDuplicateChartMetadataRow\(\)/,"duplicate chart metadata strip must have an explicit removal path");
+for(const label of ["CURRENCY PAIR","TIMEFRAME","STRATEGY","LENGTH","FILTER"])assert.match(ownership,new RegExp(label),`duplicate metadata removal must identify ${label}`);
+assert.match(ownership,/node\.querySelector\("select,input,button,canvas"\)/,"interactive chart controls must never be removed with the duplicate strip");
+assert.match(ownership,/new MutationObserver\(\(\)=>removeDuplicateChartMetadataRow\(\)\)/,"duplicate metadata strip must stay removed after dynamic rerenders");
 assert.match(ownership,/const height=Math\.max\(300,Math\.round\(stage\.getBoundingClientRect\(\)\.height/,"Weekly Bar height must derive from the main chart stage");
 assert.match(ownership,/aside\.style\.height=`\$\{height\}px`/);
 assert.match(ownership,/body\.style\.minHeight="0"/,"legacy weekly minimum height must be neutralized");
 assert.match(ownership,/ResizeObserver\(synchronizeWeeklyBar\)/,"Weekly Bar must remain synchronized through chart resize/maximize changes");
 assert.match(worker,/html=html\.replace\('\<\/body\>'[^;]*chart-indicator-ownership\.js/s,"ownership repair must load after the main inline chart runtime");
 
-console.log("Chart indicator ownership certification passed: selected indicator exclusively owns overlay/signals, HTL is no longer injected into other indicators, and Weekly Bar height follows the main chart.");
+console.log("Chart indicator ownership certification passed: one selected indicator owns overlay/signals, duplicate chart metadata remains removed, and Weekly Bar height follows the main chart.");
