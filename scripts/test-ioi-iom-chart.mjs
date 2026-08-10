@@ -9,7 +9,7 @@ sandbox.globalThis=sandbox;
 vm.runInNewContext(source,sandbox,{filename:"chart-ioi-iom.js"});
 const api=sandbox.CTEChartIOIIOM;
 assert.ok(api,"IOI/IOM chart module must publish its testable formula surface");
-assert.equal(api.VERSION,"CTE_CHART_IOI_IOM@1.0.0");
+assert.equal(api.VERSION,"CTE_CHART_IOI_IOM@1.0.1");
 
 const candles=[10,11,12,13,14,15].map((close,index)=>({close,time:`t${index}`}));
 const htl={asset:[12,12,13,14,15,16],inverse:[8,9,10,11,12,13]};
