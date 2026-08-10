@@ -16,7 +16,7 @@ assert.deepEqual(owned.map(signal=>signal.direction),[1,-1,1]);
 assert.deepEqual(owned.map(signal=>signal.signalIndex),[1,3,5]);
 assert.equal(DIRECTIONAL_OWNERSHIP_VERSION,"ALTERNATING_DIRECTIONAL_OWNERSHIP@1.0.0");
 
-const candles=Array.from({length:8},(_,index)=>({time:`t${index}`,open:1+index*.001,high:1+index*.0015,low:1+index*.0005,close:1+index*.001,complete:true}));
+const candles=Array.from({length:8},(_,index)=>({time:new Date(Date.UTC(2026,0,1,0,index)).toISOString(),open:1+index*.001,high:1+index*.0015,low:1+index*.0005,close:1+index*.001,complete:true}));
 const trades=buildRegisteredTrades(candles,owned,"EUR_USD");
 assert.equal(trades.length,2,"same-direction indicator repeats must be removed before performance trades are built");
 assert.deepEqual(trades.map(trade=>trade.direction),[1,-1]);
