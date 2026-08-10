@@ -21,17 +21,12 @@ assert.match(renderer,/options\.signals/);
 assert.match(renderer,/\?"BUY":"SELL"/);
 assert.match(renderer,/signal\.current\?" ACTIVE":""/);
 
-assert.match(html,/id="chartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="chartStage"/);
-assert.match(html,/id="evalChartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="evalChartStage"/);
-assert.equal((html.match(/data-chart-model="capitalization"/g)||[]).length,3,"Analytical, HTL Event, and Capitalization facilities must each use the complete Capitalization chart component");
-assert.match(html,/id="chartPanel"[^>]*data-chart-model="capitalization"/);
-assert.match(html,/id="eventChartPanel"[^>]*data-chart-model="capitalization"/);
-assert.match(html,/id="evalChartPanel"[^>]*data-chart-model="capitalization"/);
-assert.match(html,/Capitalization Model Chart · Analytical Compound/);
-assert.match(html,/Capitalization Model Chart · HTL Event/);
-assert.match(html,/class="event-chart-stage unified-chart-stage"/);
+for(const id of ["chartStage","evalChartStage","chartPanel","eventChartPanel","evalChartPanel","chart","eventChart","evalChart","oscillatorCanvas","weeklyCognitionCanvas"]){
+  assert.doesNotMatch(html,new RegExp(`id="${id}"`),`${id} must remain deleted`);
+}
+assert.equal((html.match(/data-chart-model="capitalization"/g)||[]).length,0,"visual chart components must remain deleted");
 assert.match(html,/id="evalIndicatorLegend"/);
-assert.match(html,/id="evalChartLength"[^>]*max="500"/);
+assert.match(html,/id="evaluationRuntimeState"[^>]*hidden/);
 assert.match(html,/unifiedIndicatorCache:new Map\(\)/);
 assert.match(html,/maximumHistoryKeys:new Set\(\)/);
 assert.match(html,/function unifiedIndicatorSet\(pair,timeframe,candles,length\)/);
@@ -82,4 +77,4 @@ assert.match(html,/function browserDiagnosticAssessment\(server\)/);
 assert.match(html,/SCHEDULE_COVERAGE_INCOMPLETE/);
 assert.match(html,/setInterval\(\(\)=>\{if\(marketDataReady\(\)&&!document\.hidden&&!state\.scheduleLoading&&state\.scheduleEvaluations\.size<INSTRUMENTS\.length\*TIMEFRAMES\.length\)void loadSchedule\("progressive"\);\},5000\)/);
 
-console.log("One canonical Evaluation-style 5,000-candle causal chart is shared by Analytical, HTL Event, and Evaluation facilities.");
+console.log("All visual chart hosts are absent; causal indicator and signal computation remains available to non-chart facilities.");
