@@ -31,7 +31,7 @@ const oandaTelemetry={requests:0,retries:0,timeouts:0,networkFailures:0,failures
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{...JSON_HEADERS,...headers}});
 const diagnosticId=()=>crypto.randomUUID();
-function releaseAuthorized(env){if(String(env.CTE_RELEASE_ENFORCEMENT||"")!==RELEASE_ENFORCEMENT)return true;return String(env.CTE_RELEASE_CONTRACT||"")===RELEASE_CONTRACT&&/^[0-9a-f]{40}$/i.test(String(env.CTE_RELEASE_SHA||""));}
+function releaseAuthorized(env){if(String(env.CTE_RELEASE_ENFORCEMENT||"")!==RELEASE_ENFORCEMENT)return true;const sourceSha=/^[0-9a-f]{40}$/i.test(String(env.CTE_RELEASE_SHA||"")),versionId=/^[0-9a-f-]{32,40}$/i.test(String(env.CF_VERSION_METADATA?.id||""));return String(env.CTE_RELEASE_CONTRACT||"")===RELEASE_CONTRACT&&(sourceSha||versionId);}
 function assertCurrentRelease(env){if(!releaseAuthorized(env))throw decorateError(new Error("This Worker release is unidentified or obsolete and is not authorized to run."),{status:503,code:"LEGACY_RELEASE_REJECTED",stage:"RELEASE_AUTHORITY",retryable:false});}
 function decorateError(error,{status,code,stage,retryable,upstreamStatus,attempts}={}){
   const target=error instanceof Error?error:new Error(String(error||"Request failed."));
@@ -204,7 +204,7 @@ async function handleCandles(env,url) {
 }
 
 
-function deploymentMetadata(env){const metadata=env.CF_VERSION_METADATA||{};return{worker:"cte-compound",versionId:metadata.id||null,versionTag:metadata.tag||null,versionTimestamp:metadata.timestamp||null,releaseContract:env.CTE_RELEASE_CONTRACT||null,releaseSha:env.CTE_RELEASE_SHA||null,releaseAuthorized:releaseAuthorized(env)};}
+function deploymentMetadata(env){const metadata=env.CF_VERSION_METADATA||{};return{worker:"cte-compound",versionId:metadata.id||null,versionTag:metadata.tag||null,versionTimestamp:metadata.timestamp||null,releaseContract:env.CTE_RELEASE_CONTRACT||null,releaseSha:env.CTE_RELEASE_SHA||null,releaseIdentity:env.CTE_RELEASE_SHA||metadata.id||null,releaseAuthorized:releaseAuthorized(env)};}
 async function handlePlatformVersion(env){return json({deployment:deploymentMetadata(env)});}
 
 async function handlePlatformDiagnostic(env,url){

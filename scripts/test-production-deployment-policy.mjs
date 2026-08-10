@@ -26,4 +26,6 @@ let response=await worker.fetch(request,{ASSETS:assets,CTE_RELEASE_ENFORCEMENT:"
 assert.equal(response.status,503);assert.equal((await response.json()).code,"LEGACY_RELEASE_REJECTED");
 response=await worker.fetch(request,{ASSETS:assets,CTE_RELEASE_ENFORCEMENT:"ENFORCE_CURRENT_RELEASE",CTE_RELEASE_CONTRACT:"CTE_COMPOUND_CAPITALIZATION_CHARTS@1.0.0",CTE_RELEASE_SHA:"a".repeat(40)});
 assert.equal(response.status,200);assert.equal(await response.text(),"current");
+response=await worker.fetch(request,{ASSETS:assets,CTE_RELEASE_ENFORCEMENT:"ENFORCE_CURRENT_RELEASE",CTE_RELEASE_CONTRACT:"CTE_COMPOUND_CAPITALIZATION_CHARTS@1.0.0",CF_VERSION_METADATA:{id:"21e019cb-fd70-48b0-87f0-a4d4a3285bab"}});
+assert.equal(response.status,200);assert.equal(await response.text(),"current");
 console.log("Production deployment is restricted to the verified current main SHA and the Worker fails closed without the current release contract.");
