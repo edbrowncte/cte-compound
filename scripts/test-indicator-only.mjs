@@ -47,16 +47,20 @@ assert.match(unitsEngine,/class HtlEngine extends IndicatorOnlyEngine/,"UNITS mu
 assert.match(unitsEngine,/state\.indicatorOnlyUnits=units/,"IO units must persist independently of signal-definition controls");
 assert.match(unitsEngine,/ioControl=\{\.\.\.control,units\}/,"IO execution must receive the persisted units value");
 assert.match(unitsEngine,/executeIndicatorOnlyUnits\(candidate,token,accountId,state\)/,"IO must have its own unit-aware entry path");
-assert.match(unitsEngine,/requested>safeCapacity/,"IO must withhold an oversized requested unit amount rather than silently resize it");
+assert.match(unitsEngine,/requested>available/,"IO must compare the requested amount directly with OANDA directional unitsAvailable");
+assert.doesNotMatch(unitsEngine,/safeCapacity|\.8\)/,"IO must not impose an invented directional-capacity haircut");
+assert.doesNotMatch(unitsEngine,/marginAvailable/,"IO sizing authority must come from OANDA directional unitsAvailable rather than an additional margin gate");
 assert.match(unitsEngine,/units:String\(signed\)/,"OANDA IO order must use the configured signed unit amount");
 assert.match(unitsEngine,/indicatorOnlyUnits:normalizeIndicatorOnlyUnits\(candidate\.IO\.units\)/,"ledger decision context must disclose IO units");
 
 const ui=fs.readFileSync(new URL("../public/indicator-only.js",import.meta.url),"utf8");
 for(const id of ["indicatorOnlyToggle","indicatorOnlyPair","indicatorOnlyTimeframe","indicatorOnlyIndicator","indicatorOnlyLength","indicatorOnlyFilter","indicatorOnlyUnits"])assert.match(ui,new RegExp(id));
+assert.match(ui,/const panel=el\("chartPanel"\),anchor=panel\?\.querySelector\("\.panel-head"\)/,"IO control surface must mount in the Forensic Capitalization Chart header");
+assert.match(ui,/anchor\.appendChild\(root\)/,"IO control must remain visibly inside the chart header");
 assert.match(ui,/STRUCTURAL_IDS/,"IO signal-definition controls must remain a separate locked structural set");
 assert.match(ui,/unitsNode\.disabled=busy/,"UNITS must remain editable while IO is engaged except during persistence");
 assert.match(ui,/· U\$\{io\.units\}/,"IO active status must display the configured units");
-assert.doesNotMatch(ui,/chartPair|chartTimeframe|chartStrategy|chartLength|chartFilter/,"Forensic chart controls and IO controls must remain independent");
+assert.doesNotMatch(ui,/chartPair|chartTimeframe|chartStrategy|chartLength|chartFilter/,"Forensic chart parameter values and IO parameter values must remain independent");
 assert.match(ui,/Disengage|disabled=enabled\|\|busy|lockNormal\(enabled\)/,"active IO structural controls must lock competing automated controls");
 assert.match(ui,/\/api\/control\/selectedPairs/,"IO UI must persist through the existing authenticated control route");
 
@@ -67,4 +71,4 @@ assert.match(worker,/indicatorOnlyAuthority\(env\)/,"all browser order submissio
 assert.match(worker,/Disengage IO before submitting any manual or candidate order/,"manual and candidate orders must be rejected while IO is active");
 assert.match(worker,/Order route authority unavailable; order withheld/,"order route must fail closed when IO authority cannot be verified");
 
-console.log("Indicator Only certification passed: separate pair/timeframe/indicator/length/filter/units controls, exact requested IO sizing within directional capacity, exclusive selected-indicator authority, server-side order lock, protected reversal path, and 5s/30s/60s cadence are wired without coupling to the Forensic chart.");
+console.log("Indicator Only certification passed: the independent IO pair/timeframe/indicator/length/filter/units control is mounted in the Forensic chart header, uses exact OANDA directional unitsAvailable without a haircut, preserves exclusive selected-indicator authority, server-side order lock, protected reversal path, and 5s/30s/60s cadence.");
