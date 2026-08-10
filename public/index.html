@@ -418,7 +418,7 @@
 
     <nav class="app-tabs" role="tablist" aria-label="Analytical compound facilities">
       <button class="app-tab" id="analysisTab" role="tab" aria-selected="true" aria-controls="analysisPanel" type="button">Analytical Compound</button>
-      <button class="app-tab" id="eventTab" role="tab" aria-selected="false" aria-controls="eventPanel" type="button">HTL Event Chart</button>
+      <button class="app-tab" id="eventTab" role="tab" aria-selected="false" aria-controls="eventPanel" type="button">HTL Schedule</button>
       <button class="app-tab" id="performanceTab" role="tab" aria-selected="false" aria-controls="performancePanel" type="button">Configuration Optimizer &amp; Event Results</button>
       <button class="app-tab" id="evaluationTab" role="tab" aria-selected="false" aria-controls="evaluationPanel" type="button">Capitalization Model</button>
     </nav>
@@ -455,7 +455,21 @@
         </div>
       </section></details>
 
-      <div id="analyticalRuntimeState" hidden aria-hidden="true"><select id="chartPair"></select><select id="chartTimeframe"></select><select id="chartStrategy"></select><input id="chartLength" type="number" min="3" max="500" value="10"><input id="chartFilter" type="number" min="0" max="10" step="0.1" value="0"><button id="refreshChart" disabled></button><button id="zoomOut"></button><button id="zoomIn"></button><button id="indentOut"></button><button id="indentIn"></button><button id="crosshairToggle"></button><button id="maximizeChart"></button><span id="metricSignal"></span><span id="metricConfidence"></span><span id="metricRegime"></span><span id="metricClose"></span><span id="metricTime"></span><span id="metricBars"></span><span id="indicatorLegend"></span><span id="chartMessage"></span><span id="compartments"></span></div>
+      <section class="panel chart-panel capitalization-chart-component" id="chartPanel" data-chart-model="canonical-single" aria-labelledby="chartTitle">
+        <div class="panel-head"><div class="panel-title"><h2 id="chartTitle">Forensic Capitalization Chart</h2><p>One synchronized completed-candle chart · constant HTL dual fan · selectable repository indicator · attached price/time crosshair.</p></div>
+          <div class="chart-toolbar">
+            <label class="field"><span>Currency pair</span><select id="chartPair"></select></label><label class="field"><span>Timeframe</span><select id="chartTimeframe"></select></label><label class="field"><span>Indicator</span><select id="chartStrategy"></select></label>
+            <label class="field"><span>Length</span><input id="chartLength" type="number" min="3" max="500" value="10"></label><label class="field"><span>Filter</span><input id="chartFilter" type="number" min="0" max="10" step="0.1" value="0"></label>
+            <button id="refreshChart" type="button" disabled>Refresh</button><button id="zoomOut" type="button">Zoom −</button><button id="zoomIn" type="button">Zoom +</button><button id="leftIndentOut" type="button">Left +</button><button id="leftIndentIn" type="button">Left −</button><button id="indentOut" type="button">Right +</button><button id="indentIn" type="button">Right −</button><button id="crosshairToggle" type="button" aria-pressed="true">Crosshair on</button><button id="maximizeChart" type="button">Maximize</button>
+          </div></div>
+        <div class="chart-summary"><div class="metric"><span>Signal</span><strong id="metricSignal">—</strong></div><div class="metric"><span>Confidence</span><strong id="metricConfidence">—</strong></div><div class="metric"><span>Regime</span><strong id="metricRegime">—</strong></div><div class="metric"><span>Current price</span><strong id="metricClose">—</strong></div><div class="metric"><span>Completed candle</span><strong id="metricTime">—</strong></div><div class="metric"><span>Visible bars</span><strong id="metricBars">120</strong></div></div>
+        <div class="indicator-legend" id="indicatorLegend" aria-label="Constant dual fan and selected indicator legend"></div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,20%);gap:8px;">
+          <div style="min-width:0;"><div class="chart-stage unified-chart-stage" id="chartStage"><canvas id="chart" aria-label="Interactive OANDA candlestick chart"></canvas><div class="chart-message" id="chartMessage">No completed candles loaded</div></div><div class="panel-head" style="padding:6px 12px;"><strong>MAS / IM Pressure</strong></div><div style="height:150px;background:#080c12;"><canvas id="oscillatorCanvas" style="width:100%;height:100%;display:block;"></canvas></div></div>
+          <aside class="panel" style="min-width:0;"><div class="panel-head" style="padding:8px;"><strong id="weeklyCognitionTitle">Weekly cognition · —</strong></div><div style="height:100%;min-height:420px;background:#080c12;"><canvas id="weeklyCognitionCanvas" style="width:100%;height:100%;display:block;"></canvas></div></aside>
+        </div>
+        <div class="compartments" id="compartments"></div>
+      </section>
       <details class="facility-details" open><summary>MTF Forecast · Capitalization Perspective</summary><section aria-labelledby="mtfTitle">
         <div class="panel-head"><div class="panel-title"><h2 id="mtfTitle">MTF Forecast · Capitalization Perspective</h2><p id="mtfScope">Selected instrument · step-wise HTL and Analytical Compound alignment</p></div></div>
         <div class="mtf-wrap"><table class="mtf-table"><thead><tr><th>Timeframe</th><th>HTL Event</th><th>Analytical Compound</th><th>Agreement</th><th>Confidence</th><th>Step</th></tr></thead><tbody id="mtfBody"><tr><td colspan="6">Load the timeframe schedule.</td></tr></tbody></table></div>
@@ -468,7 +482,7 @@
           <!-- Will be populated dynamically by JS -->
         </div>
 
-        <div id="evaluationRuntimeState" hidden aria-hidden="true"><select id="evalChartPair"></select><select id="evalChartTimeframe"></select><select id="evalChartStrategy"></select><input id="evalChartLength" type="number" min="3" max="500" value="10"><input id="evalChartFilter" type="number" min="0" max="10" step="0.1" value="0"><button id="evalRefreshChart"></button><button id="evalZoomOut"></button><button id="evalZoomIn"></button><button id="evalIndentOut"></button><button id="evalIndentIn"></button><button id="evalCrosshairToggle"></button><button id="evalMaximizeChart"></button><button id="evalConfirmButton"></button><span id="evalMetricSignal"></span><span id="evalMetricMas"></span><span id="evalMetricIm"></span><span id="evalMetricRatio"></span><span id="evalMetricRequiredIm"></span><span id="evalMetricTransition"></span><span id="evalMetricRegime"></span><span id="evalMetricPipsHour"></span><span id="evalIndicatorLegend"></span><span id="evalChartMessage"></span><span id="evalChartTitle"></span><span id="evalChartSubtitle"></span><span id="weeklyCognitionTitle"></span></div>
+        <div id="evaluationRuntimeState" hidden aria-hidden="true"><select id="evalChartPair"></select><select id="evalChartTimeframe"></select><select id="evalChartStrategy"></select><input id="evalChartLength" type="number" min="3" max="500" value="10"><input id="evalChartFilter" type="number" min="0" max="10" step="0.1" value="0"><button id="evalRefreshChart"></button><button id="evalZoomOut"></button><button id="evalZoomIn"></button><button id="evalIndentOut"></button><button id="evalIndentIn"></button><button id="evalCrosshairToggle"></button><button id="evalMaximizeChart"></button><button id="evalConfirmButton"></button><span id="evalMetricSignal"></span><span id="evalMetricMas"></span><span id="evalMetricIm"></span><span id="evalMetricRatio"></span><span id="evalMetricRequiredIm"></span><span id="evalMetricTransition"></span><span id="evalMetricRegime"></span><span id="evalMetricPipsHour"></span><span id="evalIndicatorLegend"></span><span id="evalChartMessage"></span><span id="evalChartTitle"></span><span id="evalChartSubtitle"></span></div>
 
         <!-- Bottom Row (Evaluation Table Container) -->
         <section class="panel" id="evaluationTableContainer" style="min-width:0;">
@@ -692,6 +706,7 @@
     eventDragStartOffset:0,
     visibleBars:120,
     offsetBars:0,
+    leftIndent:24,
     rightIndent:72,
     crosshairEnabled:true,
     crosshair:null,
@@ -1456,14 +1471,15 @@
     const canvas=el("oscillatorCanvas");if(!canvas)return;
     const ctx=canvas.getContext("2d"),rect=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1,width=Math.max(100,rect.width||canvas.clientWidth||canvas.parentNode?.clientWidth||0),height=Math.max(100,rect.height||canvas.clientHeight||canvas.parentNode?.clientHeight||0);
     canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#080c12";ctx.fillRect(0,0,width,height);
-    const visible=visibleEvalSlice(),metrics=state.evalMasImMetrics;if(!visible.candles.length||!metrics)return;
-    const count=Math.min(state.evalVisibleBars,state.evalCandles.length),maxOffset=Math.max(0,state.evalCandles.length-count),offset=clamp(state.evalOffsetBars,0,maxOffset),visibleEnd=state.evalCandles.length-offset,visibleStart=Math.max(0,visibleEnd-count),visibleCandles=state.evalCandles.slice(visibleStart,visibleEnd),margin={top:12,right:60+state.evalRightIndent,bottom:12,left:40},plot={x:margin.left,y:margin.top,w:width-margin.left-margin.right,h:height-margin.top-margin.bottom};
-    const align=source=>{const out=new Array(state.evalCandles.length).fill(NaN),start=Math.max(0,out.length-source.length);for(let index=0;index<source.length&&start+index<out.length;index++)out[start+index]=source[index];return out;},mas=align(metrics.MAS_SERIES||[]),im=align(metrics.IM_SERIES||[]),valueToY=value=>plot.y+(1-clamp(value,0,1))*plot.h,barWidth=plot.w/Math.max(1,visibleCandles.length),indexToX=index=>plot.x+(index+.5)*barWidth,gridEndX=width-60;
+    const metrics=state.evalMasImMetrics,candles=state.chartCandles||[];if(!candles.length||!metrics)return;
+    const count=Math.min(state.visibleBars,candles.length),maxOffset=Math.max(0,candles.length-count),offset=clamp(state.offsetBars,0,maxOffset),visibleEnd=candles.length-offset,visibleStart=Math.max(0,visibleEnd-count),visibleCandles=candles.slice(visibleStart,visibleEnd),margin={top:12,right:60+state.rightIndent,bottom:12,left:40+state.leftIndent},plot={x:margin.left,y:margin.top,w:Math.max(80,width-margin.left-margin.right),h:height-margin.top-margin.bottom};
+    const align=source=>{const out=new Array(candles.length).fill(NaN),start=Math.max(0,out.length-source.length);for(let index=0;index<source.length&&start+index<out.length;index++)out[start+index]=source[index];return out;},mas=align(metrics.MAS_SERIES||[]),im=align(metrics.IM_SERIES||[]),valueToY=value=>plot.y+(1-clamp(value,0,1))*plot.h,barWidth=plot.w/Math.max(1,visibleCandles.length),indexToX=index=>plot.x+(index+.5)*barWidth,gridEndX=width-60;
     ctx.font="8px ui-monospace,monospace";ctx.textAlign="right";
     for(const value of [0,0.25,0.5,0.75,1]){const y=valueToY(value);ctx.strokeStyle=value===0.5?"#2b3543":"#18212c";ctx.beginPath();ctx.moveTo(plot.x,y);ctx.lineTo(gridEndX,y);ctx.stroke();ctx.fillStyle="#8b98aa";ctx.fillText(value.toFixed(2),plot.x-5,y+3);}ctx.textAlign="left";
     const draw=(values,color)=>{ctx.strokeStyle=color;ctx.lineWidth=1.8;ctx.beginPath();let started=false;for(let index=visibleStart;index<visibleEnd;index++){const value=values[index];if(!Number.isFinite(value)){started=false;continue;}const x=indexToX(index-visibleStart),y=valueToY(value);if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);}ctx.stroke();};
     draw(mas,"#ef6b73");draw(im,"#48c78e");ctx.fillStyle="#ef6b73";ctx.fillText("MAS",plot.x+5,plot.y+10);ctx.fillStyle="#48c78e";ctx.fillText("IM",plot.x+38,plot.y+10);
-    if(state.evalCrosshairEnabled&&state.evalCrosshair!==null&&state.evalCrosshair>=0&&state.evalCrosshair<visibleCandles.length){const cx=indexToX(state.evalCrosshair),absolute=visibleStart+state.evalCrosshair,m=mas[absolute],i=im[absolute],ratio=Number.isFinite(m)&&m>1e-12&&Number.isFinite(i)?i/m:Number.isFinite(i)&&i>0?Infinity:0;ctx.setLineDash([3,3]);ctx.strokeStyle="#a7b5c7";ctx.beginPath();ctx.moveTo(cx,plot.y);ctx.lineTo(cx,plot.y+plot.h);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#edf2ff";ctx.fillText(`MAS ${Number.isFinite(m)?m.toFixed(3):"—"} · IM ${Number.isFinite(i)?i.toFixed(3):"—"} · R ${Number.isFinite(ratio)?ratio.toFixed(2):ratio===Infinity?"∞":"—"}`,plot.x+75,plot.y+10);}
+    const crosshairIndex=state.crosshairEnabled&&Number.isFinite(state.crosshair?.x)?clamp(Math.floor((state.crosshair.x-plot.x)/Math.max(1,barWidth)),0,visibleCandles.length-1):-1;
+    if(crosshairIndex>=0){const cx=indexToX(crosshairIndex),absolute=visibleStart+crosshairIndex,m=mas[absolute],i=im[absolute],ratio=Number.isFinite(m)&&m>1e-12&&Number.isFinite(i)?i/m:Number.isFinite(i)&&i>0?Infinity:0;ctx.setLineDash([3,3]);ctx.strokeStyle="#a7b5c7";ctx.beginPath();ctx.moveTo(cx,plot.y);ctx.lineTo(cx,plot.y+plot.h);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#edf2ff";ctx.fillText(`MAS ${Number.isFinite(m)?m.toFixed(3):"—"} · IM ${Number.isFinite(i)?i.toFixed(3):"—"} · R ${Number.isFinite(ratio)?ratio.toFixed(2):ratio===Infinity?"∞":"—"}`,plot.x+75,plot.y+10);}
   }
 
   function drawWeeklyCognition(pair,metrics){
@@ -1717,7 +1733,17 @@
       if(!state.scheduleLoading)queueProgressiveSchedule(0);
     }
     el("chartMessage").hidden=true;updateChartSummary();updateCompartments();markSelectedRow();drawChart();renderStrategyConfiguration();renderMacroPerformance();
+    void refreshMainPressure(instrument,timeframe);
     void refreshCausalChartAnalysis(instrument,timeframe,candles,resolved,state.selectedStrategy);
+  }
+
+  async function refreshMainPressure(pair,timeframe){
+    try{
+      const frames=await ensureEvaluationPairFrames(pair,timeframe);if(pair!==state.selectedInstrument||timeframe!==state.selectedTimeframe)return;
+      const analysis=state.scheduleEvaluations.get(scheduleKey(pair,timeframe)),active=analysis?.latest?.[state.selectedStrategy],events=analysis?.series?.[state.selectedStrategy]||[];
+      state.evalMasImMetrics=evaluationFramesReady(frames,timeframe)?calculateMASIMPressure(pair,timeframe,frames,{direction:Number(active?.direction)||0,events}):null;
+      drawOscillatorChart();drawWeeklyCognition(pair,state.evalMasImMetrics);
+    }catch(error){console.error("Failed to load synchronized MAS/IM pressure:",error);state.evalMasImMetrics=null;drawOscillatorChart();drawWeeklyCognition(pair,null);}
   }
 
   async function loadUnifiedChartCandles(instrument,timeframe,controller=null,priority=100,force=false){
@@ -1791,7 +1817,7 @@
     const width=Math.max(320,Math.round(rect.width)),height=Math.max(300,Math.round(rect.height));
     if (canvas.width!==Math.round(width*dpr)||canvas.height!==Math.round(height*dpr)) { canvas.width=Math.round(width*dpr); canvas.height=Math.round(height*dpr); }
     const ctx=canvas.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
-    const hasLeftZ=Boolean((CHART_INDICATORS[state.selectedStrategy]?.z||[]).length),margin={top:18,right:78+state.rightIndent,bottom:30,left:hasLeftZ?62:10};
+    const hasLeftZ=Boolean((CHART_INDICATORS[state.selectedStrategy]?.z||[]).length),margin={top:18,right:78+state.rightIndent,bottom:30,left:(hasLeftZ?62:40)+state.leftIndent};
     return {canvas,ctx,width,height,dpr,plot:{x:margin.left,y:margin.top,w:Math.max(80,width-margin.left-margin.right),h:Math.max(80,height-margin.top-margin.bottom)},axisX:width-68,axisLeft:10,hasLeftZ};
   }
   // Dual Fan: causal active regime fan plus an independently anchored adverse fan.
@@ -1831,7 +1857,7 @@
   function drawChart() {
     const pair=state.selectedInstrument,timeframe=state.selectedTimeframe,strategy=state.selectedStrategy,length=clamp(Math.round(Number(el("chartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH);
     const indicators=unifiedIndicatorSet(pair,timeframe,state.chartCandles,length);
-    const filter=Math.max(0,Number(el("chartFilter")?.value)||0),signals=indicatorSignalSeries(state.chartCandles,indicators,strategy,filter);drawCapitalizationChartSurface({canvasId:"chart",messageId:"chartMessage",candles:state.chartCandles,pair,timeframe,strategy,length,visibleBars:state.visibleBars,offsetBars:state.offsetBars,rightIndent:state.rightIndent,crosshairEnabled:state.crosshairEnabled,crosshair:state.crosshair,legendId:"indicatorLegend",indicators,signals});
+    const filter=Math.max(0,Number(el("chartFilter")?.value)||0),signals=indicatorSignalSeries(state.chartCandles,indicators,strategy,filter);drawCapitalizationChartSurface({canvasId:"chart",messageId:"chartMessage",candles:state.chartCandles,pair,timeframe,strategy,length,visibleBars:state.visibleBars,offsetBars:state.offsetBars,rightIndent:state.rightIndent,crosshairEnabled:state.crosshairEnabled,crosshair:state.crosshair,legendId:"indicatorLegend",indicators,signals});drawOscillatorChart();drawWeeklyCognition(pair,state.evalMasImMetrics);
   }
 
   // Canonical HTL series construction.
@@ -1895,9 +1921,10 @@
     let indicators=state.unifiedIndicatorCache.get(key);if(!indicators&&candles?.length){indicators=normalizeUnifiedIndicators(candles,causalIndicatorSetFast(candles,resolvedLength));state.unifiedIndicatorCache.set(key,indicators);while(state.unifiedIndicatorCache.size>12)state.unifiedIndicatorCache.delete(state.unifiedIndicatorCache.keys().next().value);}return indicators||normalizeUnifiedIndicators(candles,{});
   }
   function normalizeUnifiedIndicators(candles,indicators={}){const size=candles?.length||0,keys=new Set(Object.values(CHART_INDICATORS).flatMap(definition=>[...(definition.price||[]),...(definition.z||[]),...(definition.osc||[])].map(([key])=>key)));return Object.fromEntries([...keys].map(key=>{const values=Array.isArray(indicators?.[key])?indicators[key]:[];return[key,Array.from({length:size},(_,index)=>Number.isFinite(values[index])?values[index]:null)];}));}
-  function renderUnifiedIndicatorLegend(id,strategy,indicators,latestIndex){const node=el(id);if(!node)return;const definition=CHART_INDICATORS[strategy]||CHART_INDICATORS.ASSET;node.innerHTML=[...(definition.price||[]),...(definition.z||[]),...(definition.osc||[])].map(([key,label,color])=>`<span><i style="background:${color}"></i>${label} ${Number.isFinite(indicators?.[key]?.[latestIndex])?Number(indicators[key][latestIndex]).toFixed(5):"—"}</span>`).join("");}
+  function canonicalChartDefinition(strategy){const selected=CHART_INDICATORS[strategy]||CHART_INDICATORS.ASSET,fan=CHART_INDICATORS.ASSET.price||[],seen=new Set(fan.map(([key])=>key));return{price:[...fan,...(selected.price||[]).filter(([key])=>!seen.has(key))],z:selected.z||[],osc:selected.osc||[]};}
+  function renderUnifiedIndicatorLegend(id,strategy,indicators,latestIndex){const node=el(id);if(!node)return;const definition=canonicalChartDefinition(strategy);node.innerHTML=[...(definition.price||[]),...(definition.z||[]),...(definition.osc||[])].map(([key,label,color])=>`<span><i style="background:${color}"></i>${label} ${Number.isFinite(indicators?.[key]?.[latestIndex])?Number(indicators[key][latestIndex]).toFixed(5):"—"}</span>`).join("");}
   function renderUnifiedChartSurface({canvasId,candles,pair,timeframe,strategy,length,visibleBars,offsetBars,rightIndent,crosshairEnabled,crosshair,legendId,indicators=null,signals=[]}){
-    const canvas=el(canvasId);if(!canvas||!globalThis.CTEUnifiedChart)return null;const definition=CHART_INDICATORS[strategy]||CHART_INDICATORS.ASSET,resolved=indicators||unifiedIndicatorSet(pair,timeframe,candles,length),live=offsetBars===0?liveMid(pair):NaN,result=CTEUnifiedChart.render({canvas,candles,indicators:resolved,indicatorSet:definition,signals,visibleBars,offsetBars,rightIndent,crosshairEnabled,crosshair,livePrice:live,formatPrice:value=>formatPrice(value,pair)});renderUnifiedIndicatorLegend(legendId,strategy,resolved,result?.latestIndex??-1);return result;
+    const canvas=el(canvasId);if(!canvas||!globalThis.CTEUnifiedChart)return null;const definition=canonicalChartDefinition(strategy),resolved=indicators||unifiedIndicatorSet(pair,timeframe,candles,length),live=offsetBars===0?liveMid(pair):NaN,result=CTEUnifiedChart.render({canvas,candles,indicators:resolved,indicatorSet:definition,signals,visibleBars,offsetBars,leftIndent:state.leftIndent,rightIndent,crosshairEnabled,crosshair,livePrice:live,formatPrice:value=>formatPrice(value,pair)});renderUnifiedIndicatorLegend(legendId,strategy,resolved,result?.latestIndex??-1);return result;
   }
   function drawCapitalizationChartSurface(options){const message=el(options.messageId);try{const indicators=normalizeUnifiedIndicators(options.candles,options.indicators||unifiedIndicatorSet(options.pair,options.timeframe,options.candles,options.length)),result=renderUnifiedChartSurface({...options,indicators});if(message&&options.candles?.length)message.hidden=true;return result;}catch(error){console.error("Capitalization chart surface failed:",error);if(message){message.hidden=false;message.textContent="Chart data is being rebuilt from completed candles.";}state.unifiedIndicatorCache.clear();return null;}}
   async function causalIndicatorSet(data,length,token){await new Promise(resolve=>setTimeout(resolve,0));if(token!==state.chartCausalToken)return null;return causalIndicatorSetFast(data,length);}
@@ -2271,6 +2298,8 @@
     });
     el("zoomIn").addEventListener("click",()=>{state.visibleBars=clamp(Math.round(state.visibleBars*.8),30,300);updateChartSummary();drawChart();queuePlatformPreferenceSave();});
     el("zoomOut").addEventListener("click",()=>{state.visibleBars=clamp(Math.round(state.visibleBars*1.25),30,300);state.offsetBars=clamp(state.offsetBars,0,Math.max(0,state.chartCandles.length-state.visibleBars));updateChartSummary();drawChart();queuePlatformPreferenceSave();});
+    el("leftIndentOut").addEventListener("click",()=>{state.leftIndent=clamp(state.leftIndent+16,0,160);drawChart();queuePlatformPreferenceSave();});
+    el("leftIndentIn").addEventListener("click",()=>{state.leftIndent=clamp(state.leftIndent-16,0,160);drawChart();queuePlatformPreferenceSave();});
     el("indentOut").addEventListener("click",()=>{state.rightIndent=clamp(state.rightIndent+24,0,260);drawChart();queuePlatformPreferenceSave();});
     el("indentIn").addEventListener("click",()=>{state.rightIndent=clamp(state.rightIndent-24,0,260);drawChart();queuePlatformPreferenceSave();});
     el("crosshairToggle").addEventListener("click",event=>{state.crosshairEnabled=!state.crosshairEnabled;event.currentTarget.textContent=`Crosshair ${state.crosshairEnabled?"on":"off"}`;event.currentTarget.setAttribute("aria-pressed",String(state.crosshairEnabled));if(!state.crosshairEnabled)state.crosshair=null;drawChart();queuePlatformPreferenceSave();});
