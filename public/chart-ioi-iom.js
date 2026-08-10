@@ -1,7 +1,7 @@
 (function installIOIIOMChartIndicators(global){
   "use strict";
 
-  const VERSION="CTE_CHART_IOI_IOM@1.0.2";
+  const VERSION="CTE_CHART_IOI_IOM@1.0.3";
   const CHART_ONLY_IDS=new Set(["IOI","IOM"]);
   const PREFERENCE_KEY="cte-compound.chart-only-indicator";
   const cache=new Map();
@@ -32,21 +32,20 @@
   }
 
   function crossSignalSeries(candles=[],left=[],right=[],filter=0){
-    const threshold=Math.max(0,Number(filter)||0),signals=[];let owner=0,current=0;
+    const threshold=Math.max(0,Number(filter)||0),signals=[];let owner=0;
     for(let index=0;index<candles.length;index++){
       const spread=isFinite(left[index])&&isFinite(right[index])?Number(left[index])-Number(right[index]):NaN,direction=Number.isFinite(spread)?spread>threshold?1:spread<-threshold?-1:0:0;
-      current=direction;
       if(direction&&direction!==owner){signals.push({index,direction,time:candles[index]?.time,price:candles[index]?.close,current:false});owner=direction;}
     }
-    const lastIndex=candles.length-1;if(current&&lastIndex>=0&&signals.at(-1)?.index!==lastIndex)signals.push({index:lastIndex,direction:current,time:candles[lastIndex]?.time,price:candles[lastIndex]?.close,current:true});
+    if(signals.length)signals[signals.length-1]={...signals.at(-1),current:true};
     return signals;
   }
 
-  function latestOutput(strategy,indicators,filter=0){
+  function latestOutput(strategy,indicators,filter=0,ownerDirection=0){
     const left=strategy==="IOI"?indicators.ioi:indicators.ioiMean,right=strategy==="IOI"?indicators.ioiInverse:indicators.iomInverse,threshold=Math.max(0,Number(filter)||0);let index=Math.max(left?.length||0,right?.length||0)-1;
     while(index>=0&&(!isFinite(left?.[index])||!isFinite(right?.[index])))index--;
-    if(index<0)return{direction:0,score:0,confidence:null,regime:strategy==="IOI"?"IOI CROSS":"IOM CROSS",metrics:{}};
-    const spread=Number(left[index])-Number(right[index]),direction=spread>threshold?1:spread<-threshold?-1:0;
+    if(index<0)return{direction:Math.sign(Number(ownerDirection)||0),score:0,confidence:null,regime:strategy==="IOI"?"IOI CROSS":"IOM CROSS",metrics:{}};
+    const spread=Number(left[index])-Number(right[index]),rawDirection=spread>threshold?1:spread<-threshold?-1:0,direction=Math.sign(Number(ownerDirection)||0)||rawDirection;
     return{direction,score:spread,confidence:null,regime:strategy==="IOI"?"IOI CROSS":"IOM CROSS",metrics:strategy==="IOI"?{ioi:left[index],ioiInverse:right[index],spread}:{iomMean:left[index],iomInverse:right[index],iomZ:indicators.iomZ?.[index],spread}};
   }
 
@@ -57,8 +56,8 @@
       const htl=global.CTEChartIndicatorOwnership?.selectedHtlCausal?.(data,resolvedLength);if(!htl)throw new Error("HTL Asset prerequisite is unavailable for IOI/IOM");
       indicators=buildIoiIom(data,htl,resolvedLength);cache.set(key,indicators);while(cache.size>8)cache.delete(cache.keys().next().value);
     }
-    const left=strategy==="IOI"?indicators.ioi:indicators.ioiMean,right=strategy==="IOI"?indicators.ioiInverse:indicators.iomInverse,signals=crossSignalSeries(data,left,right,filter);
-    return{indicators,signals,latest:latestOutput(strategy,indicators,filter)};
+    const left=strategy==="IOI"?indicators.ioi:indicators.ioiMean,right=strategy==="IOI"?indicators.ioiInverse:indicators.iomInverse,signals=crossSignalSeries(data,left,right,filter),owner=signals.at(-1)?.direction||0;
+    return{indicators,signals,latest:latestOutput(strategy,indicators,filter,owner),owner};
   }
 
   function installDefinitions(){
@@ -88,7 +87,7 @@
 
   function installRuntime(){
     if(typeof drawChart!=="function"||typeof refreshCausalChartAnalysis!=="function")return false;
-    const priorDraw=drawChart,priorRefresh=refreshCausalChartAnalysis;
+    const priorDraw=drawChart,priorRefresh=refreshCausalChartAnalysis,priorPressure=typeof refreshMainPressure==="function"?refreshMainPressure:null;
     drawChart=function(){
       const strategy=state?.selectedStrategy;if(!CHART_ONLY_IDS.has(strategy))return priorDraw();
       try{renderChartOnly(strategy);}catch(error){const message=document.getElementById("chartMessage");console.error(`${strategy} chart render failed:`,error);if(message){message.hidden=false;message.textContent=`${strategy} overlay unavailable · ${error.message||error}`;}}
@@ -101,11 +100,22 @@
       const length=Math.max(3,Math.min(Number(global.MAX_ANALYTICAL_LENGTH)||500,Math.trunc(Number(document.getElementById("chartLength")?.value)||10))),filter=Math.max(0,Number(document.getElementById("chartFilter")?.value)||0),built=buildSelected(candles,length,strategy,filter);
       state.chartAnalysis={latest:{[strategy]:built.latest}};state.chartCausalIndicators=built.indicators;state.chartCausalSeries=built.signals;updateChartSummary();updateCompartments();drawChart();
     };
+    if(priorPressure){
+      refreshMainPressure=async function(pair,timeframe){
+        const strategy=state?.selectedStrategy;if(!CHART_ONLY_IDS.has(strategy))return priorPressure(pair,timeframe);
+        try{
+          const frames=await ensureEvaluationPairFrames(pair,timeframe);if(pair!==state.selectedInstrument||timeframe!==state.selectedTimeframe||strategy!==state.selectedStrategy)return;
+          const data=Array.isArray(state.chartCandles)?state.chartCandles:[],length=Math.max(3,Math.min(Number(global.MAX_ANALYTICAL_LENGTH)||500,Math.trunc(Number(document.getElementById("chartLength")?.value)||10))),filter=Math.max(0,Number(document.getElementById("chartFilter")?.value)||0),built=buildSelected(data,length,strategy,filter),events=built.signals.map(signal=>({...signal,current:false})),direction=built.owner;
+          state.evalMasImMetrics=evaluationFramesReady(frames,timeframe)&&direction?calculateMASIMPressure(pair,timeframe,frames,{direction,events}):null;
+          drawOscillatorChart();drawWeeklyCognition(pair,state.evalMasImMetrics);
+        }catch(error){console.error(`Failed to load synchronized MAS/IM pressure for ${strategy}:`,error);state.evalMasImMetrics=null;drawOscillatorChart();drawWeeklyCognition(pair,null);}
+      };
+    }
     return true;
   }
 
-  function install(){installDefinitions();installSelector();installRuntime();if(CHART_ONLY_IDS.has(state?.selectedStrategy)&&state?.chartCandles?.length){drawChart();void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,null,state.selectedStrategy);}}
+  function install(){installDefinitions();installSelector();installRuntime();if(CHART_ONLY_IDS.has(state?.selectedStrategy)&&state?.chartCandles?.length){drawChart();void refreshCausalChartAnalysis(state.selectedInstrument,state.selectedTimeframe,state.chartCandles,null,state.selectedStrategy);void refreshMainPressure(state.selectedInstrument,state.selectedTimeframe);}}
 
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
-  global.CTEChartIOIIOM=Object.freeze({VERSION,CHART_ONLY_IDS,buildIoiIom,rollingMeanStd,pairAverage,crossSignalSeries,latestOutput});
+  global.CTEChartIOIIOM=Object.freeze({VERSION,CHART_ONLY_IDS,buildIoiIom,rollingMeanStd,pairAverage,crossSignalSeries,latestOutput,buildSelected});
 })(globalThis);

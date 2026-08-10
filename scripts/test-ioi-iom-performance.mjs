@@ -44,5 +44,9 @@ assert.match(ui,/Macro: HTL Asset \/ DARE\(N\) \/ DARE \/ COMBO \/ NAI \/ APEX \
 assert.match(ui,/renderMacroPerformance=function/);
 assert.match(ui,/renderStrategyConfiguration=function/);
 assert.match(ui,/renderOptimizerRegistry=function/);
+assert.match(ui,/loadOptimizerRecords=async function/,"optimizer-record refresh must republish IOI/IOM configuration and performance results");
+assert.match(ui,/new MutationObserver\(\(\)=>queueMicrotask\(appendConfigurationCards\)\)/,"configuration cards must be restored after the legacy six-indicator renderer rewrites the container");
+assert.match(ui,/data-ioi-iom-config/);
+assert.match(ui,/Trades \$\{result\.trades/,"IOI/IOM configuration cards must display computed result statistics");
 
-console.log("IOI/IOM indicator performance certification passed: causal formulas, warmup integrity, alternating BUY/SELL ownership, next-open/opposite-indicator-signal statistics, authoritative performance persistence, Macro rows, configuration cards, and optimizer registry integration are wired without changing trade-engine authority.");
+console.log("IOI/IOM indicator performance certification passed: authoritative IOI/IOM configuration and Macro results persist through legacy UI rerenders, while causal formulas, warmup integrity, alternating ownership, and trade-engine separation remain intact.");

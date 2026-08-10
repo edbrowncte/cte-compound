@@ -4,7 +4,7 @@ import fs from "node:fs";
 const ownership=fs.readFileSync(new URL("../public/chart-indicator-ownership.js",import.meta.url),"utf8");
 const worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8");
 
-assert.match(ownership,/CTE_CHART_INDICATOR_OWNERSHIP@1\.0\.3/);
+assert.match(ownership,/CTE_CHART_INDICATOR_OWNERSHIP@1\.0\.4/);
 assert.match(ownership,/const MAX_VISIBLE_HISTORY=MAX_ANALYTICAL_HISTORY/,"main chart maximum viewport must equal the 5,000-candle analytical history contract");
 assert.match(ownership,/canonicalChartDefinition=function\(strategy\)\{return ownedDefinition\(strategy\);\}/,"chart definition must be the selected indicator only");
 assert.doesNotMatch(ownership,/fan=CHART_INDICATORS\.ASSET|price:\[\.\.\.fan/,"HTL Asset must not be injected into every indicator selection");
@@ -23,7 +23,10 @@ assert.doesNotMatch(comboBlock,/\["asset"|\["inverse"/,"COMBO display must not c
 assert.match(ownership,/function drawAuxiliarySurfaces\(pair\)/,"MAS/IM and Weekly rendering must be isolated from the main selected-indicator surface");
 assert.match(ownership,/try\{drawOscillatorChart\(\);\}catch\(error\)/,"MAS/IM failure must not erase the selected indicator");
 assert.match(ownership,/try\{drawWeeklyCognition\(pair,state\.evalMasImMetrics\);\}catch\(error\)/,"Weekly failure must not erase the selected indicator");
-assert.match(ownership,/state\.visibleBars=MAX_VISIBLE_HISTORY;state\.offsetBars=0/,"chart must open at maximum analytical history rather than the legacy 120/300-bar window");
+assert.match(ownership,/function forceMaximumHistoryViewport\(candles=state\.chartCandles\)/,"maximum-history viewport must have an explicit lifecycle setter");
+assert.match(ownership,/state\.visibleBars=maximumVisibleBars\(candles\);state\.offsetBars=0/,"chart viewport must reset to all actually loaded candles up to 5,000");
+assert.match(ownership,/applyPlatformPreferences=function\(preferences=\{\}\)\{const result=prior\(preferences\);forceMaximumHistoryViewport\(\)/,"legacy persisted 300-bar preference must not override maximum-history startup");
+assert.match(ownership,/applyChartDataset=function\(instrument,timeframe,candles\).*forceMaximumHistoryViewport\(candles\)/s,"every newly loaded selected dataset must expose its full available history");
 assert.match(ownership,/replaceZoom\("zoomIn",\.8\);replaceZoom\("zoomOut",1\.25\)/,"zoom controls must operate across the expanded maximum-history viewport");
 assert.match(ownership,/stopImmediatePropagation\(\).*maximumVisibleBars/s,"wheel zoom must replace the legacy 300-bar cap");
 assert.match(ownership,/selected indicator exclusively owns its overlay and BUY\/SELL signals/,"visible chart copy must state the ownership contract");
@@ -37,4 +40,4 @@ assert.match(ownership,/body\.style\.minHeight="0"/,"legacy weekly minimum heigh
 assert.match(ownership,/ResizeObserver\(synchronizeWeeklyBar\)/,"Weekly Bar must remain synchronized through chart resize/maximize changes");
 assert.match(worker,/html=html\.replace\('\<\/body\>'[^;]*chart-indicator-ownership\.js/s,"ownership repair must load after the main inline chart runtime");
 
-console.log("Chart indicator ownership certification passed: direct HTL Asset render/signals, guarded causal selection, 5,000-bar maximum viewport, isolated auxiliary surfaces, singular ownership, duplicate metadata removal, and Weekly Bar sizing are enforced.");
+console.log("Chart indicator ownership certification passed: direct HTL Asset render/signals, guarded causal selection, full loaded-history startup through preference/data lifecycles, isolated auxiliary surfaces, singular ownership, duplicate metadata removal, and Weekly Bar sizing are enforced.");

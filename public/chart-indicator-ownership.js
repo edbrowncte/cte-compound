@@ -1,7 +1,7 @@
 (function installChartIndicatorOwnership(global){
   "use strict";
 
-  const VERSION="CTE_CHART_INDICATOR_OWNERSHIP@1.0.3";
+  const VERSION="CTE_CHART_INDICATOR_OWNERSHIP@1.0.4";
   const MAX_VISIBLE_HISTORY=MAX_ANALYTICAL_HISTORY;
 
   function ownedDefinition(strategy){
@@ -115,10 +115,21 @@
     return{result,indicators,signals,htl};
   }
 
-  function maximumVisibleBars(){return Math.max(30,Math.min(MAX_VISIBLE_HISTORY,state.chartCandles?.length||MAX_VISIBLE_HISTORY));}
-  function setMaximumHistoryViewport(){state.visibleBars=maximumVisibleBars();state.offsetBars=0;updateChartSummary();drawChart();queuePlatformPreferenceSave();}
+  function maximumVisibleBars(candles=state.chartCandles){const count=Array.isArray(candles)&&candles.length?candles.length:MAX_VISIBLE_HISTORY;return Math.max(30,Math.min(MAX_VISIBLE_HISTORY,count));}
+  function forceMaximumHistoryViewport(candles=state.chartCandles){state.visibleBars=maximumVisibleBars(candles);state.offsetBars=0;}
+  function setMaximumHistoryViewport(){forceMaximumHistoryViewport();updateChartSummary();drawChart();queuePlatformPreferenceSave();}
+  function installMaximumHistoryLifecycle(){
+    if(typeof applyPlatformPreferences==="function"){
+      const prior=applyPlatformPreferences;
+      applyPlatformPreferences=function(preferences={}){const result=prior(preferences);forceMaximumHistoryViewport();updateChartSummary();if(state.chartCandles?.length)drawChart();return result;};
+    }
+    if(typeof applyChartDataset==="function"){
+      const prior=applyChartDataset;
+      applyChartDataset=function(instrument,timeframe,candles){const result=prior(instrument,timeframe,candles);if(instrument===state.selectedInstrument&&timeframe===state.selectedTimeframe){forceMaximumHistoryViewport(candles);updateChartSummary();drawChart();}return result;};
+    }
+  }
   function installMaximumHistoryControls(){
-    state.visibleBars=MAX_VISIBLE_HISTORY;state.offsetBars=0;
+    forceMaximumHistoryViewport();
     const replaceZoom=(id,factor)=>{const original=el(id);if(!original)return;const replacement=original.cloneNode(true);original.replaceWith(replacement);replacement.addEventListener("click",()=>{const max=maximumVisibleBars();state.visibleBars=clamp(Math.round(state.visibleBars*factor),30,max);state.offsetBars=clamp(state.offsetBars,0,Math.max(0,(state.chartCandles?.length||0)-state.visibleBars));updateChartSummary();drawChart();queuePlatformPreferenceSave();});};
     replaceZoom("zoomIn",.8);replaceZoom("zoomOut",1.25);
     const canvas=el("chart");if(canvas)canvas.addEventListener("wheel",event=>{event.preventDefault();event.stopImmediatePropagation();const max=maximumVisibleBars(),factor=event.deltaY>0?1.15:.87;state.visibleBars=clamp(Math.round(state.visibleBars*factor),30,max);state.offsetBars=clamp(state.offsetBars,0,Math.max(0,(state.chartCandles?.length||0)-state.visibleBars));updateChartSummary();drawChart();queuePlatformPreferenceSave();},{capture:true,passive:false});
@@ -174,6 +185,7 @@
   removeDuplicateChartMetadataRow();
   synchronizeWeeklyBar();
   installMaximumHistoryControls();
+  installMaximumHistoryLifecycle();
   if(chartPanel&&typeof MutationObserver!=="undefined"){
     const metadataObserver=new MutationObserver(()=>removeDuplicateChartMetadataRow());metadataObserver.observe(chartPanel,{childList:true,subtree:true});
     global.addEventListener?.("pagehide",()=>metadataObserver.disconnect(),{once:true});
@@ -185,5 +197,5 @@
   document.addEventListener?.("fullscreenchange",synchronizeWeeklyBar);
   global.addEventListener?.("resize",synchronizeWeeklyBar);
 
-  global.CTEChartIndicatorOwnership=Object.freeze({VERSION,MAX_VISIBLE_HISTORY,selectedIndicatorSet,selectedHtlCausal,assetSignalSeries,renderAssetOnlyChart,ownedDefinition,synchronizeWeeklyBar,removeDuplicateChartMetadataRow,setMaximumHistoryViewport});
+  global.CTEChartIndicatorOwnership=Object.freeze({VERSION,MAX_VISIBLE_HISTORY,selectedIndicatorSet,selectedHtlCausal,assetSignalSeries,renderAssetOnlyChart,ownedDefinition,synchronizeWeeklyBar,removeDuplicateChartMetadataRow,maximumVisibleBars,forceMaximumHistoryViewport,setMaximumHistoryViewport});
 })(globalThis);
