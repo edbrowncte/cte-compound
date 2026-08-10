@@ -14,7 +14,7 @@ assert.match(renderer,/indicatorSet\.osc/);
 assert.match(renderer,/Intl\.DateTimeFormat/);
 assert.match(renderer,/livePrice/);
 assert.match(renderer,/value!==null&&value!==undefined&&value!==""/);
-assert.match(renderer,/plausiblePrice/);
+assert.match(renderer,/plausiblePrice/);\nassert.match(renderer,/function drawSignals\(/);\nassert.match(renderer,/options\.signals/);\nassert.match(renderer,/\?"BUY":"SELL"/);
 
 assert.match(html,/id="chartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="chartStage"/);
 assert.match(html,/id="evalChartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="evalChartStage"/);
@@ -33,11 +33,11 @@ const event=between("function eventDraw(data,htl,events)","function eventHistory
 const evaluation=between("function drawEvalCharts()","function drawOscillatorChart","evaluation draw");
 for(const [name,segment] of [["Analytical",analytical],["Event",event],["Evaluation",evaluation]]){
   assert.match(segment,/renderUnifiedChartSurface\(/,`${name} must delegate to the canonical renderer`);
-  assert.doesNotMatch(segment,/getContext\(/,`${name} must not maintain a private canvas renderer`);
+  assert.doesNotMatch(segment,/getContext\(/,`${name} must not maintain a private canvas renderer`);\n  assert.match(segment,/signals/,`${name} must provide causal BUY and SELL markers`);
 }
 assert.match(analytical,/unifiedIndicatorSet\(pair,timeframe,state\.chartCandles,length\)/);
 assert.match(event,/unifiedIndicatorSet\(pair,timeframe,data,length\)/);
-assert.match(evaluation,/unifiedIndicatorSet\(pair,timeframe,state\.evalCandles,length\)/);
+assert.match(evaluation,/unifiedIndicatorSet\(pair,timeframe,state\.evalCandles,length\)/);\nassert.match(html,/function indicatorSignalSeries\(candles,indicators,strategy,filter=0\)/);\nassert.match(html,/signals:state\.chartCausalSeries/);
 
 const evalLoad=between("async function loadEvalChartData(pair,timeframe)","function drawEvalCharts()","evaluation load");
 assert.match(evalLoad,/loadUnifiedChartCandles\(pair,timeframe,null,95,true\)/);
