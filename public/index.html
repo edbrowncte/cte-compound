@@ -1818,8 +1818,15 @@
 
   function applyChartDataset(instrument,timeframe,candles) {
     if(instrument!==state.selectedInstrument||timeframe!==state.selectedTimeframe)return;
-    const resolved=chartControlConfiguration(instrument,timeframe,state.selectedStrategy,"chartLength","chartFilter");
+    const resolved=chartControlConfiguration(instrument,timeframe,state.selectedStrategy,"chartLength","chartFilter"),key=scheduleKey(instrument,timeframe);
     state.chartCandles=candles;state.chartAnalysis=null;state.chartCausalIndicators=null;state.chartCausalSeries=[];state.offsetBars=0;state.crosshair=null;
+    if(candles.length){
+      setReadiness("marketData","ready",`${formatPair(instrument)} ${timeframe}`);
+      setReadiness("analytics","ready",`${candles.length} completed candles`);
+      if(candles.length>=(state.scheduleCandles.get(key)?.length||0))state.scheduleCandles.set(key,candles);
+      try{state.scheduleEvaluations.set(key,analyzeWithConfiguration(candles,state.autoConfigurations.get(key)?.config||STRATEGY_CONFIG,false));state.scheduleFailures.delete(key);renderScheduleCell(instrument,timeframe);}catch(error){state.scheduleFailures.set(key,{instrument,timeframe,error:error.message||"Analytical evaluation failed",attempts:1});}
+      if(!state.scheduleLoading)queueProgressiveSchedule(0);
+    }
     el("chartMessage").hidden=true;updateChartSummary();updateCompartments();markSelectedRow();drawChart();renderStrategyConfiguration();renderMacroPerformance();
     void refreshCausalChartAnalysis(instrument,timeframe,candles,resolved,state.selectedStrategy);
   }
