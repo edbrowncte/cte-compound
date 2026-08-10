@@ -21,10 +21,13 @@ assert.match(renderer,/options\.signals/);
 assert.match(renderer,/\?"BUY":"SELL"/);
 assert.match(renderer,/signal\.current\?" ACTIVE":""/);
 
-for(const id of ["chartStage","evalChartStage","chartPanel","eventChartPanel","evalChartPanel","chart","eventChart","evalChart","oscillatorCanvas","weeklyCognitionCanvas"]){
+for(const id of ["chartStage","chartPanel","chart","oscillatorCanvas","weeklyCognitionCanvas"]){
+  assert.match(html,new RegExp(`id="${id}"`),`${id} must exist in the canonical chart`);
+}
+for(const id of ["evalChartStage","eventChartPanel","evalChartPanel","eventChart","evalChart"]){
   assert.doesNotMatch(html,new RegExp(`id="${id}"`),`${id} must remain deleted`);
 }
-assert.equal((html.match(/data-chart-model="capitalization"/g)||[]).length,0,"visual chart components must remain deleted");
+assert.equal((html.match(/data-chart-model="canonical-single"/g)||[]).length,1,"one canonical chart component is required");
 assert.match(html,/id="evalIndicatorLegend"/);
 assert.match(html,/id="evaluationRuntimeState"[^>]*hidden/);
 assert.match(html,/unifiedIndicatorCache:new Map\(\)/);
@@ -35,21 +38,13 @@ assert.match(html,/function loadUnifiedChartCandles\(instrument,timeframe,contro
 assert.match(html,/count=\$\{MAX_ANALYTICAL_HISTORY\}/);
 
 const analytical=between("function drawChart()","// Canonical HTL series construction.","analytical draw");
-const event=between("function eventDraw(data,htl,events)","function eventHistoryCount","event draw");
-const evaluation=between("function drawEvalCharts()","function drawOscillatorChart","evaluation draw");
-for(const [name,segment] of [["Analytical",analytical],["Event",event],["Evaluation",evaluation]]){
-  assert.match(segment,/drawCapitalizationChartSurface\(/,`${name} must delegate to the Capitalization chart surface`);
-  assert.doesNotMatch(segment,/getContext\(/,`${name} must not maintain a private canvas renderer`);
-  assert.match(segment,/signals/,`${name} must provide causal BUY and SELL markers`);
-}
+assert.match(analytical,/drawCapitalizationChartSurface\(/,"canonical chart must delegate to the unified renderer");
+assert.doesNotMatch(analytical,/getContext\(/,"canonical chart must not maintain a private price renderer");
+assert.match(analytical,/signals/,"canonical chart must provide causal BUY and SELL markers");
 assert.match(analytical,/unifiedIndicatorSet\(pair,timeframe,state\.chartCandles,length\)/);
-assert.match(event,/unifiedIndicatorSet\(pair,timeframe,data,length\)/);
-assert.match(evaluation,/unifiedIndicatorSet\(pair,timeframe,state\.evalCandles,length\)/);
 assert.match(html,/function indicatorSignalSeries\(candles,indicators,strategy,filter=0\)/);
 assert.match(analytical,/indicatorSignalSeries\(state\.chartCandles,indicators,strategy,filter\)/);
 assert.doesNotMatch(analytical,/signals:state\.chartCausalSeries/);
-assert.match(event,/asset:Array\.isArray\(htl\?\.asset\)/);
-assert.match(event,/Array\.isArray\(events\)/);
 assert.match(html,/current:true/);
 assert.doesNotMatch(certificationManifests,/public\/(?:index\.html|unified-chart\.js)/);
 
@@ -77,4 +72,8 @@ assert.match(html,/function browserDiagnosticAssessment\(server\)/);
 assert.match(html,/SCHEDULE_COVERAGE_INCOMPLETE/);
 assert.match(html,/setInterval\(\(\)=>\{if\(marketDataReady\(\)&&!document\.hidden&&!state\.scheduleLoading&&state\.scheduleEvaluations\.size<INSTRUMENTS\.length\*TIMEFRAMES\.length\)void loadSchedule\("progressive"\);\},5000\)/);
 
-console.log("All visual chart hosts are absent; causal indicator and signal computation remains available to non-chart facilities.");
+assert.match(renderer,/leftIndent/);
+assert.match(renderer,/priceLabel/);
+assert.match(renderer,/timeLabel/);
+assert.match(html,/function canonicalChartDefinition\(strategy\)/);
+console.log("Canonical chart runtime, attached crosshair labels, signals, and synchronized analytical surfaces verified.");
