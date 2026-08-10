@@ -239,7 +239,8 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         ageExpectationVersion:AGE_EXPECTATION_VERSION,
         ageReallocationMinimumIndex:AGE_REALLOCATION_MIN_INDEX,
         ageReallocationDeltaIndex:AGE_REALLOCATION_DELTA_INDEX,
-        ageLastPlan:state.ageLastPlan||null
+        ageLastPlan:state.ageLastPlan||null,
+        candidateAssessment:state.candidateAssessment||null
       }),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     }
     return super.fetch(request);
@@ -624,6 +625,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         const filteredDecisionCandidates = decisionCandidates.filter(candidate => tradableSet.has(candidate.pair));
         const{reversals,newEntries}=this.classifyCandidates(filteredDecisionCandidates,positions),ageContext=ageContextForConfig(state.modelContext,config);
         const deploymentCandidates=[...reversals.map(candidate=>annotateAgeCandidate(candidate,ageContext,"REVERSAL")),...newEntries.map(candidate=>annotateAgeCandidate(candidate,ageContext,"NEW_ENTRY"))];
+        state.candidateAssessment={time:new Date().toISOString(),completedCandle:lastCandle,decisionMode:config.decisionMode,eventCandidates:eventCandidates.length,mtfCandidates:mtfCandidates.length,combinedCandidates:combined.length,decisionCandidates:decisionCandidates.length,selectedCandidates:filteredDecisionCandidates.length,reversals:reversals.length,newEntries:newEntries.length,deploymentCandidates:deploymentCandidates.length,selectedPairs:tradablePairs.length};
 
         // Opposed positions are closed first; their reversal does not automatically inherit the capital. Reversal and alternative deployment now compete inside AGE.
         await this.reconcile(requirements,token,accountId,state,config,positions);
@@ -638,7 +640,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
             else if(plan.action==="REALLOCATE"&&plan.displacement?.position){const position=plan.displacement.position,existing=positionDirection(position),longUnits=Number(position.long?.units||0),shortUnits=Math.abs(Number(position.short?.units||0)),fill=await this.closePosition(position.instrument,existing,longUnits,shortUnits,token,accountId,selected.event.id,`AGE reallocation · GE delta ${Number(plan.delta||0).toFixed(1)}`,{...this.decisionContext(selected,config),agePolicy:AGE_POLICY_VERSION,expectationVersion:AGE_EXPECTATION_VERSION,capitalDisposition:"REALLOCATE",replacementPair:selected.pair,greatExpectationIndex:plan.selected?.index??null,continuationIndex:plan.displacement?.continuation?.index??null});if(fill)await this.execute(selected,token,accountId,state);else state.lastNoOrderReason=`AGE displacement close failed for ${position.instrument}; replacement ${selected.pair} withheld`; }
             else await this.execute(selected,token,accountId,state);
           }
-        }else{const monitored=(positions||[]).map(position=>{const direction=positionDirection(position);if(!direction)return null;const continuation=continuationExpectation({pair:position.instrument,direction},requirements[position.instrument],ageContext);return{pair:position.instrument,direction,index:continuation.index,expectedPipsPerHour:continuation.expectedPipsPerHour,disposition:continuation.disposition};}).filter(Boolean);state.ageLastPlan={action:"MONITOR_CONTINUATIONS",qualified:false,selected:null,displacement:null,delta:null,threshold:AGE_REALLOCATION_DELTA_INDEX,minimum:AGE_REALLOCATION_MIN_INDEX,positions:monitored,time:new Date().toISOString()};}
+        }else{const monitored=(positions||[]).map(position=>{const direction=positionDirection(position);if(!direction)return null;const continuation=continuationExpectation({pair:position.instrument,direction},requirements[position.instrument],ageContext);return{pair:position.instrument,direction,index:continuation.index,expectedPipsPerHour:continuation.expectedPipsPerHour,disposition:continuation.disposition};}).filter(Boolean);state.ageLastPlan={action:"MONITOR_CONTINUATIONS",qualified:false,selected:null,displacement:null,delta:null,threshold:AGE_REALLOCATION_DELTA_INDEX,minimum:AGE_REALLOCATION_MIN_INDEX,positions:monitored,time:new Date().toISOString()};state.lastNoOrderReason=`No new qualified ${config.decisionMode} deployment candidate on completed ${config.timeframe} candle ${lastCandle} · events ${eventCandidates.length} · MTF ${mtfCandidates.length} · combined ${combined.length} · selected ${filteredDecisionCandidates.length}`;}
 
         for(const row of rows)state.events[row.pair]=row.event.id;
         state.mtfDecisionDirections=Object.fromEntries(mtfNow.map(row=>[row.pair,row.event.direction]));

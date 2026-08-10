@@ -6,7 +6,9 @@ const renderer=await readFile(new URL("../public/unified-chart.js",import.meta.u
 const certificationManifests=(await Promise.all(["registered-horizon.manifest.json","registered-horizon-implementation.manifest.json"].map(name=>readFile(new URL(`../source-code/${name}`,import.meta.url),"utf8")))).join(String.fromCharCode(10));
 const between=(start,end,label)=>{const from=html.indexOf(start),to=html.indexOf(end,from);assert.ok(from>=0,`${label}: start missing`);assert.ok(to>from,`${label}: end missing`);return html.slice(from,to);};
 
-assert.match(html,/<script src="\/unified-chart\.js"><\/script>/);
+assert.doesNotMatch(html,/<script src="\/unified-chart\.js"><\/script>/);
+assert.match(html,/CTE_UNIFIED_EVALUATION_CHART@1\.0\.0/);
+assert.match(html,/global\.CTEUnifiedChart=Object\.freeze\(\{VERSION,render\}\)/);
 assert.match(renderer,/CTE_UNIFIED_EVALUATION_CHART@1\.0\.0/);
 assert.match(renderer,/global\.CTEUnifiedChart=Object\.freeze\(\{VERSION,render\}\)/);
 assert.match(renderer,/indicatorSet\.price/);
