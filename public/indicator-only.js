@@ -1,7 +1,7 @@
 (function installIndicatorOnlyControls(global){
   "use strict";
 
-  const VERSION="CTE_INDICATOR_ONLY_UI@1.1.0";
+  const VERSION="CTE_INDICATOR_ONLY_UI@1.2.0";
   const NORMAL_CONTROL_IDS=["engineTimeframe","engineStrategy","engineConfirmationStrategy","engineHtlLength","engineFilter","engineDecisionMode","engineConfigurationSource","saveEngineConfig","candidateA","candidateB","candidateC","candidateUnits","executeDecisionCandidate","tradePair","tradeUnits","tradeBuy","tradeSell"];
   const STRUCTURAL_IDS=["indicatorOnlyPair","indicatorOnlyTimeframe","indicatorOnlyIndicator","indicatorOnlyLength","indicatorOnlyFilter"];
   const priorDisabled=new Map();
@@ -51,7 +51,7 @@
     if(busy)return;
     busy=true;
     const requested=control(),status=el("indicatorOnlyStatus");
-    if(status)status.textContent=requested.enabled?"Saving Indicator Only controls…":"Saving Indicator Only controls…";
+    if(status)status.textContent="Saving Indicator Only controls…";
     try{
       const response=await fetch("/api/control/selectedPairs",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({indicatorOnly:requested})}),payload=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);
@@ -63,9 +63,10 @@
   function install(){
     if(typeof document==="undefined")return false;
     if(root&&document.contains(root))return true;
-    const panel=el("automationPanel"),anchor=panel?.querySelector(".automation-controls");
+    const panel=el("chartPanel"),anchor=panel?.querySelector(".panel-head");
     if(!panel||!anchor)return false;
-    root=document.createElement("section");root.id="indicatorOnlyControls";root.setAttribute("aria-label","Indicator Only automated trading controls");root.style.cssText="grid-column:1/-1;border:1px solid var(--line2,#3a4657);background:#0a1017;padding:10px;display:flex;flex-wrap:wrap;gap:7px;align-items:end;";
+    anchor.style.flexWrap="wrap";
+    root=document.createElement("section");root.id="indicatorOnlyControls";root.setAttribute("aria-label","Indicator Only automated trading controls");root.dataset.controlScope="indicator-only";root.style.cssText="flex:1 0 100%;border:1px solid var(--line2,#3a4657);background:#0a1017;padding:8px;display:flex;flex-wrap:wrap;gap:7px;align-items:end;margin-top:4px;";
     root.innerHTML=`
       <label style="display:flex;align-items:center;gap:8px;min-height:36px;padding:7px 10px;border:1px solid var(--line2,#3a4657);background:#101923;font-weight:850;"><input id="indicatorOnlyToggle" type="checkbox" style="width:16px;height:16px;"><span>Indicator Only (IO)</span><strong id="indicatorOnlyToggleLabel" style="font-size:9px;color:var(--muted,#8e9aab);">OFF</strong></label>
       <label class="field"><span>Pair</span><select id="indicatorOnlyPair"></select></label>
@@ -75,7 +76,7 @@
       <label class="field"><span>Filter</span><input id="indicatorOnlyFilter" type="number" min="0" max="10" step="0.1" value="0"></label>
       <label class="field"><span>Units</span><input id="indicatorOnlyUnits" type="number" min="1" max="100000000" step="1" value="100"></label>
       <div id="indicatorOnlyStatus" role="status" aria-live="polite" style="flex-basis:100%;min-height:14px;font-size:9px;color:var(--muted,#8e9aab);">IO OFF · normal certified automation active</div>`;
-    anchor.insertAdjacentElement("afterend",root);
+    anchor.appendChild(root);
     copyOptions(el("tradePair"),el("indicatorOnlyPair"));copyOptions(el("engineTimeframe"),el("indicatorOnlyTimeframe"));copyOptions(el("engineStrategy"),el("indicatorOnlyIndicator"));
     if(el("tradePair"))el("indicatorOnlyPair").value=el("tradePair").value;
     if(el("engineTimeframe"))el("indicatorOnlyTimeframe").value=el("engineTimeframe").value;
