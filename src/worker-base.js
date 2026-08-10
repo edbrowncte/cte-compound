@@ -2,6 +2,8 @@ import { requireCloudflareAccess } from "./access-auth.js";
 
 const LIVE_OANDA_ORIGIN = "https://api-fxtrade.oanda.com";
 const LIVE_OANDA_STREAM_ORIGIN = "https://stream-fxtrade.oanda.com";
+const RELEASE_CONTRACT="CTE_COMPOUND_CAPITALIZATION_CHARTS@1.0.0";
+const RELEASE_ENFORCEMENT="ENFORCE_CURRENT_RELEASE";
 export { HtlEngine } from "./engine.js";
 
 const INSTRUMENTS = new Set([
@@ -29,6 +31,8 @@ const oandaTelemetry={requests:0,retries:0,timeouts:0,networkFailures:0,failures
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{...JSON_HEADERS,...headers}});
 const diagnosticId=()=>crypto.randomUUID();
+function releaseAuthorized(env){if(String(env.CTE_RELEASE_ENFORCEMENT||"")!==RELEASE_ENFORCEMENT)return true;return String(env.CTE_RELEASE_CONTRACT||"")===RELEASE_CONTRACT&&/^[0-9a-f]{40}$/i.test(String(env.CTE_RELEASE_SHA||""));}
+function assertCurrentRelease(env){if(!releaseAuthorized(env))throw decorateError(new Error("This Worker release is unidentified or obsolete and is not authorized to run."),{status:503,code:"LEGACY_RELEASE_REJECTED",stage:"RELEASE_AUTHORITY",retryable:false});}
 function decorateError(error,{status,code,stage,retryable,upstreamStatus,attempts}={}){
   const target=error instanceof Error?error:new Error(String(error||"Request failed."));
   if(status!==undefined)target.status=status;if(code)target.code=code;if(stage)target.stage=stage;if(retryable!==undefined)target.retryable=retryable;if(upstreamStatus!==undefined)target.upstreamStatus=upstreamStatus;if(attempts!==undefined)target.attempts=attempts;
@@ -200,7 +204,7 @@ async function handleCandles(env,url) {
 }
 
 
-function deploymentMetadata(env){const metadata=env.CF_VERSION_METADATA||{};return{worker:"cte-compound",versionId:metadata.id||null,versionTag:metadata.tag||null,versionTimestamp:metadata.timestamp||null};}
+function deploymentMetadata(env){const metadata=env.CF_VERSION_METADATA||{};return{worker:"cte-compound",versionId:metadata.id||null,versionTag:metadata.tag||null,versionTimestamp:metadata.timestamp||null,releaseContract:env.CTE_RELEASE_CONTRACT||null,releaseSha:env.CTE_RELEASE_SHA||null,releaseAuthorized:releaseAuthorized(env)};}
 async function handlePlatformVersion(env){return json({deployment:deploymentMetadata(env)});}
 
 async function handlePlatformDiagnostic(env,url){
@@ -242,6 +246,7 @@ export default {
   async fetch(request,env) {
     const url=new URL(request.url);
     try {
+      assertCurrentRelease(env);
       await requireCloudflareAccess(request,env);
       if(url.pathname.startsWith("/api/")) {
         assertSameOrigin(request);
@@ -278,5 +283,5 @@ export default {
       return errorResponse(error);
     }
   },
-  async scheduled(_event,env,ctx){const engine=env.HTL_ENGINE.getByName("live"),tradingTick=engine.fetch(new Request("https://engine/tick",{method:"POST"})),optimizerTick=engine.fetch(new Request("https://engine/optimizer/tick",{method:"POST"}));ctx.waitUntil(Promise.allSettled([tradingTick,optimizerTick]).then(results=>{const rejected=results.filter(result=>result.status==="rejected");if(rejected.length)throw new AggregateError(rejected.map(result=>result.reason),"Scheduled engine tasks failed independently.");}));}
+  async scheduled(_event,env,ctx){assertCurrentRelease(env);const engine=env.HTL_ENGINE.getByName("live"),tradingTick=engine.fetch(new Request("https://engine/tick",{method:"POST"})),optimizerTick=engine.fetch(new Request("https://engine/optimizer/tick",{method:"POST"}));ctx.waitUntil(Promise.allSettled([tradingTick,optimizerTick]).then(results=>{const rejected=results.filter(result=>result.status==="rejected");if(rejected.length)throw new AggregateError(rejected.map(result=>result.reason),"Scheduled engine tasks failed independently.");}));}
 };

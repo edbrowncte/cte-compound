@@ -4,6 +4,10 @@ compatibility_date = "2026-07-31"
 compatibility_flags = [ "nodejs_compat" ]
 keep_vars = true
 
+[vars]
+CTE_RELEASE_CONTRACT = "CTE_COMPOUND_CAPITALIZATION_CHARTS@1.0.0"
+CTE_RELEASE_ENFORCEMENT = "ENFORCE_CURRENT_RELEASE"
+
 [observability]
 enabled = true
 head_sampling_rate = 1
