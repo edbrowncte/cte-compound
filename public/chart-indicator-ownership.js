@@ -54,20 +54,14 @@
   canonicalChartDefinition=function(strategy){return ownedDefinition(strategy);};
 
   drawChart=function(){
-    const pair=state.selectedInstrument,timeframe=state.selectedTimeframe,strategy=state.selectedStrategy,length=clamp(Math.round(Number(el("chartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),filter=Math.max(0,Number(el("chartFilter")?.value)||0);
-    let indicators;
-    try{indicators=selectedIndicatorSet(state.chartCandles,length,strategy);}catch(error){console.error(`Selected ${strategy} indicator computation failed:`,error);indicators=normalizeUnifiedIndicators(state.chartCandles,{});}
-    const signals=indicatorSignalSeries(state.chartCandles,indicators,strategy,filter);
+    const pair=state.selectedInstrument,timeframe=state.selectedTimeframe,strategy=state.selectedStrategy,length=clamp(Math.round(Number(el("chartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),filter=Math.max(0,Number(el("chartFilter")?.value)||0),indicators=selectedIndicatorSet(state.chartCandles,length,strategy),signals=indicatorSignalSeries(state.chartCandles,indicators,strategy,filter);
     drawCapitalizationChartSurface({canvasId:"chart",messageId:"chartMessage",candles:state.chartCandles,pair,timeframe,strategy,length,visibleBars:state.visibleBars,offsetBars:state.offsetBars,rightIndent:state.rightIndent,crosshairEnabled:state.crosshairEnabled,crosshair:state.crosshair,legendId:"indicatorLegend",indicators,signals});
     drawOscillatorChart();
     drawWeeklyCognition(pair,state.evalMasImMetrics);
   };
 
   drawEvalCharts=function(){
-    const pair=el("evalChartPair")?.value||state.selectedInstrument,timeframe=el("evalChartTimeframe")?.value||state.selectedTimeframe,strategy=el("evalChartStrategy")?.value||state.evaluationSelectedStrategy||"ASSET",length=clamp(Math.round(Number(el("evalChartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),filter=Math.max(0,Number(el("evalChartFilter")?.value)||0);
-    let indicators;
-    try{indicators=selectedIndicatorSet(state.evalCandles,length,strategy);}catch(error){console.error(`Selected evaluation ${strategy} indicator computation failed:`,error);indicators=normalizeUnifiedIndicators(state.evalCandles,{});}
-    const signals=indicatorSignalSeries(state.evalCandles,indicators,strategy,filter);
+    const pair=el("evalChartPair")?.value||state.selectedInstrument,timeframe=el("evalChartTimeframe")?.value||state.selectedTimeframe,strategy=el("evalChartStrategy")?.value||state.evaluationSelectedStrategy||"ASSET",length=clamp(Math.round(Number(el("evalChartLength")?.value)||10),3,MAX_ANALYTICAL_LENGTH),filter=Math.max(0,Number(el("evalChartFilter")?.value)||0),indicators=selectedIndicatorSet(state.evalCandles,length,strategy),signals=indicatorSignalSeries(state.evalCandles,indicators,strategy,filter);
     drawCapitalizationChartSurface({canvasId:"evalChart",messageId:"evalChartMessage",candles:state.evalCandles,pair,timeframe,strategy,length,visibleBars:state.evalVisibleBars,offsetBars:state.evalOffsetBars,rightIndent:state.evalRightIndent,crosshairEnabled:state.evalCrosshairEnabled,crosshair:state.evalCrosshair,legendId:"evalIndicatorLegend",indicators,signals});
     drawOscillatorChart();
   };
@@ -85,6 +79,7 @@
   }
 
   const legend=el("indicatorLegend");if(legend)legend.setAttribute("aria-label","Selected indicator legend and selected-indicator signals");
+  const chartPanel=el("chartPanel"),subtitle=chartPanel?.querySelector(".panel-title p");if(subtitle)subtitle.textContent="One synchronized completed-candle chart · selected indicator exclusively owns its overlay and BUY/SELL signals · attached price/time crosshair.";
   synchronizeWeeklyBar();
   if(typeof ResizeObserver!=="undefined"){
     const observer=new ResizeObserver(synchronizeWeeklyBar),stage=el("chartStage");if(stage)observer.observe(stage);
