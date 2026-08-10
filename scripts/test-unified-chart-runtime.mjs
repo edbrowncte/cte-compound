@@ -60,6 +60,9 @@ const eventLoad=between("async function loadEventRow","async function refreshSel
 assert.match(eventLoad,/desired===MAX_ANALYTICAL_HISTORY\?await loadUnifiedChartCandles/);
 const analyticalLoad=between("async function loadChart","function updateChartSummary","analytical load");
 assert.match(analyticalLoad,/loadUnifiedChartCandles\(instrument,timeframe,controller,100,true\)/);
+assert.match(analyticalLoad,/setReadiness\("marketData","ready"/);
+assert.match(analyticalLoad,/state\.scheduleEvaluations\.set\(key,analyzeWithConfiguration/);
+assert.match(analyticalLoad,/queueProgressiveSchedule\(0\)/);
 
 assert.match(html,/state\.unifiedIndicatorCache\.clear\(\)/);
 assert.match(html,/state\.maximumHistoryKeys\.clear\(\)/);
