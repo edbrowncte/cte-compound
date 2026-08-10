@@ -1,7 +1,7 @@
 (function installIOIIOMPerformance(global){
   "use strict";
 
-  const VERSION="CTE_IOI_IOM_PERFORMANCE_UI@1.0.1";
+  const VERSION="CTE_IOI_IOM_PERFORMANCE_UI@1.0.2";
   const EXTRA=Object.freeze([
     {id:"IOI",label:"IOI · Indicator Only Indicator"},
     {id:"IOM",label:"IOM · Indicator Only Mean"}
@@ -18,12 +18,14 @@
     for(const heading of document.querySelectorAll("#performancePanel h2"))if(String(heading.textContent||"").trim().startsWith("Macro:")){heading.textContent=MACRO_TITLE;break;}
   }
 
+  function performanceRow(record,label){return (Array.isArray(record?.grossPerformance)?record.grossPerformance:[]).find(row=>row?.Strategy===label)||null;}
+
   function renderMacroRows(){
     const record=currentRecord();if(!record||record.source!=="COMPUTE_CONFIGURATION")return;
     const body=document.getElementById("macroPerformanceBody");if(!body)return;
     body.innerHTML=analyticalStrategies().map(strategy=>{
-      const entry=record.config?.[strategy.id]||{},stats={...entry,...entry.grossPerformance},needsCompute=EXTRA.some(item=>item.id===strategy.id)&&!record.config?.[strategy.id];
-      return `<tr data-strategy="${strategy.id}"><td>${strategy.label}</td><td>${needsCompute?"Recompute":stats.trades??"—"}</td><td>${finite(stats.wins)?`${stats.wins}/${stats.losses}/${stats.flats}`:"—"}</td><td class="${finite(stats.net)&&Number(stats.net)<0?"negative":"positive"}">${fmt(stats.net,1)}</td><td>${fmt(stats.average)}</td><td>${fmt(stats.mfeMae)}</td><td>${fmt(stats.maxDrawdown,1)}</td><td>${fmt(stats.profitFactor)}</td><td>${fmt(stats.recoveryFactor)}</td></tr>`;
+      const row=performanceRow(record,strategy.label),needsCompute=!row,wlf=row?.["W/L/Flat"]||"—",net=row?.["Net pips"],avg=row?.Avg,mfeMae=row?.["MFE/MAE"],maxDd=row?.["Max DD"],profitFactor=row?.["Profit factor"],recoveryFactor=row?.["Recovery factor"];
+      return `<tr data-strategy="${strategy.id}"><td>${strategy.label}</td><td>${needsCompute?"Recompute":row?.Trades??"—"}</td><td>${wlf}</td><td class="${finite(net)&&Number(net)<0?"negative":"positive"}">${fmt(net,1)}</td><td>${fmt(avg)}</td><td>${fmt(mfeMae)}</td><td>${fmt(maxDd,1)}</td><td>${fmt(profitFactor)}</td><td>${fmt(recoveryFactor)}</td></tr>`;
     }).join("");
   }
 
@@ -60,5 +62,5 @@
 
   function install(){installRuntime();try{renderMacroRows();appendConfigurationCards();appendOptimizerRows();}catch(error){console.error("IOI/IOM performance UI initialization failed:",error);}}
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
-  global.CTEIOIIOMPerformanceUI=Object.freeze({VERSION,EXTRA,MACRO_TITLE});
+  global.CTEIOIIOMPerformanceUI=Object.freeze({VERSION,EXTRA,MACRO_TITLE,performanceRow});
 })(globalThis);
