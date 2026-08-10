@@ -1057,7 +1057,7 @@
     if(node){node.textContent=detail?`${READINESS_LABELS[status]||status} · ${detail}`:(READINESS_LABELS[status]||status);node.className=status==="ready"?"positive":status==="failed"||status==="degraded"?"negative":"";}
     if(lane==="account"||lane==="engine"){
       const ready=accountReady()&&readinessReady("engine");
-      state.readiness.execution={status:ready?"available":"unavailable",detail:ready?"Awaiting trade initiation":"Account and engine required",time:new Date().toISOString()};
+      state.readiness.execution={status:ready?"ready":"locked",detail:ready?"Execution available; awaiting trade initiation":"Account and engine required",time:new Date().toISOString()};
       const executionNode=el("readinessExecution");if(executionNode){executionNode.textContent=ready?"Available · awaiting trade initiation":"Unavailable · account and engine required";executionNode.className=ready?"positive":"";}
     }
     updateTradeButtons();renderDecisionCandidates();
