@@ -89,6 +89,10 @@ export const __indicatorOnlyTest=Object.freeze({INDICATOR_ONLY_VERSION,normalize
 export class HtlEngine extends CertifiedHtlEngine{
   async fetch(request){
     const url=new URL(request.url),path=url.pathname;
+    if(path==="/control/indicatorOnly"&&request.method==="GET"){
+      const state=(await this.ctx.storage.get("state"))||{};
+      return response({indicatorOnly:normalizeIndicatorOnly(state.indicatorOnly),indicatorOnlyRuntime:state.indicatorOnlyRuntime||null});
+    }
     if(path==="/control/selectedPairs"&&request.method==="POST"){
       const body=await request.clone().json().catch(()=>({})),state=(await this.ctx.storage.get("state"))||{};
       if(Object.prototype.hasOwnProperty.call(body,"indicatorOnly"))return this.configureIndicatorOnly(state,body.indicatorOnly);

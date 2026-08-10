@@ -31,6 +31,7 @@ assert.match(engine,/if\(normalizeIndicatorOnly\(state\?\.indicatorOnly\)\.enabl
 assert.match(engine,/state\.pendingReversals=\{\}/,"pre-existing normal reversal claims must be cleared on IO engagement");
 assert.match(engine,/"Indicator Only opposing indicator signal reversal"/,"only the opposing selected indicator signal may reverse the IO position");
 assert.match(engine,/await this\.ctx\.storage\.setAlarm\(due\)/,"IO must reschedule its dedicated sub-minute-capable Durable Object alarm");
+assert.match(engine,/path==="\/control\/indicatorOnly"&&request\.method==="GET"/,"Worker order authority must have a lightweight Durable Object IO state source");
 assert.doesNotMatch(engine,/ageMarketWindow|reallocationDecision|continuationExpectation|this\.choose\(/,"IO wrapper must not invoke AGE, MTF candidate selection, or normal capital reallocation");
 
 const ui=fs.readFileSync(new URL("../public/indicator-only.js",import.meta.url),"utf8");
@@ -41,5 +42,8 @@ assert.match(ui,/\/api\/control\/selectedPairs/,"IO UI must persist through the 
 const worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8");
 assert.match(worker,/export \{ HtlEngine \} from "\.\/engine-indicator-only\.js"/);
 assert.match(worker,/indicator-only\.js/);
+assert.match(worker,/indicatorOnlyAuthority\(env\)/,"all browser order submissions must query server-side IO authority");
+assert.match(worker,/Disengage IO before submitting any manual or candidate order/,"manual and candidate orders must be rejected while IO is active");
+assert.match(worker,/Order route authority unavailable; order withheld/,"order route must fail closed when IO authority cannot be verified");
 
-console.log("Indicator Only certification passed: exclusive selected-indicator authority, protected reversal path, and 5s\/30s\/60s cadence are wired without modifying the certified normal engine.");
+console.log("Indicator Only certification passed: exclusive selected-indicator authority, server-side order lock, protected reversal path, and 5s\/30s\/60s cadence are wired without modifying the certified normal engine.");
