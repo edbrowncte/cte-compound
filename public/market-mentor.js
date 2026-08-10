@@ -172,3 +172,87 @@
 
   global.CTEMarketMentor=Object.freeze({VERSION,update,__test:Object.freeze({buildNarrative,materialChange,ratioText,postureFor,lessonFor,rotationText,leadersOf})});
 })(globalThis);
+
+(function installCandleFirstChartGuard(global){
+  "use strict";
+
+  const VERSION="CTE_CANDLE_FIRST_CHART_GUARD@1.0.0";
+  const clampValue=(value,min,max)=>Math.max(min,Math.min(max,value));
+  const finiteNumber=value=>Number.isFinite(Number(value));
+
+  function renderCandles(options={}){
+    const canvas=options.canvas,candles=Array.isArray(options.candles)?options.candles:[];
+    if(!canvas)return null;
+    const ctx=canvas.getContext?.("2d");
+    if(!ctx)return null;
+    const rect=canvas.getBoundingClientRect?.()||{},dpr=Math.max(1,Number(options.devicePixelRatio)||Number(global.devicePixelRatio)||1),width=Math.max(100,Number(rect.width)||Number(canvas.clientWidth)||Number(canvas.parentNode?.clientWidth)||0),height=Math.max(100,Number(rect.height)||Number(canvas.clientHeight)||Number(canvas.parentNode?.clientHeight)||0);
+    canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle="#080c12";ctx.fillRect(0,0,width,height);
+    if(!candles.length)return{visibleStart:0,visibleEnd:0,visibleCandles:[],latestIndex:-1,rendered:false};
+
+    const visibleBars=clampValue(Math.trunc(Number(options.visibleBars)||120),30,300),offset=clampValue(Math.trunc(Number(options.offsetBars)||0),0,Math.max(0,candles.length-visibleBars)),visibleEnd=candles.length-offset,visibleStart=Math.max(0,visibleEnd-visibleBars),visibleCandles=candles.slice(visibleStart,visibleEnd);
+    if(!visibleCandles.length)return{visibleStart,visibleEnd,visibleCandles,latestIndex:candles.length-1,rendered:false};
+    const valid=visibleCandles.filter(candle=>[candle?.open,candle?.high,candle?.low,candle?.close].every(finiteNumber));
+    if(!valid.length)return{visibleStart,visibleEnd,visibleCandles,latestIndex:candles.length-1,rendered:false};
+
+    const leftIndent=Math.max(0,Number(options.leftIndent)||0),rightIndent=Math.max(0,Number(options.rightIndent)||0),margin={top:20,right:60+rightIndent,bottom:28,left:40+leftIndent},plot={x:margin.left,y:margin.top,w:Math.max(80,width-margin.left-margin.right),h:Math.max(80,height-margin.top-margin.bottom)},gridEndX=width-60;
+    const candleLow=Math.min(...valid.map(candle=>Number(candle.low))),candleHigh=Math.max(...valid.map(candle=>Number(candle.high))),live=finiteNumber(options.livePrice)?Number(options.livePrice):NaN,rawLow=Number.isFinite(live)?Math.min(candleLow,live):candleLow,rawHigh=Number.isFinite(live)?Math.max(candleHigh,live):candleHigh,span=Math.max(rawHigh-rawLow,Math.abs(rawHigh)*1e-6,1e-8),low=rawLow-span*.1,high=rawHigh+span*.1,priceToY=price=>plot.y+(high-Number(price))/(high-low)*plot.h,barWidth=plot.w/Math.max(1,visibleCandles.length),indexToX=index=>plot.x+(index+.5)*barWidth,format=typeof options.formatPrice==="function"?options.formatPrice:value=>Number(value).toFixed(5);
+
+    ctx.strokeStyle="#1c2632";ctx.lineWidth=1;ctx.font="9px ui-monospace,monospace";ctx.textBaseline="middle";
+    for(let index=0;index<=4;index++){
+      const y=plot.y+plot.h*index/4,price=high-(high-low)*index/4;ctx.beginPath();ctx.moveTo(plot.x,y+.5);ctx.lineTo(gridEndX,y+.5);ctx.stroke();ctx.fillStyle="#8b98aa";ctx.textAlign="left";ctx.fillText(format(price),gridEndX+5,y);
+    }
+    for(let index=0;index<=6;index++){
+      const x=plot.x+plot.w*index/6;ctx.strokeStyle="#151e29";ctx.beginPath();ctx.moveTo(x+.5,plot.y);ctx.lineTo(x+.5,plot.y+plot.h);ctx.stroke();const candle=visibleCandles[Math.min(visibleCandles.length-1,Math.floor(index/6*(visibleCandles.length-1)))];if(candle?.time){ctx.fillStyle="#7f8b9b";ctx.textAlign=index===0?"left":index===6?"right":"center";ctx.fillText(new Intl.DateTimeFormat(undefined,{month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(candle.time)),x,plot.y+plot.h+17);}
+    }
+
+    for(let index=0;index<visibleCandles.length;index++){
+      const candle=visibleCandles[index],open=Number(candle?.open),highPrice=Number(candle?.high),lowPrice=Number(candle?.low),close=Number(candle?.close);if(![open,highPrice,lowPrice,close].every(Number.isFinite))continue;const x=indexToX(index),rising=close>=open,stroke=rising?"#48c78e":"#ef6b73";ctx.strokeStyle=stroke;ctx.fillStyle=stroke;ctx.beginPath();ctx.moveTo(x,priceToY(highPrice));ctx.lineTo(x,priceToY(lowPrice));ctx.stroke();const bodyTop=priceToY(Math.max(open,close)),bodyBottom=priceToY(Math.min(open,close)),bodyWidth=Math.max(1,Math.min(11,barWidth*.6));ctx.fillRect(x-bodyWidth/2,bodyTop,bodyWidth,Math.max(1,bodyBottom-bodyTop));
+    }
+
+    if(Number.isFinite(live)){
+      const y=priceToY(live),label=format(live);ctx.strokeStyle="#7dc4ff";ctx.setLineDash?.([4,4]);ctx.beginPath();ctx.moveTo(plot.x,y);ctx.lineTo(gridEndX,y);ctx.stroke();ctx.setLineDash?.([]);ctx.fillStyle="#7dc4ff";ctx.fillRect(gridEndX,y-9,60,18);ctx.fillStyle="#080c12";ctx.textAlign="left";ctx.fillText(label,gridEndX+5,y);
+    }
+
+    const crosshair=options.crosshair;
+    if(options.crosshairEnabled!==false&&crosshair&&finiteNumber(crosshair.x)){
+      const localX=Number(crosshair.x),relative=clampValue(Math.floor((localX-plot.x)/Math.max(1,barWidth)),0,visibleCandles.length-1),candle=visibleCandles[relative],x=indexToX(relative),candidateY=finiteNumber(crosshair.y)?Number(crosshair.y):priceToY(Number(candle?.close)),y=clampValue(candidateY,plot.y,plot.y+plot.h),cursorPrice=high-((y-plot.y)/plot.h)*(high-low),timeLabel=candle?.time?new Intl.DateTimeFormat(undefined,{year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date(candle.time)):"—",priceLabel=format(cursorPrice);ctx.setLineDash?.([3,3]);ctx.strokeStyle="#a7b5c7";ctx.beginPath();ctx.moveTo(x,plot.y);ctx.lineTo(x,plot.y+plot.h);ctx.moveTo(plot.x,y);ctx.lineTo(gridEndX,y);ctx.stroke();ctx.setLineDash?.([]);ctx.fillStyle="#26384b";const textWidth=Math.max(80,Math.ceil(ctx.measureText?.(timeLabel)?.width||90)+10),timeX=clampValue(x-textWidth/2,plot.x,Math.max(plot.x,gridEndX-textWidth));ctx.fillRect(timeX,plot.y+plot.h+4,textWidth,18);ctx.fillStyle="#edf2ff";ctx.textAlign="left";ctx.fillText(timeLabel,timeX+5,plot.y+plot.h+13);ctx.fillStyle="#7dc4ff";ctx.fillRect(gridEndX,y-9,60,18);ctx.fillStyle="#080c12";ctx.fillText(priceLabel,gridEndX+5,y);
+    }
+
+    return{visibleStart,visibleEnd,visibleCandles,latestIndex:candles.length-1,pricePlot:plot,plot,indexToX,priceToY,rendered:true};
+  }
+
+  function install(){
+    if(typeof document==="undefined"||typeof global.drawChart!=="function")return false;
+    if(global.drawChart.__cteCandleFirstGuard)return true;
+    const enrichedDraw=global.drawChart;
+    const baseOptions=()=>{
+      const pair=state.selectedInstrument,candles=state.chartCandles||[];let live=NaN;try{live=liveMid(pair);}catch{}
+      return{canvas:document.getElementById("chart"),candles,pair,visibleBars:state.visibleBars,offsetBars:state.offsetBars,leftIndent:state.leftIndent,rightIndent:state.rightIndent,crosshairEnabled:state.crosshairEnabled,crosshair:state.crosshair,livePrice:live,formatPrice:value=>{try{return formatPrice(value,pair);}catch{return Number(value).toFixed(String(pair||"").endsWith("JPY")?3:5);}}};
+    };
+    const paintBase=()=>renderCandles(baseOptions());
+    const retainCandles=error=>{
+      if(!(state.chartCandles||[]).length)return;
+      paintBase();
+      const message=document.getElementById("chartMessage");if(message)message.hidden=true;
+      const legend=document.getElementById("indicatorLegend");if(legend)legend.textContent=`Candles active · ${state.selectedStrategy||"indicator"} overlay unavailable${error?.message?` · ${error.message}`:""}`;
+    };
+    const guarded=function(...args){
+      if((state.chartCandles||[]).length)paintBase();
+      try{
+        const result=enrichedDraw.apply(this,args),message=document.getElementById("chartMessage");
+        if((state.chartCandles||[]).length&&message&&!message.hidden&&String(message.textContent||"").startsWith("Chart renderer failure"))retainCandles(new Error(String(message.textContent).replace(/^Chart renderer failure\s*·?\s*/,"")));
+        return result;
+      }catch(error){
+        console.error("Forensic chart enrichment failed; retained completed OANDA candles:",error);retainCandles(error);try{drawOscillatorChart();}catch(auxError){console.error("MAS / IM chart enrichment failed:",auxError);}try{drawWeeklyCognition(state.selectedInstrument,state.evalMasImMetrics);}catch(auxError){console.error("Weekly cognition enrichment failed:",auxError);}return null;
+      }
+    };
+    guarded.__cteCandleFirstGuard=true;guarded.__cteEnrichedDraw=enrichedDraw;global.drawChart=guarded;
+    if((state.chartCandles||[]).length)guarded();
+    return true;
+  }
+
+  if(typeof document!=="undefined"){
+    if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);
+  }
+  global.CTEChartRuntimeGuard=Object.freeze({VERSION,install,__test:Object.freeze({renderCandles})});
+})(globalThis);

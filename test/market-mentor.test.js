@@ -52,3 +52,20 @@ test("leader rotation and transition regime changes are material notification ev
   const transitioned={row:row({regime:"TRANSITION",ratio:1.2}),slots:base.slots};
   assert.equal(mentor.__test.materialChange(transitioned,base),true);
 });
+
+test("candle-first chart guard paints valid OHLC independently of analytical overlays",()=>{
+  const operations=[];
+  const ctx={
+    setTransform(){},
+    fillRect(...args){operations.push(["fillRect",...args]);},
+    beginPath(){},moveTo(){},lineTo(){},stroke(){operations.push(["stroke"]);},fillText(){},setLineDash(){},measureText(){return{width:80};},
+    fillStyle:"",strokeStyle:"",lineWidth:1,font:"",textBaseline:"",textAlign:""
+  };
+  const canvas={width:0,height:0,clientWidth:900,clientHeight:420,parentNode:{clientWidth:900,clientHeight:420},getBoundingClientRect(){return{width:900,height:420};},getContext(){return ctx;}};
+  const candles=Array.from({length:120},(_,index)=>{const open=1.19+index*.00001,close=open+(index%2===0?.00005:-.00004);return{time:new Date(Date.UTC(2026,7,10,0,index)).toISOString(),open,high:Math.max(open,close)+.00008,low:Math.min(open,close)-.00008,close};});
+  const result=globalThis.CTEChartRuntimeGuard.__test.renderCandles({canvas,candles,visibleBars:120,offsetBars:0,leftIndent:24,rightIndent:72,devicePixelRatio:1,formatPrice:value=>Number(value).toFixed(5)});
+  assert.equal(result.rendered,true);
+  assert.equal(result.visibleCandles.length,120);
+  assert.ok(canvas.width>0&&canvas.height>0);
+  assert.ok(operations.filter(([name])=>name==="fillRect").length>120,"background plus candle bodies should be painted");
+});
