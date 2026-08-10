@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 
 const html=await readFile(new URL("../public/index.html",import.meta.url),"utf8");
-const renderer=await readFile(new URL("../public/unified-chart.js",import.meta.url),"utf8");\nconst certificationManifests=(await Promise.all(["registered-horizon.manifest.json","registered-horizon-implementation.manifest.json"].map(name=>readFile(new URL(`../source-code/${name}`,import.meta.url),"utf8")))).join("\\n");
+const renderer=await readFile(new URL("../public/unified-chart.js",import.meta.url),"utf8");
+const certificationManifests=(await Promise.all(["registered-horizon.manifest.json","registered-horizon-implementation.manifest.json"].map(name=>readFile(new URL(`../source-code/${name}`,import.meta.url),"utf8")))).join("\
+");
 const between=(start,end,label)=>{const from=html.indexOf(start),to=html.indexOf(end,from);assert.ok(from>=0,`${label}: start missing`);assert.ok(to>from,`${label}: end missing`);return html.slice(from,to);};
 
 assert.match(html,/<script src="\/unified-chart\.js"><\/script>/);
@@ -17,7 +19,8 @@ assert.match(renderer,/value!==null&&value!==undefined&&value!==""/);
 assert.match(renderer,/plausiblePrice/);
 assert.match(renderer,/function drawSignals\(/);
 assert.match(renderer,/options\.signals/);
-assert.match(renderer,/\?"BUY":"SELL"/);\nassert.match(renderer,/signal\.current\?" ACTIVE":""/);
+assert.match(renderer,/\?"BUY":"SELL"/);
+assert.match(renderer,/signal\.current\?" ACTIVE":""/);
 
 assert.match(html,/id="chartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="chartStage"/);
 assert.match(html,/id="evalChartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="evalChartStage"/);
@@ -43,7 +46,12 @@ assert.match(analytical,/unifiedIndicatorSet\(pair,timeframe,state\.chartCandles
 assert.match(event,/unifiedIndicatorSet\(pair,timeframe,data,length\)/);
 assert.match(evaluation,/unifiedIndicatorSet\(pair,timeframe,state\.evalCandles,length\)/);
 assert.match(html,/function indicatorSignalSeries\(candles,indicators,strategy,filter=0\)/);
-assert.match(analytical,/indicatorSignalSeries\(state\.chartCandles,indicators,strategy,filter\)/);\nassert.doesNotMatch(analytical,/signals:state\.chartCausalSeries/);\nassert.match(event,/asset:Array\.isArray\(htl\?\.asset\)/);\nassert.match(event,/Array\.isArray\(events\)/);\nassert.match(html,/current:true/);\nassert.doesNotMatch(certificationManifests,/public\/(?:index\.html|unified-chart\.js)/);
+assert.match(analytical,/indicatorSignalSeries\(state\.chartCandles,indicators,strategy,filter\)/);
+assert.doesNotMatch(analytical,/signals:state\.chartCausalSeries/);
+assert.match(event,/asset:Array\.isArray\(htl\?\.asset\)/);
+assert.match(event,/Array\.isArray\(events\)/);
+assert.match(html,/current:true/);
+assert.doesNotMatch(certificationManifests,/public\/(?:index\.html|unified-chart\.js)/);
 
 const evalLoad=between("async function loadEvalChartData(pair,timeframe)","function drawEvalCharts()","evaluation load");
 assert.match(evalLoad,/loadUnifiedChartCandles\(pair,timeframe,null,95,true\)/);
