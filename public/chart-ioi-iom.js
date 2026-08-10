@@ -1,12 +1,12 @@
 (function installIOIIOMChartIndicators(global){
   "use strict";
 
-  const VERSION="CTE_CHART_IOI_IOM@1.0.0";
+  const VERSION="CTE_CHART_IOI_IOM@1.0.1";
   const CHART_ONLY_IDS=new Set(["IOI","IOM"]);
   const PREFERENCE_KEY="cte-compound.chart-only-indicator";
   const cache=new Map();
 
-  const isFinite=value=>Number.isFinite(Number(value));
+  const isFinite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
 
   function pairAverage(left=[],right=[]){
     const size=Math.max(left.length||0,right.length||0);
