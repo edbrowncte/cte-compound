@@ -19,18 +19,18 @@ function controlsInOrder(segment,ids,label){
   }
 }
 
-const analytical=between('<section class="panel chart-panel" id="chartPanel"','<div class="chart-summary">',"Analytical Compound chart");
+const analytical=between('id="chartPanel" data-chart-model="capitalization"','<div class="chart-summary">',"Analytical Compound Capitalization chart");
 controlsInOrder(analytical,["chartPair","chartTimeframe","chartStrategy","chartLength","chartFilter","refreshChart","zoomOut","zoomIn","indentOut","indentIn","crosshairToggle","maximizeChart"],"Analytical Compound chart");
 
-const evaluation=between('<section class="panel chart-panel" id="evalChartPanel"','<div class="chart-summary"',"Evaluation chart");
+const evaluation=between('id="evalChartPanel" data-chart-model="capitalization"','<div class="chart-summary"',"Capitalization Model chart");
 controlsInOrder(evaluation,["evalChartPair","evalChartTimeframe","evalChartStrategy","evalChartLength","evalChartFilter","evalRefreshChart","evalZoomOut","evalZoomIn","evalIndentOut","evalIndentIn","evalCrosshairToggle","evalMaximizeChart"],"Evaluation chart");
 
-const eventChart=between('<div class="chart-toolbar event-chart-toolbar">','<div class="indicator-legend" id="eventIndicatorLegend"',"HTL Event chart");
+const eventChart=between('id="eventChartPanel" data-chart-model="capitalization"','<div class="indicator-legend" id="eventIndicatorLegend"',"HTL Event Capitalization chart");
 controlsInOrder(eventChart,["eventStrategy","refreshEventChart","eventZoomOut","eventZoomIn","eventIndentOut","eventIndentIn","eventCrosshairToggle","eventMaximize"],"HTL Event chart");
 for(const deprecated of ["eventChartPair","eventChartTimeframe","eventChartLength","eventChartFilter"])assert.ok(!eventChart.includes(`id="${deprecated}"`),`HTL Event chart must not expose deprecated ${deprecated}`);
 assert.ok(eventChart.includes('id="eventStrategy" type="hidden" value="ASSET"'),"HTL Event chart must be fixed to HTL Asset");
 
-const eventSchedule=between('<section class="panel tab-panel" id="eventPanel"','<div class="chart-toolbar event-chart-toolbar">',"HTL schedule");
+const eventSchedule=between('<section class="panel tab-panel" id="eventPanel"','id="eventChartPanel" data-chart-model="capitalization"',"HTL schedule");
 assert.ok(eventSchedule.includes('id="eventPair"'),"HTL schedule must retain its own pair selector");
 assert.ok(eventSchedule.includes('id="eventTimeframe"'),"HTL schedule must retain its own timeframe selector");
 assert.ok(eventSchedule.includes('id="eventLength"'),"HTL schedule must retain its own HTL length");

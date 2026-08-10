@@ -456,11 +456,11 @@
       </section></details>
 
       <!-- Interactive analytical chart. -->
-      <section class="panel chart-panel" id="chartPanel" aria-labelledby="chartTitle">
+      <section class="panel chart-panel capitalization-chart-component" id="chartPanel" data-chart-model="capitalization" aria-labelledby="chartTitle">
         <div class="panel-head">
           <div class="panel-title">
-            <h2 id="chartTitle">Interactive Analytical Chart</h2>
-            <p>Drag to pan · wheel or controls to zoom · price uses the right y-axis · normalized NAI uses the left z-axis.</p>
+            <h2 id="chartTitle">Capitalization Model Chart · Analytical Compound</h2>
+            <p>Unified 5,000-candle Capitalization chart · timestamp-synchronized indicator signals · drag to pan · wheel or controls to zoom.</p>
           </div>
           <div class="chart-toolbar">
             <label class="field"><span>Currency pair</span><select id="chartPair"></select></label>
@@ -508,10 +508,10 @@
         <div style="display:grid; grid-template-columns:70% 30%; gap:14px; margin-bottom:14px;">
           <!-- Left Column (Main Chart + Oscillator) -->
           <div style="display:flex; flex-direction:column; gap:14px; min-width:0;">
-            <section class="panel chart-panel" id="evalChartPanel" style="min-width:0;">
+            <section class="panel chart-panel capitalization-chart-component" id="evalChartPanel" data-chart-model="capitalization" style="min-width:0;">
               <div class="panel-head">
                 <div class="panel-title">
-                  <h2 id="evalChartTitle">Evaluation Chart</h2>
+                  <h2 id="evalChartTitle">Capitalization Model Chart</h2>
                   <p id="evalChartSubtitle">Timestamp-synchronized antagonist pressure, reverse-cadence IM, event power, and transition diagnostics.</p>
                 </div>
                 <div class="chart-toolbar">
@@ -666,6 +666,8 @@
         </div>
         <p class="event-note" id="eventScheduleStatus">HTL schedule not loaded.</p>
         <p class="event-note" id="eventScheduleInterpretation">Current Event is the active Asset/Inverse crossing; Current Event Open is the completed crossing candle close; Location is AA above average or BA below average; completion columns estimate the active event ending within 5 or 10 bars; Events counts FINAL events; MAE columns measure duration and envelope error; Onset Brier measures the same-direction ≤10-bar probability error; Historical Brier is the rolling historical-frequency benchmark; Next HTL Event and Forecast Envelope describe the next opposite event.</p>
+        <section class="panel chart-panel capitalization-chart-component" id="eventChartPanel" data-chart-model="capitalization" aria-labelledby="eventCapitalizationChartTitle">
+        <div class="panel-head"><div class="panel-title"><h2 id="eventCapitalizationChartTitle">Capitalization Model Chart · HTL Event</h2><p>Unified 5,000-candle Capitalization chart · completed-candle HTL signals and event transitions.</p></div></div>
         <div class="chart-toolbar event-chart-toolbar">
           <input id="eventStrategy" type="hidden" value="ASSET">
           <button id="refreshEventChart" type="button" disabled>Refresh chart</button>
@@ -676,6 +678,7 @@
         </div>
         <div class="indicator-legend" id="eventIndicatorLegend" aria-label="HTL geometry legend"></div>
         <div class="event-chart-stage unified-chart-stage"><canvas id="eventChart" aria-label="Completed OANDA candles with original HTL and HTL Asset geometry"></canvas><div class="chart-message" id="eventMessage">No event forecast loaded</div></div>
+        </section>
         <p class="event-note" id="eventMethod">Not loaded</p>
         <details class="event-ledger">
           <summary>Event Ledger · Result / Profit</summary>

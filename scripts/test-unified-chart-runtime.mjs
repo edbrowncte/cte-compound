@@ -23,6 +23,12 @@ assert.match(renderer,/signal\.current\?" ACTIVE":""/);
 
 assert.match(html,/id="chartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="chartStage"/);
 assert.match(html,/id="evalChartStage"[^>]*unified-chart-stage|class="chart-stage unified-chart-stage" id="evalChartStage"/);
+assert.equal((html.match(/data-chart-model="capitalization"/g)||[]).length,3,"Analytical, HTL Event, and Capitalization facilities must each use the complete Capitalization chart component");
+assert.match(html,/id="chartPanel"[^>]*data-chart-model="capitalization"/);
+assert.match(html,/id="eventChartPanel"[^>]*data-chart-model="capitalization"/);
+assert.match(html,/id="evalChartPanel"[^>]*data-chart-model="capitalization"/);
+assert.match(html,/Capitalization Model Chart · Analytical Compound/);
+assert.match(html,/Capitalization Model Chart · HTL Event/);
 assert.match(html,/class="event-chart-stage unified-chart-stage"/);
 assert.match(html,/id="evalIndicatorLegend"/);
 assert.match(html,/id="evalChartLength"[^>]*max="500"/);
