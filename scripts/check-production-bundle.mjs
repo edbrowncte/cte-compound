@@ -17,7 +17,8 @@ try{
   if(/storage\.put\(\s*["']optimizer["']/.test(bundle))throw new Error("Production bundle contains a forbidden monolithic optimizer registry write.");
   if(!/optimizer:v/.test(bundle))throw new Error("Production bundle is missing versioned sharded optimizer record keys.");
   if(!/SHARDED_PER_DATASET/.test(bundle))throw new Error("Production bundle is missing the sharded optimizer health contract.");
-  if(!/CTE_COMPOUND_CAPITALIZATION_CHARTS@1\.0\.0/.test(bundle)||!/LEGACY_RELEASE_REJECTED/.test(bundle))throw new Error("Production bundle is missing the fail-closed current-release authority contract.");
+  if(!/CTE_COMPOUND_CURRENT_RELEASE@2\.0\.0/.test(bundle)||!/LEGACY_RELEASE_REJECTED/.test(bundle))throw new Error("Production bundle is missing the fail-closed current-release authority contract.");
+  if(/CTE_COMPOUND_CAPITALIZATION_CHARTS@1\.0\.0/.test(bundle))throw new Error("Production bundle contains the obsolete chart-era release contract.");
   console.log("Production bundle contains only the sharded optimizer persistence contract and fails closed against unidentified legacy releases.");
 }finally{
   await rm(outdir,{recursive:true,force:true});

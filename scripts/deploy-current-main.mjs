@@ -1,7 +1,7 @@
 import {execFileSync,spawnSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 
-const RELEASE_CONTRACT="CTE_COMPOUND_CAPITALIZATION_CHARTS@1.0.0";
+const RELEASE_CONTRACT="CTE_COMPOUND_CURRENT_RELEASE@2.0.0";
 const required={
   GITHUB_ACTIONS:"true",
   GITHUB_REF:"refs/heads/main",
