@@ -4,7 +4,7 @@ import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
 import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
 
 const API="https://api-fxtrade.oanda.com";
-const IO_UNITS_VERSION="INDICATOR_ONLY_UNITS@1.0.0";
+const IO_UNITS_VERSION="INDICATOR_ONLY_UNITS@1.0.1";
 const DEFAULT_IO_UNITS=100;
 const MAX_IO_UNITS=100000000;
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
@@ -65,11 +65,8 @@ export class HtlEngine extends IndicatorOnlyEngine{
   async executeIndicatorOnlyUnits(candidate,token,accountId,state){
     state.lastTradeAttemptAt=new Date().toISOString();
     const{pair,event}=candidate,direction=event.direction>0?"BUY":"SELL",requested=normalizeIndicatorOnlyUnits(candidate?.IO?.units),context=this.decisionContext(candidate,{});
-    const summary=(await callOanda(`/v3/accounts/${accountId}/summary`,token)).account||{},marginAvailable=Number(summary.marginAvailable||0);
-    if(marginAvailable<=0){state.lastNoOrderReason=`Indicator Only · no margin available: ${marginAvailable}`;await this.write({type:"NO_ORDER",pair,direction,units:requested,message:state.lastNoOrderReason,...context});return null;}
-
-    const pricing=await callOanda(`/v3/accounts/${accountId}/pricing?instruments=${pair}&includeUnitsAvailable=true`,token),priceData=pricing.prices?.[0],available=priceData?.unitsAvailable?.default?Math.max(0,Math.trunc(Number(event.direction>0?priceData.unitsAvailable.default.long:priceData.unitsAvailable.default.short)||0)):0,safeCapacity=Math.floor(available*.8);
-    if(requested>safeCapacity){state.lastNoOrderReason=`Indicator Only · requested ${requested} units exceeds 80% directional capacity ${safeCapacity} (available ${available})`;await this.write({type:"NO_ORDER",pair,direction,units:requested,message:state.lastNoOrderReason,...context});return null;}
+    const pricing=await callOanda(`/v3/accounts/${accountId}/pricing?instruments=${pair}&includeUnitsAvailable=true`,token),priceData=pricing.prices?.[0],available=priceData?.unitsAvailable?.default?Math.max(0,Math.trunc(Number(event.direction>0?priceData.unitsAvailable.default.long:priceData.unitsAvailable.default.short)||0)):0;
+    if(available<1||requested>available){state.lastNoOrderReason=available<1?`Indicator Only · no ${direction} units available for ${pair}`:`Indicator Only · requested ${requested} ${direction} units unavailable; OANDA unitsAvailable is ${available}`;await this.write({type:"NO_ORDER",pair,direction,units:requested,unitsAvailable:available,message:state.lastNoOrderReason,...context});return null;}
 
     state.pendingOrders=state.pendingOrders||{};
     const pending=state.pendingOrders[pair];
@@ -84,9 +81,9 @@ export class HtlEngine extends IndicatorOnlyEngine{
     const signed=event.direction>0?requested:-requested,clientId=ioClientOrderId(pair,event.id),order={order:{instrument:pair,units:String(signed),type:"MARKET",timeInForce:"FOK",positionFill:"DEFAULT",clientExtensions:{id:clientId,tag:"cte-compound-io",comment:String(event.id).slice(0,64)}}};
     state.pendingOrders[pair]={clientId,event:event.id,direction,units:requested,createdAt:new Date().toISOString()};await this.ctx.storage.put("state",state);
     const result=await callOanda(`/v3/accounts/${accountId}/orders`,token,{method:"POST",body:JSON.stringify(order)}),fill=result.orderFillTransaction;
-    if(!fill){const rejected=result.orderRejectTransaction||result.orderCancelTransaction,reason=rejected?.rejectReason||rejected?.reason||"OANDA returned no IO order fill";delete state.pendingOrders[pair];await this.ctx.storage.put("state",state);state.lastNoOrderReason=`Indicator Only order rejected: ${reason} (Requested: ${requested}, Available: ${available})`;await this.write({type:"ORDER_REJECTED",pair,direction,units:requested,transaction:rejected?.id||result.lastTransactionID||null,event:event.id,message:reason,...context});return null;}
+    if(!fill){const rejected=result.orderRejectTransaction||result.orderCancelTransaction,reason=rejected?.rejectReason||rejected?.reason||"OANDA returned no IO order fill";delete state.pendingOrders[pair];await this.ctx.storage.put("state",state);state.lastNoOrderReason=`Indicator Only order rejected: ${reason} (Requested: ${requested}, Available: ${available})`;await this.write({type:"ORDER_REJECTED",pair,direction,units:requested,unitsAvailable:available,transaction:rejected?.id||result.lastTransactionID||null,event:event.id,message:reason,...context});return null;}
     delete state.pendingOrders[pair];await this.ctx.storage.put("state",state);state.lastNoOrderReason=`Indicator Only order filled: ${direction} ${requested} units`;
-    await this.write({type:"ORDER_FILLED",pair,direction,units:Math.abs(Number(fill.units)||requested),transaction:fill.id||result.lastTransactionID||null,clientOrderId:clientId,price:fill.price||null,accountBalance:fill.accountBalance??null,event:event.id,message:state.lastNoOrderReason,...context});return fill;
+    await this.write({type:"ORDER_FILLED",pair,direction,units:Math.abs(Number(fill.units)||requested),unitsAvailable:available,transaction:fill.id||result.lastTransactionID||null,clientOrderId:clientId,price:fill.price||null,accountBalance:fill.accountBalance??null,event:event.id,message:state.lastNoOrderReason,...context});return fill;
   }
 
   async tickIndicatorOnly(state,control){
