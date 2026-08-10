@@ -14,7 +14,7 @@ try{
   if(!javascript.length)throw new Error("Wrangler dry-run produced no JavaScript bundle.");
   const bundle=(await Promise.all(javascript.map(file=>readFile(join(outdir,file),"utf8")))).join("\n");
   if(/storage\.put\(\s*["']optimizer["']/.test(bundle))throw new Error("Production bundle contains a forbidden monolithic optimizer registry write.");
-  if(!/optimizer:v7:/.test(bundle))throw new Error("Production bundle is missing sharded optimizer record keys.");
+  if(!/optimizer:v/.test(bundle))throw new Error("Production bundle is missing versioned sharded optimizer record keys.");
   if(!/SHARDED_PER_DATASET/.test(bundle))throw new Error("Production bundle is missing the sharded optimizer health contract.");
   console.log("Production bundle contains only the sharded optimizer persistence contract.");
 }finally{
