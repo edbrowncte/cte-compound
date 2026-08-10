@@ -9,7 +9,7 @@ sandbox.globalThis=sandbox;
 vm.runInNewContext(source,sandbox,{filename:"chart-ioi-iom.js"});
 const api=sandbox.CTEChartIOIIOM;
 assert.ok(api,"IOI/IOM chart module must publish its testable formula surface");
-assert.equal(api.VERSION,"CTE_CHART_IOI_IOM@1.0.1");
+assert.equal(api.VERSION,"CTE_CHART_IOI_IOM@1.0.2");
 
 const candles=[10,11,12,13,14,15].map((close,index)=>({close,time:`t${index}`}));
 const htl={asset:[12,12,13,14,15,16],inverse:[8,9,10,11,12,13]};
@@ -28,9 +28,9 @@ for(let index=2;index<candles.length;index++){
 }
 
 const signals=api.crossSignalSeries(candles,[1,2,1,0,2,3],[2,1,1,1,1,2],0);
-assert.deepEqual(Array.from(signals,signal=>signal.direction),[-1,1,-1,1,1],"cross signals must preserve transition markers plus the final current-state marker");
-assert.equal(signals.at(-1)?.current,true,"the final same-direction marker must identify the currently active signal");
-assert.deepEqual(Array.from(signals.slice(0,-1),signal=>signal.direction),[-1,1,-1,1],"historical transition signals must alternate only when line ownership changes");
+assert.deepEqual(Array.from(signals,signal=>signal.direction),[-1,1,-1,1,1],"cross signals must preserve alternating ownership transitions plus the final current-owner marker");
+assert.equal(signals.at(-1)?.current,true,"the final same-direction marker must identify the currently active owner");
+assert.deepEqual(Array.from(signals.slice(0,-1),signal=>signal.direction),[-1,1,-1,1],"historical transition signals must alternate only when directional ownership changes");
 
 assert.match(source,/CHART_INDICATORS\.IOI=\{price:\[\["ioi","IOI"/,"IOI must own exactly its two chart lines");
 assert.match(source,/CHART_INDICATORS\.IOM=\{price:\[\["ioiMean","IOM Mean"/,"IOM must own exactly its mean and recovered inverse lines");
@@ -39,6 +39,6 @@ assert.match(source,/IOM · Indicator Only Mean/);
 assert.match(source,/if\(!CHART_ONLY_IDS\.has\(strategy\)\)return priorDraw\(\)/,"existing chart indicators must retain their current renderer");
 assert.match(source,/if\(!CHART_ONLY_IDS\.has\(strategy\)\)return priorRefresh/,"registered analytical strategies must retain their current causal refresh path");
 assert.match(worker,/chart-indicator-ownership\.js[^]*chart-ioi-iom\.js/,"IOI/IOM extension must load after singular chart ownership");
-assert.doesNotMatch(source,/engineStrategy|indicatorOnlyIndicator|scheduleStrategy/,"IOI/IOM must be added only to the Forensic chart selector");
+assert.doesNotMatch(source,/engineStrategy|indicatorOnlyIndicator|scheduleStrategy/,"IOI/IOM chart module must not alter automated execution selectors");
 
-console.log("IOI/IOM chart certification passed: IOI averages instrument/HTL lines, IOM standardizes the IOI mean and recovers its inverse, transition/current crossing signals are singularly owned, and only the Forensic chart selector is extended.");
+console.log("IOI/IOM chart certification passed: IOI averages instrument/HTL lines, IOM standardizes the IOI mean and recovers its inverse, transition/current crossing signals use alternating ownership, and automated execution selectors remain untouched.");
