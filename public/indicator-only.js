@@ -8,7 +8,7 @@
 
   const el=id=>document.getElementById(id);
   const copyOptions=(source,target)=>{if(source&&target)target.innerHTML=[...source.options].map(option=>`<option value="${option.value}">${option.textContent}</option>`).join("");};
-  const control=()=>({enabled:Boolean(el("indicatorOnlyToggle")?.checked),pair:el("indicatorOnlyPair")?.value||"EUR_USD",timeframe:el("indicatorOnlyTimeframe")?.value||"M1",indicator:el("indicatorOnlyIndicator")?.value||"ASSET",length:Math.max(3,Math.min(200,Math.trunc(Number(el("indicatorOnlyLength")?.value)||10)),filter:Math.max(0,Math.min(10,Number(el("indicatorOnlyFilter")?.value)||0))});
+  const control=()=>({enabled:Boolean(el("indicatorOnlyToggle")?.checked),pair:el("indicatorOnlyPair")?.value||"EUR_USD",timeframe:el("indicatorOnlyTimeframe")?.value||"M1",indicator:el("indicatorOnlyIndicator")?.value||"ASSET",length:Math.max(3,Math.min(200,Math.trunc(Number(el("indicatorOnlyLength")?.value)||10))),filter:Math.max(0,Math.min(10,Number(el("indicatorOnlyFilter")?.value)||0))});
 
   function lockNormal(active){
     const nodes=[...NORMAL_CONTROL_IDS.map(el).filter(Boolean),...document.querySelectorAll("#pairSelectorGrid button")];
