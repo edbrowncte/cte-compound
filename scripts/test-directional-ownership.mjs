@@ -46,8 +46,10 @@ assert.deepEqual(Array.from(captured.signals.slice(0,-1),signal=>signal.directio
 assert.equal(captured.signals.at(-1).current,true);
 assert.match(worker,/chart-ioi-iom\.js[^]*directional-ownership\.js[^]*ioi-iom-performance\.js/);
 assert.match(optimizer,/applyDirectionalOwnershipPerformance/);
-assert.match(optimizer,/statsFor=signals=>ownedPerformance/);
+assert.match(optimizer,/const finalResult=evaluateRegisteredPerformance\(candles,pair,settings\),directionalResult=applyDirectionalOwnershipPerformance\(finalResult,pair\),config=\{\}/,"directional performance must be derived after the execution optimizer has selected settings");
+assert.match(optimizer,/entryFor\(strategy,settings,finalResult\.strategies\[strategy\]\.stats\)/,"six-strategy execution config metrics must continue using the original registered optimizer result");
+assert.match(optimizer,/registeredExportRows\(directionalResult,pair,timeframe\)/,"Macro performance rows must use directional ownership results");
 assert.match(optimizer,/directionalOwnershipVersion:DIRECTIONAL_OWNERSHIP_VERSION/);
 
 for(const label of ["HTL Asset","DARE(N)","DARE","COMBO","NAI","APEX","IOI","IOM"])assert.ok(label.length>0);
-console.log("Universal directional ownership certification passed for HTL Asset, DARE(N), DARE, COMBO, NAI, APEX, IOI, and IOM: repeated same-direction events are ignored until the opposite direction takes ownership at the optimizer performance boundary and unified chart marker boundary, while the checksum-hydrated registered core remains unchanged.");
+console.log("Universal directional ownership certification passed for HTL Asset, DARE(N), DARE, COMBO, NAI, APEX, IOI, and IOM: repeated same-direction events are ignored until the opposite direction takes ownership in Macro performance and unified chart markers, while the checksum-hydrated registered core and six-strategy execution optimizer metrics remain unchanged.");
