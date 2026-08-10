@@ -1,14 +1,15 @@
 (function installIndicatorOnlyControls(global){
   "use strict";
 
-  const VERSION="CTE_INDICATOR_ONLY_UI@1.0.0";
+  const VERSION="CTE_INDICATOR_ONLY_UI@1.1.0";
   const NORMAL_CONTROL_IDS=["engineTimeframe","engineStrategy","engineConfirmationStrategy","engineHtlLength","engineFilter","engineDecisionMode","engineConfigurationSource","saveEngineConfig","candidateA","candidateB","candidateC","candidateUnits","executeDecisionCandidate","tradePair","tradeUnits","tradeBuy","tradeSell"];
+  const STRUCTURAL_IDS=["indicatorOnlyPair","indicatorOnlyTimeframe","indicatorOnlyIndicator","indicatorOnlyLength","indicatorOnlyFilter"];
   const priorDisabled=new Map();
   let root=null,busy=false,pollTimer=null;
 
   const el=id=>document.getElementById(id);
   const copyOptions=(source,target)=>{if(source&&target)target.innerHTML=[...source.options].map(option=>`<option value="${option.value}">${option.textContent}</option>`).join("");};
-  const control=()=>({enabled:Boolean(el("indicatorOnlyToggle")?.checked),pair:el("indicatorOnlyPair")?.value||"EUR_USD",timeframe:el("indicatorOnlyTimeframe")?.value||"M1",indicator:el("indicatorOnlyIndicator")?.value||"ASSET",length:Math.max(3,Math.min(200,Math.trunc(Number(el("indicatorOnlyLength")?.value)||10))),filter:Math.max(0,Math.min(10,Number(el("indicatorOnlyFilter")?.value)||0))});
+  const control=()=>({enabled:Boolean(el("indicatorOnlyToggle")?.checked),pair:el("indicatorOnlyPair")?.value||"EUR_USD",timeframe:el("indicatorOnlyTimeframe")?.value||"M1",indicator:el("indicatorOnlyIndicator")?.value||"ASSET",length:Math.max(3,Math.min(200,Math.trunc(Number(el("indicatorOnlyLength")?.value)||10))),filter:Math.max(0,Math.min(10,Number(el("indicatorOnlyFilter")?.value)||0)),units:Math.max(1,Math.min(100000000,Math.trunc(Number(el("indicatorOnlyUnits")?.value)||100)))});
 
   function lockNormal(active){
     const nodes=[...NORMAL_CONTROL_IDS.map(el).filter(Boolean),...document.querySelectorAll("#pairSelectorGrid button")];
@@ -25,13 +26,15 @@
     if(el("indicatorOnlyIndicator")&&io.indicator)el("indicatorOnlyIndicator").value=io.indicator;
     if(el("indicatorOnlyLength")&&io.length!==undefined)el("indicatorOnlyLength").value=String(io.length);
     if(el("indicatorOnlyFilter")&&io.filter!==undefined)el("indicatorOnlyFilter").value=String(io.filter);
+    if(el("indicatorOnlyUnits")&&io.units!==undefined)el("indicatorOnlyUnits").value=String(io.units);
     if(el("indicatorOnlyToggle"))el("indicatorOnlyToggle").checked=enabled;
-    for(const id of ["indicatorOnlyPair","indicatorOnlyTimeframe","indicatorOnlyIndicator","indicatorOnlyLength","indicatorOnlyFilter"]){const node=el(id);if(node)node.disabled=enabled||busy;}
+    for(const id of STRUCTURAL_IDS){const node=el(id);if(node)node.disabled=enabled||busy;}
+    const unitsNode=el("indicatorOnlyUnits");if(unitsNode)unitsNode.disabled=busy;
     lockNormal(enabled);
     const status=el("indicatorOnlyStatus");
     if(status){
       const signal=runtime.lastSignal?` · signal ${runtime.lastSignal}`:"",candle=runtime.lastCandle?` · ${new Date(runtime.lastCandle).toLocaleString()}`:"";
-      status.textContent=enabled?`IO ACTIVE · ${String(io.pair||"").replace("_","/")} · ${io.timeframe} · ${io.indicator} · L${io.length} · F${io.filter}${signal}${candle}`:"IO OFF · normal certified automation active";
+      status.textContent=enabled?`IO ACTIVE · ${String(io.pair||"").replace("_","/")} · ${io.timeframe} · ${io.indicator} · L${io.length} · F${io.filter} · U${io.units}${signal}${candle}`:"IO OFF · normal certified automation active";
       status.style.color=enabled?"var(--buy,#48c78e)":"var(--muted,#8e9aab)";
     }
     const toggleLabel=el("indicatorOnlyToggleLabel");if(toggleLabel){toggleLabel.textContent=enabled?"ENGAGED":"OFF";toggleLabel.style.color=enabled?"var(--buy,#48c78e)":"var(--muted,#8e9aab)";}
@@ -48,13 +51,13 @@
     if(busy)return;
     busy=true;
     const requested=control(),status=el("indicatorOnlyStatus");
-    if(status)status.textContent=requested.enabled?"Engaging Indicator Only…":"Saving Indicator Only controls…";
+    if(status)status.textContent=requested.enabled?"Saving Indicator Only controls…":"Saving Indicator Only controls…";
     try{
       const response=await fetch("/api/control/selectedPairs",{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({indicatorOnly:requested})}),payload=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);
       await load();
     }catch(error){if(status)status.textContent=error?.message||"Indicator Only control update failed";await load();}
-    finally{busy=false;const active=Boolean(el("indicatorOnlyToggle")?.checked);for(const id of ["indicatorOnlyPair","indicatorOnlyTimeframe","indicatorOnlyIndicator","indicatorOnlyLength","indicatorOnlyFilter"]){const node=el(id);if(node)node.disabled=active;}lockNormal(active);}
+    finally{busy=false;const active=Boolean(el("indicatorOnlyToggle")?.checked);for(const id of STRUCTURAL_IDS){const node=el(id);if(node)node.disabled=active;}const unitsNode=el("indicatorOnlyUnits");if(unitsNode)unitsNode.disabled=false;lockNormal(active);}
   }
 
   function install(){
@@ -70,6 +73,7 @@
       <label class="field"><span>Indicator</span><select id="indicatorOnlyIndicator"></select></label>
       <label class="field"><span>Length</span><input id="indicatorOnlyLength" type="number" min="3" max="200" value="10"></label>
       <label class="field"><span>Filter</span><input id="indicatorOnlyFilter" type="number" min="0" max="10" step="0.1" value="0"></label>
+      <label class="field"><span>Units</span><input id="indicatorOnlyUnits" type="number" min="1" max="100000000" step="1" value="100"></label>
       <div id="indicatorOnlyStatus" role="status" aria-live="polite" style="flex-basis:100%;min-height:14px;font-size:9px;color:var(--muted,#8e9aab);">IO OFF · normal certified automation active</div>`;
     anchor.insertAdjacentElement("afterend",root);
     copyOptions(el("tradePair"),el("indicatorOnlyPair"));copyOptions(el("engineTimeframe"),el("indicatorOnlyTimeframe"));copyOptions(el("engineStrategy"),el("indicatorOnlyIndicator"));
@@ -79,7 +83,7 @@
     if(el("engineHtlLength"))el("indicatorOnlyLength").value=el("engineHtlLength").value;
     if(el("engineFilter"))el("indicatorOnlyFilter").value=el("engineFilter").value;
     el("indicatorOnlyToggle").addEventListener("change",save);
-    for(const id of ["indicatorOnlyPair","indicatorOnlyTimeframe","indicatorOnlyIndicator","indicatorOnlyLength","indicatorOnlyFilter"])el(id).addEventListener("change",save);
+    for(const id of [...STRUCTURAL_IDS,"indicatorOnlyUnits"])el(id).addEventListener("change",save);
     void load();pollTimer=setInterval(()=>{if(!document.hidden)void load();},5000);
     global.addEventListener?.("pagehide",()=>{if(pollTimer)clearInterval(pollTimer);},{once:true});
     return true;
