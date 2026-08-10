@@ -105,7 +105,6 @@ async function exactLiveAccount(token,configured,state,writeLedger=null){
 function configFingerprint(config){
   return JSON.stringify({
     timeframe:config.timeframe,
-    decisionMode:config.decisionMode,
     strategy:config.strategy,
     confirmationStrategy:config.confirmationStrategy,
     htlLength:config.htlLength,
@@ -265,6 +264,21 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
 
   async scan(token, config, timeframe = config.timeframe, optimizer = {}) {
     return optimizedScan(this, token, config, timeframe, optimizer);
+  }
+
+  mtfCandidates(state,rows,lastCandle,fingerprint){
+    const byPair=new Map(rows.filter(row=>row?.event&&row.event.qualified!==false).map(row=>[row.pair,row]));
+    return PAIRS.map(pair=>{
+      let score=0,count=0;
+      for(const timeframe of TIMEFRAMES){
+        const snapshot=state.mtf?.[timeframe];
+        if(snapshot?.fingerprint!==fingerprint)continue;
+        const direction=Number(snapshot.directions?.[pair]||0);
+        if(direction){score+=direction;count++;}
+      }
+      const direction=Math.sign(score),confidence=count?Math.abs(score)/count:0,row=byPair.get(pair);
+      return direction&&count>=3&&row?{...row,event:{...row.event,direction,id:`MTF:${direction}:${lastCandle}`},confidence,count}:null;
+    }).filter(Boolean).sort((left,right)=>right.confidence-left.confidence||right.count-left.count);
   }
 
   async enforceAgeWeekendPolicy(state,config,window){
@@ -511,7 +525,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         state.mtf={};
         state.mtfRotation=0;
         state.mtfFingerprint=fingerprint;
-        // Clean stale strategy requirements, directions, events, candle markers, and initialized flag to prevent premature position closures on configuration change
+        // Clean stale strategy requirements, directions, events, candle markers, and initialized flag to prevent premature position closures on analytical configuration change.
         state.requirements=null;
         state.directions=null;
         state.events={};
@@ -613,8 +627,7 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         const eventCandidates=rows
           .filter(row=>state.events[row.pair]!==row.event.id&&row.event.startTime===lastCandle)
           .sort((left,right)=>right.event.bars-left.event.bars);
-        const priorMtf=state.mtfDecisionDirections||{};
-        const mtfCandidates=mtfNow.filter(row=>Number(priorMtf[row.pair]||0)!==row.event.direction);
+        const mtfCandidates=mtfNow;
         const combined=eventCandidates.map(event=>{
           const mtf=mtfNow.find(item=>item.pair===event.pair&&item.event.direction===event.event.direction);
           return mtf?{...event,confidence:mtf.confidence,count:mtf.count}:null;
