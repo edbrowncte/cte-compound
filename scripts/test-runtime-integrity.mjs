@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+
+const source=fs.readFileSync(new URL("../public/runtime-integrity.js",import.meta.url),"utf8"),sandbox={console,Math,Number,Array,Object,String,Boolean,Date,Map,Set,state:{evaluationTableData:[],selectedScheduleStrategy:"ASSET"}};sandbox.globalThis=sandbox;vm.runInNewContext(source,sandbox,{filename:"runtime-integrity.js"});
+const api=sandbox.CTERuntimeIntegrity;assert.ok(api);assert.equal(api.VERSION,"CTE_RUNTIME_INTEGRITY@1.0.0");
+const strong=api.regressionPFromR2(.8,50);assert.ok(strong.fStat>100);assert.ok(strong.pValue<.000001);
+const rows=[{pair:"EUR_CAD",signal:1,r2:.8,pValue:1,fStat:0,mas:.2,im:.4},{pair:"NZD_CHF",signal:1,r2:NaN,pValue:NaN,fStat:NaN,mas:NaN,im:NaN}];sandbox.state.evaluationTableData=rows;const result=api.repairEvaluationRows(rows);assert.equal(result.repaired,1);assert.equal(rows[0].integrityStatus,"STAT_REPAIRED");assert.ok(rows[0].pValue<.000001);assert.ok(rows[0].fStat>0);assert.equal(rows[0].statIntegrityRepair.originalPValue,1);assert.equal(result.incomplete,1);assert.equal(rows[1].integrityStatus,"INCOMPLETE_METRICS");
+sandbox.CTEIndicatorOnlyUI={currentTickets:()=>[{slot:1,enabled:true,pair:"EUR_USD",timeframe:"M30",indicator:"ASSET"},{slot:2,enabled:true,pair:"GBP_USD",timeframe:"M15",indicator:"NAI"}]};sandbox.state.selectedScheduleStrategy="DARE";let alignment=api.mentorAlignment({selectedPair:"EUR_USD",timeframe:"M30",rows:[{pair:"EUR_USD",timeframe:"M30",signal:-1}]});assert.equal(alignment.aligned,false);assert.equal(alignment.ticket.indicator,"ASSET");sandbox.state.selectedScheduleStrategy="ASSET";alignment=api.mentorAlignment({selectedPair:"EUR_USD",timeframe:"M30",rows:[{pair:"EUR_USD",timeframe:"M30",signal:1}]});assert.equal(alignment.aligned,true);
+assert.match(source,/connected:false/);assert.match(source,/external alert withheld/);assert.match(source,/R2_PVALUE_INCONSISTENCY/);assert.match(source,/INCOMPLETE_METRICS/);
+console.log("Runtime integrity certification passed: high-fit p=1 contradictions are repaired from the OLS R² invariant, incomplete metric rows are flagged, and mentor external alerts are withheld when an IO-managed pair is being evaluated under a different indicator.");
