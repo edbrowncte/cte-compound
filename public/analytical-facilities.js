@@ -4,7 +4,6 @@
   const VERSION="CTE_ANALYTICAL_FACILITIES@1.0.0";
   let evaluationPreloadPromise=null,evaluationPreloadKey="";
 
-  const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
   const safeName=value=>String(value||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"data";
   const currentEventTimeframe=()=>document.getElementById("eventTimeframe")?.value||state.selectedTimeframe;
   const currentEventPair=()=>document.getElementById("eventPair")?.value||state.selectedInstrument;
@@ -17,7 +16,7 @@
       length:Math.max(3,Math.min(maxLength,Math.trunc(Number(rawLength)||10))),
       filter:Math.max(0,Math.min(10,Number(rawFilter)||0)),
       configured:Boolean(entry),
-      source:entry?(record?.source||"OPTIMIZER"):"DEFAULT_FALLBACK",
+      source:entry?(record?.source||"OPTIMIZER"):"OPTIMIZER_UNAVAILABLE",
       computedAt:record?.computedAt||null,
       stamp:record?.stamp||null,
       recordVersion:record?.version??null,
@@ -153,7 +152,7 @@
       const prior=renderEventSchedule;renderEventSchedule=function(){const result=prior();augmentEventScheduleRows();return result;};
     }
     if(typeof loadEventRow==="function"){
-      const prior=loadEventRow;loadEventRow=async function(pair,timeframe,_length,controller,priority=60,requestedCount=null){const config=optimizerAssetConfiguration(pair,timeframe),row=await prior(pair,timeframe,config.length,controller,priority,requestedCount);return{...row,length:config.length,filter:config.filter,configurationSource:config.source,configurationComputedAt:config.computedAt,configurationStamp:config.stamp,optimizerConfigured:config.configured};};
+      const prior=loadEventRow;loadEventRow=async function(pair,timeframe,_length,controller,priority=60,requestedCount=null){const config=optimizerAssetConfiguration(pair,timeframe);if(!config.configured)throw new Error(`Optimizer configuration unavailable · ${formatPair(pair)} ${timeframe}`);const row=await prior(pair,timeframe,config.length,controller,priority,requestedCount);return{...row,length:config.length,filter:config.filter,configurationSource:config.source,configurationComputedAt:config.computedAt,configurationStamp:config.stamp,optimizerConfigured:true};};
     }
     if(typeof renderEventDetail==="function"){
       const prior=renderEventDetail;renderEventDetail=function(row){if(row){const length=document.getElementById("eventLength"),filter=ensureEventFilterControl();if(length)length.value=String(row.length??optimizerAssetConfiguration(row.pair,currentEventTimeframe()).length);if(filter)filter.value=String(row.filter??0);}const result=prior(row);const method=document.getElementById("eventMethod");if(method&&row&&!method.textContent.includes("optimizer"))method.textContent+=` · filter ${row.filter??0} · ${row.configurationSource||"optimizer"}`;return result;};
