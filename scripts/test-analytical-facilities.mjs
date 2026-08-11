@@ -1,0 +1,31 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+
+const source=fs.readFileSync(new URL("../public/analytical-facilities.js",import.meta.url),"utf8"),worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8"),pkg=JSON.parse(fs.readFileSync(new URL("../package.json",import.meta.url),"utf8"));
+assert.match(source,/CTE_ANALYTICAL_FACILITIES@1\.0\.0/);
+assert.match(source,/record\?\.config\?\.ASSET/,"HTL Schedule must resolve pair × timeframe HTL Asset configuration from optimizer records");
+assert.match(source,/loadEventRow=async function\(pair,timeframe,_length/,"HTL event-row loader must replace the detached global length with optimizer-backed row configuration");
+assert.match(source,/length:config\.length,filter:config\.filter,configurationSource:config\.source/,"HTL rows must retain optimizer length, filter, and configuration source");
+assert.match(source,/data-event-sort=\\"length\\"/,"HTL Schedule must expose a sortable Length column");
+assert.match(source,/data-event-sort=\\"filter\\"/,"HTL Schedule must expose a sortable Filter column");
+assert.match(source,/id=\\"eventFilter\\"/,"HTL selected-row controls must expose Filter beside Length");
+assert.match(source,/preloadEvaluationTimeframe\(timeframe\)/,"Evaluation Table must have an explicit preload path");
+assert.match(source,/if\(mode===\"focused\"\|\|mode===\"full\"\)void preloadEvaluationTable\(\)/,"Evaluation Table preload must follow the initial focused/full schedule load instead of waiting for the Evaluation tab");
+for(const id of ["exportEvaluationJson","exportPlatformDiagnosticJson","exportMacroPerformanceJson","exportEventLedgerJson","exportHtlScheduleJson","exportTimeframeSignalScheduleJson"])assert.match(source,new RegExp(id),`${id} must be installed`);
+for(const facility of ["Evaluation Table","Platform Diagnostic","Macro Performance","Event Ledger","HTL Schedule","Timeframe Signal Schedule"])assert.match(source,new RegExp(facility.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")),`${facility} must have an underlying JSON payload`);
+assert.match(source,/state\.diagnosticLast/,"Platform Diagnostic JSON must export the underlying diagnostic result, not scrape the visible cards");
+assert.match(source,/state\.evaluationTableData/,"Evaluation JSON must use the underlying evaluation records");
+assert.match(source,/record\?\.grossPerformance/,"Macro JSON must use authoritative optimizer performance rows");
+assert.match(source,/state\.eventRows/,"HTL Schedule and Event Ledger JSON must use event model records");
+assert.match(source,/state\.scheduleEvaluations/,"Timeframe Schedule JSON must use analytical schedule records");
+assert.match(worker,/ioi-iom-performance\.js[^]*analytical-facilities\.js/,"analytical facilities extension must load after existing chart/performance extensions");
+assert.ok(pkg.scripts.check.includes("node --check public/analytical-facilities.js"));
+assert.ok(pkg.scripts.check.includes("node scripts/test-analytical-facilities.mjs"));
+
+const state={autoConfigurations:new Map([["EUR_USD|M15",{source:"COMPUTE_CONFIGURATION",computedAt:"2026-08-10T20:00:00Z",stamp:"2026-08-10T19:45:00Z",version:7,settings:{assetLength:10},config:{ASSET:{length:30,filter:0}}}]])};
+const sandbox={console,Math,Number,Array,Object,String,Boolean,Date,Map,Set,state,STRATEGY_CONFIG:{ASSET:{length:10,filter:0}},MAX_ANALYTICAL_LENGTH:500,scheduleKey:(pair,timeframe)=>`${pair}|${timeframe}`};sandbox.globalThis=sandbox;
+vm.runInNewContext(source,sandbox,{filename:"analytical-facilities.js"});
+const resolved=sandbox.CTEAnalyticalFacilities.optimizerAssetConfiguration("EUR_USD","M15");
+assert.equal(resolved.length,30);assert.equal(resolved.filter,0);assert.equal(resolved.source,"COMPUTE_CONFIGURATION");assert.equal(resolved.configured,true);
+console.log("Analytical facilities certification passed: HTL Schedule is optimizer-backed by pair/timeframe Length + Filter, Evaluation Table preloads, and six requested facilities export JSON from underlying analytical records.");
