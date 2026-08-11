@@ -8,11 +8,11 @@ assert.match(source,/record\?\.config\?\.ASSET/,"HTL Schedule must resolve pair 
 assert.match(source,/loadEventRow=async function\(pair,timeframe,_length/,"HTL event-row loader must replace the detached global length with optimizer-backed row configuration");
 assert.match(source,/if\(!config\.configured\)throw new Error\(`Optimizer configuration unavailable/,"HTL Schedule must not silently substitute a generic configuration when optimizer configuration is absent");
 assert.match(source,/length:config\.length,filter:config\.filter,configurationSource:config\.source/,"HTL rows must retain optimizer length, filter, and configuration source");
-assert.match(source,/data-event-sort=\\"length\\"/,"HTL Schedule must expose a sortable Length column");
-assert.match(source,/data-event-sort=\\"filter\\"/,"HTL Schedule must expose a sortable Filter column");
-assert.match(source,/id=\\"eventFilter\\"/,"HTL selected-row controls must expose Filter beside Length");
+assert.match(source,/data-event-sort="length"/,"HTL Schedule must expose a sortable Length column");
+assert.match(source,/data-event-sort="filter"/,"HTL Schedule must expose a sortable Filter column");
+assert.match(source,/id="eventFilter"/,"HTL selected-row controls must expose Filter beside Length");
 assert.match(source,/preloadEvaluationTimeframe\(timeframe\)/,"Evaluation Table must have an explicit preload path");
-assert.match(source,/if\(mode===\"focused\"\|\|mode===\"full\"\)void preloadEvaluationTable\(\)/,"Evaluation Table preload must follow the initial focused/full schedule load instead of waiting for the Evaluation tab");
+assert.match(source,/if\(mode==="focused"\|\|mode==="full"\)void preloadEvaluationTable\(\)/,"Evaluation Table preload must follow the initial focused/full schedule load instead of waiting for the Evaluation tab");
 for(const id of ["exportEvaluationJson","exportPlatformDiagnosticJson","exportMacroPerformanceJson","exportEventLedgerJson","exportHtlScheduleJson","exportTimeframeSignalScheduleJson"])assert.match(source,new RegExp(id),`${id} must be installed`);
 for(const facility of ["Evaluation Table","Platform Diagnostic","Macro Performance","Event Ledger","HTL Schedule","Timeframe Signal Schedule"])assert.match(source,new RegExp(facility.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")),`${facility} must have an underlying JSON payload`);
 assert.match(source,/state\.diagnosticLast/,"Platform Diagnostic JSON must export the underlying diagnostic result, not scrape the visible cards");
