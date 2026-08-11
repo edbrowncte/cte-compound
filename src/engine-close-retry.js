@@ -3,7 +3,7 @@ import { HtlEngine as DualIndicatorOnlyEngine } from "./engine-indicator-only-du
 const API="https://api-fxtrade.oanda.com";
 const CLOSE_RETRY_VERSION="OANDA_CLOSE_RETRY_GUARD@1.0.0";
 const MAX_CLOSE_ATTEMPTS=5;
-const CLOSE_RETRY_DELAYS_MS=Object.freeze([60_000,120_000,300_000,900_000,1_800_000]);
+const CLOSE_RETRY_DELAYS_MS=Object.freeze([60_000,120_000,300_000,900_000]);
 const CLOSE_CIRCUIT_COOLDOWN_MS=3_600_000;
 const RETRY_KEY_PREFIX="close-retry:";
 
@@ -46,14 +46,15 @@ export class HtlEngine extends DualIndicatorOnlyEngine{
 
     const fill=payload.longOrderFillTransaction||payload.shortOrderFillTransaction;
     if(fill){
-      if(retry){await this.ctx.storage.delete(retryKey);await this.write({type:"CLOSE_RETRY_RECOVERED",pair,direction,event,executionPolicy:CLOSE_RETRY_VERSION,attempts:Number(retry.attempts||0),cycles:Number(retry.cycle||0),transaction:fill.id||payload.lastTransactionID||null,message:"OANDA position close recovered after prior failed attempts"},false);}
+      await this.ctx.storage.delete(retryKey);
+      if(retry)await this.write({type:"CLOSE_RETRY_RECOVERED",pair,direction,event,closeRetryVersion:CLOSE_RETRY_VERSION,attempts:Number(retry.attempts||0),cycles:Number(retry.cycle||0),transaction:fill.id||payload.lastTransactionID||null,message:"OANDA position close recovered after prior failed attempts"},false);
       await this.write(this.closeRecord(fill,{pair,direction,event,message,context}));return fill;
     }
 
     const transaction=closeFailureTransaction(payload),attempt=Number(retry?.attempts||0)+1,delayMs=nextRetryDelayMs(attempt),nextRetryAt=now+delayMs,exhausted=attempt>=MAX_CLOSE_ATTEMPTS,reason=closeFailureReason(payload,status,networkError?.message||null),record={fingerprint,pair,direction,event:event||null,message:String(message||""),attempts:attempt,cycle:Number(retry?.cycle||0),lastAttemptAt:new Date(now).toISOString(),lastReason:reason,lastStatus:status,lastTransaction:transaction?.id||payload.lastTransactionID||null,nextRetryAt};
     await this.ctx.storage.put(retryKey,record);
-    await this.write({type:"CLOSE_REJECTED",pair,direction,units,transaction:record.lastTransaction,event,message:reason,oandaHttpStatus:status||null,oandaTransactionType:transaction?.type||null,oandaReason:transaction?.reason||null,oandaRejectReason:transaction?.rejectReason||null,retryAttempt:attempt,retryMaxAttempts:MAX_CLOSE_ATTEMPTS,retryCycle:record.cycle,retryStatus:exhausted?"CIRCUIT_OPEN":"BACKOFF",nextRetryAt:new Date(nextRetryAt).toISOString(),executionPolicy:CLOSE_RETRY_VERSION,...context},false);
-    if(exhausted)await this.write({type:"CLOSE_RETRY_EXHAUSTED",pair,direction,event,executionPolicy:CLOSE_RETRY_VERSION,attempts:attempt,retryCycle:record.cycle,nextRetryAt:new Date(nextRetryAt).toISOString(),message:`Close retry circuit opened after ${attempt} failed attempts; next close attempt allowed after ${new Date(nextRetryAt).toISOString()}`},false);
+    await this.write({type:"CLOSE_REJECTED",pair,direction,units,transaction:record.lastTransaction,event,message:reason,oandaHttpStatus:status||null,oandaTransactionType:transaction?.type||null,oandaReason:transaction?.reason||null,oandaRejectReason:transaction?.rejectReason||null,retryAttempt:attempt,retryMaxAttempts:MAX_CLOSE_ATTEMPTS,retryCycle:record.cycle,retryStatus:exhausted?"CIRCUIT_OPEN":"BACKOFF",nextRetryAt:new Date(nextRetryAt).toISOString(),closeRetryVersion:CLOSE_RETRY_VERSION,...context});
+    if(exhausted)await this.write({type:"CLOSE_RETRY_EXHAUSTED",pair,direction,event,closeRetryVersion:CLOSE_RETRY_VERSION,attempts:attempt,retryCycle:record.cycle,nextRetryAt:new Date(nextRetryAt).toISOString(),message:`Close retry circuit opened after ${attempt} failed attempts; next close attempt allowed after ${new Date(nextRetryAt).toISOString()}`});
     return null;
   }
 }
