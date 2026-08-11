@@ -6,6 +6,7 @@ const source=fs.readFileSync(new URL("../public/analytical-facilities.js",import
 assert.match(source,/CTE_ANALYTICAL_FACILITIES@1\.0\.0/);
 assert.match(source,/record\?\.config\?\.ASSET/,"HTL Schedule must resolve pair × timeframe HTL Asset configuration from optimizer records");
 assert.match(source,/loadEventRow=async function\(pair,timeframe,_length/,"HTL event-row loader must replace the detached global length with optimizer-backed row configuration");
+assert.match(source,/if\(!config\.configured\)throw new Error\(`Optimizer configuration unavailable/,"HTL Schedule must not silently substitute a generic configuration when optimizer configuration is absent");
 assert.match(source,/length:config\.length,filter:config\.filter,configurationSource:config\.source/,"HTL rows must retain optimizer length, filter, and configuration source");
 assert.match(source,/data-event-sort=\\"length\\"/,"HTL Schedule must expose a sortable Length column");
 assert.match(source,/data-event-sort=\\"filter\\"/,"HTL Schedule must expose a sortable Filter column");
@@ -28,4 +29,5 @@ const sandbox={console,Math,Number,Array,Object,String,Boolean,Date,Map,Set,stat
 vm.runInNewContext(source,sandbox,{filename:"analytical-facilities.js"});
 const resolved=sandbox.CTEAnalyticalFacilities.optimizerAssetConfiguration("EUR_USD","M15");
 assert.equal(resolved.length,30);assert.equal(resolved.filter,0);assert.equal(resolved.source,"COMPUTE_CONFIGURATION");assert.equal(resolved.configured,true);
-console.log("Analytical facilities certification passed: HTL Schedule is optimizer-backed by pair/timeframe Length + Filter, Evaluation Table preloads, and six requested facilities export JSON from underlying analytical records.");
+const missing=sandbox.CTEAnalyticalFacilities.optimizerAssetConfiguration("GBP_USD","M15");assert.equal(missing.configured,false);assert.equal(missing.source,"OPTIMIZER_UNAVAILABLE");
+console.log("Analytical facilities certification passed: every populated HTL Schedule row is pair/timeframe optimizer-backed by Length + Filter, Evaluation Table preloads, and six requested facilities export JSON from underlying analytical records.");
