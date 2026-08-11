@@ -103,7 +103,7 @@
 
   function eventLedgerExportPayload(){
     const pair=currentEventPair(),timeframe=currentEventTimeframe(),row=(state.eventRows||[]).find(item=>item.pair===pair)||null,events=row?.eventList||state.eventEvents||[];
-    return{facility:"Event Ledger",version:VERSION,exportedAt:new Date().toISOString(),pair,timeframe,length:row?.length??Number(document.getElementById("eventLength")?.value)||null,filter:row?.filter??Number(document.getElementById("eventFilter")?.value)||0,configurationSource:row?.configurationSource||null,events};
+    return{facility:"Event Ledger",version:VERSION,exportedAt:new Date().toISOString(),pair,timeframe,length:row?.length??(Number(document.getElementById("eventLength")?.value)||null),filter:row?.filter??(Number(document.getElementById("eventFilter")?.value)||0),configurationSource:row?.configurationSource||null,events};
   }
 
   function htlScheduleExportPayload(){
