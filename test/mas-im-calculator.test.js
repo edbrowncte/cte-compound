@@ -44,11 +44,12 @@ function eventSeries(tf,rows,count=14){
   return events;
 }
 
-test("v2 uses the complete S5-to-W hierarchy",()=>{
+test("v2 uses the complete S5-to-W hierarchy including H2",()=>{
   assert.equal(MAS_IM_VERSION,"MAS_ANTAGONIST_PRESSURE@2.1.0");
-  assert.deepEqual(MAS_IM_TIMEFRAMES,["S5","S30","M1","M5","M15","M30","H1","H4","D","W"]);
+  assert.deepEqual(MAS_IM_TIMEFRAMES,["S5","S30","M1","M5","M15","M30","H1","H2","H4","D","W"]);
   assert.deepEqual(timeframeHierarchy("D"),["D","W"]);
-  assert.deepEqual(timeframeHierarchy("H1"),["H1","H4","D","W"]);
+  assert.deepEqual(timeframeHierarchy("H2"),["H2","H4","D","W"]);
+  assert.deepEqual(timeframeHierarchy("H1"),["H1","H2","H4","D","W"]);
   assert.deepEqual(timeframeHierarchy("S5"),MAS_IM_TIMEFRAMES);
 });
 
