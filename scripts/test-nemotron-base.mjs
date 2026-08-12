@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { HtlEngine, __nemotronTest } from "../src/engine.js";
+import { HtlEngine, __nemotronTest } from "../src/engine-nemotron-base.js";
 
 class Storage {
   constructor(seed={}){this.values=new Map(Object.entries(seed));}
