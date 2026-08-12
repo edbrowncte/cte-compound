@@ -17,7 +17,7 @@ analytical=replaceOnce(
 );
 const ledgerSelector='document.querySelector(".event-ledger")';
 const occurrences=(analytical.match(/document\.querySelector\("\.event-ledger"\)/g)||[]).length;
-if(occurrences!==3)throw new Error(`Expected exactly 3 generic event-ledger selectors, found ${occurrences}`);
+if(occurrences!==2)throw new Error(`Expected exactly 2 generic event-ledger selectors, found ${occurrences}`);
 analytical=analytical.split(ledgerSelector).join('eventOutcomeLedgerDetails()');
 fs.writeFileSync(analyticalPath,analytical);
 
