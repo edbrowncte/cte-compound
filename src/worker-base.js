@@ -13,10 +13,10 @@ const INSTRUMENTS = new Set([
   "AUD_JPY","AUD_CHF","AUD_CAD","AUD_NZD",
   "NZD_JPY","NZD_CHF","NZD_CAD","CAD_JPY","CAD_CHF","CHF_JPY"
 ]);
-const GRANULARITIES = new Set(["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]);
+const GRANULARITIES = new Set(["W","D","H4","H2","H1","M30","M15","M5","M1","S30","S5"]);
 const JSON_HEADERS = {"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
 const candleCache=new Map();
-// Retain the complete 28 × 10 schedule universe plus selected-chart history.
+// Retain the complete 28 × 11 schedule universe plus selected-chart history.
 // The previous 32-entry ceiling forced almost every browser reload to refetch
 // 248 schedule datasets even while OANDA and the engine were healthy.
 const CANDLE_CACHE_MAX_ENTRIES=320,CANDLE_CACHE_MAX_BARS=220000;
@@ -197,7 +197,7 @@ async function handleCandles(env,url) {
   const select=value=>({...value,candles:(value.candles||[]).slice(-count)});
   if(cached?.value&&cached.expires>now&&cached.count>=count){touchCandleCache(key,cached);return json(select(cached.value));}
   if(cached?.promise&&cached.count>=count){touchCandleCache(key,cached);return json(select(await cached.promise));}
-  const requestCount=Math.max(count,cached?.count||0),query=new URLSearchParams({price:"M",granularity,count:String(requestCount),smooth:"false"}),ttl={S5:4000,S30:15000,M1:30000,M5:120000,M15:300000,M30:600000,H1:1200000,H4:3600000,D:21600000,W:86400000}[granularity]||30000;
+  const requestCount=Math.max(count,cached?.count||0),query=new URLSearchParams({price:"M",granularity,count:String(requestCount),smooth:"false"}),ttl={S5:4000,S30:15000,M1:30000,M5:120000,M15:300000,M30:600000,H1:1200000,H2:2400000,H4:3600000,D:21600000,W:86400000}[granularity]||30000;
   const promise=oandaRequest(`/v3/instruments/${instrument}/candles?${query}`,token).then(payload=>({instrument,granularity,candles:normalizeCandles(payload),completedOnly:true}));
   setCandleCache(key,{promise,count:requestCount,expires:0,value:cached?.value});
   try{const value=await promise;setCandleCache(key,{value,count:requestCount,expires:Date.now()+ttl});return json(select(value));}catch(error){if(candleCache.get(key)?.promise===promise)candleCache.delete(key);throw error;}

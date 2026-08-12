@@ -31,9 +31,15 @@ const preserved=bootstrapH2OptimizerCoverage({"EUR_USD|H1":h1,"EUR_USD|H2":nativ
 assert.equal(preserved["EUR_USD|H2"],nativeH2,"a genuine H2 optimizer record must never be overwritten by bootstrap coverage");
 
 const index=fs.readFileSync(new URL("../public/index.html",import.meta.url),"utf8");
+const worker=fs.readFileSync(new URL("../src/worker-base.js",import.meta.url),"utf8");
 assert.match(index,/const TIMEFRAMES = Object\.freeze\(\["W","D","H4","H2","H1","M30","M15","M5","M1","S30","S5"\]\)/,"browser registry must expose H2 in chronological hierarchy order");
 assert.match(index,/28 currency pairs by eleven timeframes with buy and sell signals/);
 assert.match(index,/<option value="H2">H2<\/option>/,"Evaluation timeframe filter must expose H2");
 assert.match(index,/el\("eventTimeframe"\)\.innerHTML=el\("chartTimeframe"\)\.innerHTML/,"HTL Schedule must inherit the shared chart timeframe selector including H2");
+assert.match(worker,/const GRANULARITIES = new Set\(\["W","D","H4","H2","H1","M30","M15","M5","M1","S30","S5"\]\)/,"Worker candle gateway must accept H2 between H4 and H1");
+assert.match(worker,/H1:1200000,H2:2400000,H4:3600000/,"Worker candle cache must define an explicit H2 TTL between H1 and H4");
+assert.match(worker,/!GRANULARITIES\.has\(granularity\)/,"Worker candle route must validate requests against the H2-capable shared gateway registry");
+assert.doesNotMatch(worker,/28 × 10 schedule universe/,"Worker cache contract must not retain the pre-H2 28×10 assumption");
+assert.doesNotMatch(index,/id="optimizerServerStatus">0 \/ 280 datasets/,"browser optimizer registry must not initialize to the pre-H2 280-dataset total");
 
 console.log("H2 timeframe certification passed: 28×11 registry, OANDA 7,200-second range sizing, MAS/IM hierarchy, browser surfaces, HTL selector inheritance, and non-destructive H1-to-H2 optimizer bootstrap are wired.");
