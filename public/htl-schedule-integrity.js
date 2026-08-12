@@ -1,16 +1,22 @@
 (function installHtlScheduleIntegrity(global){
   "use strict";
 
-  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.0.3";
+  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.1.0";
+  const SURVIVAL_VERSION="CTE_HTL_EVENT_SURVIVAL@1.0.0";
   const MIN_DURATION_VALIDATION_SAMPLES=8;
   const MIN_COMPLETION_VALIDATION_SAMPLES=8;
   const MIN_OUTLIER_TRIM_SAMPLES=10;
   const MAD_SIGMA=1.4826;
   const MAD_LIMIT=4.5;
+  const DEFAULT_ADDITIONAL_LIFE_BARS=5;
+  const SURVIVAL_HORIZONS=Object.freeze([1,5,10,18]);
 
   const mean=values=>values.length?values.reduce((sum,value)=>sum+value,0)/values.length:null;
   const median=values=>{if(!values.length)return null;const ordered=[...values].sort((a,b)=>a-b),middle=Math.floor(ordered.length/2);return ordered.length%2?ordered[middle]:(ordered[middle-1]+ordered[middle])/2;};
   const quantile=(values,q)=>{if(!values.length)return null;const ordered=[...values].sort((a,b)=>a-b),position=(ordered.length-1)*q,base=Math.floor(position),fraction=position-base;return ordered[base+1]===undefined?ordered[base]:ordered[base]+fraction*(ordered[base+1]-ordered[base]);};
+  const finiteNumber=value=>{const number=Number(value);return Number.isFinite(number)?number:null;};
+  const formatNumber=(value,digits=2)=>Number.isFinite(Number(value))?Number(value).toFixed(digits):"—";
+  const formatPercent=value=>Number.isFinite(Number(value))?`${(Number(value)*100).toFixed(1)}%`:"—";
 
   function durationErrorSeries(events){
     const completed=(events||[]).filter(event=>event?.status==="FINAL"),errors=[];
@@ -70,6 +76,97 @@
     return `${duration} · ${completion} · FINAL events only`;
   }
 
+  function normalizedExcursion(event){
+    const direction=Math.sign(Number(event?.direction)||0),up=finiteNumber(event?.upBps),down=finiteNumber(event?.downBps);
+    if(!direction||up===null||down===null)return{favorable:null,adverse:null,up,down};
+    return direction>0
+      ?{favorable:Math.max(0,up),adverse:Math.max(0,-down),up,down}
+      :{favorable:Math.max(0,-down),adverse:Math.max(0,up),up,down};
+  }
+
+  function survivalStatistics(events,currentEvent,additionalLifeBars=DEFAULT_ADDITIONAL_LIFE_BARS){
+    const current=currentEvent||events?.at?.(-1)||null,age=Math.max(1,Math.trunc(Number(current?.bars)||0)),direction=Math.sign(Number(current?.direction)||0),additional=Math.max(1,Math.trunc(Number(additionalLifeBars)||DEFAULT_ADDITIONAL_LIFE_BARS));
+    if(!current||!direction||!age)return{direction,ageBars:age||null,additionalLifeBars:additional,n:0,historicalSurvival:null,meanBars:null,medianBars:null,meanFavorableMoveBps:null,meanAdverseMoveBps:null,medianUltimateUpsideBps:null,medianUltimateDownsideBps:null,p25UltimateUpsideBps:null,p25UltimateDownsideBps:null,survivalCurve:SURVIVAL_HORIZONS.map(horizon=>({additionalLifeBars:horizon,historicalSurvival:null}))};
+    const eligible=(Array.isArray(events)?events:[]).filter(event=>event?.status==="FINAL"&&Math.sign(Number(event.direction)||0)===direction&&Number(event.bars)>=age),bars=eligible.map(event=>Number(event.bars)).filter(Number.isFinite),excursions=eligible.map(normalizedExcursion),favorable=excursions.map(item=>item.favorable).filter(Number.isFinite),adverse=excursions.map(item=>item.adverse).filter(Number.isFinite),up=excursions.map(item=>item.up).filter(Number.isFinite),down=excursions.map(item=>item.down).filter(Number.isFinite),survival=horizon=>eligible.length?eligible.filter(event=>Number(event.bars)>=age+horizon).length/eligible.length:null;
+    return{
+      direction,
+      ageBars:age,
+      additionalLifeBars:additional,
+      n:eligible.length,
+      historicalSurvival:survival(additional),
+      meanBars:mean(bars),
+      medianBars:median(bars),
+      meanFavorableMoveBps:mean(favorable),
+      meanAdverseMoveBps:mean(adverse),
+      medianUltimateUpsideBps:median(up),
+      medianUltimateDownsideBps:median(down),
+      p25UltimateUpsideBps:quantile(up,.25),
+      p25UltimateDownsideBps:quantile(down,.25),
+      survivalCurve:SURVIVAL_HORIZONS.map(horizon=>({additionalLifeBars:horizon,historicalSurvival:survival(horizon)})),
+    };
+  }
+
+  function buildSurvivalRows(rows,additionalLifeBars=DEFAULT_ADDITIONAL_LIFE_BARS){
+    return (Array.isArray(rows)?rows:[]).map(row=>{
+      const events=Array.isArray(row?.eventList)?row.eventList:[],current=events.at(-1)||null,stats=survivalStatistics(events,current,additionalLifeBars);
+      return{
+        pair:row?.pair||null,
+        timeframe:typeof document!=="undefined"?document.getElementById("eventTimeframe")?.value||null:null,
+        currentEvent:stats.direction>0?"BUY":stats.direction<0?"SELL":null,
+        currentEventOpen:finiteNumber(current?.openPrice??row?.eventOpen),
+        currentPrice:finiteNumber(row?.price),
+        currentAgeBars:stats.ageBars,
+        additionalEventLifeBars:stats.additionalLifeBars,
+        historicalSurvival:stats.historicalSurvival,
+        n:stats.n,
+        meanBars:stats.meanBars,
+        medianBars:stats.medianBars,
+        meanFavorableMoveBps:stats.meanFavorableMoveBps,
+        meanAdverseMoveBps:stats.meanAdverseMoveBps,
+        medianUltimateUpsideBps:stats.medianUltimateUpsideBps,
+        medianUltimateDownsideBps:stats.medianUltimateDownsideBps,
+        p25UltimateUpsideBps:stats.p25UltimateUpsideBps,
+        p25UltimateDownsideBps:stats.p25UltimateDownsideBps,
+        survivalCurve:stats.survivalCurve,
+      };
+    }).filter(row=>row.pair);
+  }
+
+  function survivalAdditionalLifeBars(){
+    if(typeof document==="undefined")return DEFAULT_ADDITIONAL_LIFE_BARS;
+    return Math.max(1,Math.min(250,Math.trunc(Number(document.getElementById("eventSurvivalAdditionalBars")?.value)||DEFAULT_ADDITIONAL_LIFE_BARS)));
+  }
+
+  function survivalExportPayload(){
+    const appState=typeof state!=="undefined"?state:null,additionalEventLifeBars=survivalAdditionalLifeBars(),timeframe=typeof document!=="undefined"?document.getElementById("eventTimeframe")?.value||null:null;
+    return{facility:"HTL Event Survival",version:SURVIVAL_VERSION,scheduleIntegrityVersion:VERSION,exportedAt:new Date().toISOString(),timeframe,additionalEventLifeBars,basis:"FINAL same-direction events with total bars greater than or equal to the current event age",units:{bars:"bars",moves:"basis points from event open"},rows:buildSurvivalRows(appState?.eventRows||[],additionalEventLifeBars)};
+  }
+
+  function downloadSurvivalJson(){
+    if(typeof document==="undefined"||typeof Blob==="undefined"||typeof URL==="undefined")return false;
+    const payload=survivalExportPayload(),date=new Date().toISOString().replace(/[:.]/g,"-"),blob=new Blob([JSON.stringify(payload,(_key,value)=>typeof value==="number"&&!Number.isFinite(value)?String(value):value,2)],{type:"application/json;charset=utf-8"}),url=URL.createObjectURL(blob),link=document.createElement("a");
+    link.href=url;link.download=`cte-compound-htl-event-survival-${date}.json`;document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);return true;
+  }
+
+  function ensureSurvivalPanel(){
+    if(typeof document==="undefined")return null;
+    let panel=document.getElementById("eventSurvivalAnalysis");if(panel)return panel;
+    const eventPanel=document.getElementById("eventPanel"),anchor=document.getElementById("eventScheduleInterpretation");if(!eventPanel||!anchor)return null;
+    panel=document.createElement("details");panel.id="eventSurvivalAnalysis";panel.className="event-ledger";panel.open=true;
+    panel.innerHTML=`<summary>Historical Event Survival · Current Event Maturity</summary><div class="head-controls" style="padding:7px 10px;justify-content:flex-start"><label class="field"><span>Additional event life</span><input id="eventSurvivalAdditionalBars" type="number" min="1" max="250" step="1" value="${DEFAULT_ADDITIONAL_LIFE_BARS}"></label><button id="exportEventSurvivalJson" type="button">Export JSON</button><span class="event-note" id="eventSurvivalBasis">FINAL same-direction events conditioned on having reached the current event age.</span></div><div class="event-table-wrap"><table class="event-table" id="eventSurvivalTable"><thead><tr><th>Currency pair</th><th>Current event</th><th>Age (bars)</th><th>Additional event life</th><th>Historical survival</th><th>n</th><th>Mean bars</th><th>Median bars</th><th>Mean favorable move</th><th>Mean adverse move</th><th>Median ultimate upside</th><th>Median ultimate downside</th><th>25th-pctl upside</th><th>25th-pctl downside</th></tr></thead><tbody id="eventSurvivalBody"></tbody></table></div>`;
+    anchor.insertAdjacentElement("afterend",panel);
+    document.getElementById("eventSurvivalAdditionalBars")?.addEventListener("change",renderSurvivalTable);
+    document.getElementById("eventSurvivalAdditionalBars")?.addEventListener("input",renderSurvivalTable);
+    document.getElementById("exportEventSurvivalJson")?.addEventListener("click",downloadSurvivalJson);
+    return panel;
+  }
+
+  function renderSurvivalTable(){
+    const panel=ensureSurvivalPanel(),body=typeof document!=="undefined"?document.getElementById("eventSurvivalBody"):null,appState=typeof state!=="undefined"?state:null;if(!panel||!body||!appState)return;
+    const additional=survivalAdditionalLifeBars(),rows=buildSurvivalRows(appState.eventRows||[],additional);
+    body.innerHTML=rows.length?rows.map(row=>`<tr data-survival-pair="${row.pair}"><td>${typeof formatPair==="function"?formatPair(row.pair):String(row.pair).replace("_","/")}</td><td class="${row.currentEvent==="BUY"?"buy":row.currentEvent==="SELL"?"sell":""}">${row.currentEvent||"—"}</td><td>${row.currentAgeBars??"—"}</td><td>+${row.additionalEventLifeBars} bars</td><td>${formatPercent(row.historicalSurvival)}</td><td>${row.n}</td><td>${formatNumber(row.meanBars,2)}</td><td>${formatNumber(row.medianBars,2)}</td><td>${formatNumber(row.meanFavorableMoveBps,2)} bps</td><td>${formatNumber(row.meanAdverseMoveBps,2)} bps</td><td>${formatNumber(row.medianUltimateUpsideBps,2)} bps</td><td>${formatNumber(row.medianUltimateDownsideBps,2)} bps</td><td>${formatNumber(row.p25UltimateUpsideBps,2)} bps</td><td>${formatNumber(row.p25UltimateDownsideBps,2)} bps</td></tr>`).join(""):`<tr><td colspan="14">Load the HTL Schedule to calculate survival statistics for all 28 pairs.</td></tr>`;
+  }
+
   function annotateSchedule(){
     const body=document.getElementById("eventScheduleBody"),appState=typeof state!=="undefined"?state:null;if(!body||!appState)return;
     for(const tr of body.querySelectorAll("tr[data-pair]")){
@@ -84,11 +181,12 @@
   function install(){
     if(typeof buildEventRow!=="function")return false;
     const priorBuild=buildEventRow,wrappedBuild=function(...args){return applyIntegrity(priorBuild(...args));};buildEventRow=wrappedBuild;global.buildEventRow=wrappedBuild;
-    if(typeof renderEventSchedule==="function"){const priorRender=renderEventSchedule;renderEventSchedule=function(...args){const result=priorRender(...args);annotateSchedule();return result;};global.renderEventSchedule=renderEventSchedule;}
+    if(typeof renderEventSchedule==="function"){const priorRender=renderEventSchedule;renderEventSchedule=function(...args){const result=priorRender(...args);annotateSchedule();renderSurvivalTable();return result;};global.renderEventSchedule=renderEventSchedule;}
     if(typeof renderEventDetail==="function"){const priorDetail=renderEventDetail;renderEventDetail=function(row,...args){const result=priorDetail(row,...args),method=document.getElementById("eventMethod");if(method&&row&&!method.textContent.includes("Duration validation"))method.textContent+=` · ${describe(row)}`;return result;};global.renderEventDetail=renderEventDetail;}
+    ensureSurvivalPanel();renderSurvivalTable();
     return true;
   }
 
-  global.CTEHtlScheduleIntegrity=Object.freeze({VERSION,MIN_DURATION_VALIDATION_SAMPLES,MIN_COMPLETION_VALIDATION_SAMPLES,MIN_OUTLIER_TRIM_SAMPLES,durationErrorSeries,trimDurationErrors,scheduleValidation,applyIntegrity,describe});
+  global.CTEHtlScheduleIntegrity=Object.freeze({VERSION,SURVIVAL_VERSION,MIN_DURATION_VALIDATION_SAMPLES,MIN_COMPLETION_VALIDATION_SAMPLES,MIN_OUTLIER_TRIM_SAMPLES,DEFAULT_ADDITIONAL_LIFE_BARS,SURVIVAL_HORIZONS,durationErrorSeries,trimDurationErrors,scheduleValidation,applyIntegrity,describe,normalizedExcursion,survivalStatistics,buildSurvivalRows,survivalExportPayload,renderSurvivalTable});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);
