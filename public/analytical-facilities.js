@@ -1,7 +1,7 @@
 (function installAnalyticalFacilities(global){
   "use strict";
 
-  const VERSION="CTE_ANALYTICAL_FACILITIES@1.1.0",RATE_FLUCTUATION_VERSION="CTE_RATE_FLUCTUATION_RANKING@1.0.0",EVENT_LEDGER_FOLLOW="__FOLLOW_SELECTED__";
+  const VERSION="CTE_ANALYTICAL_FACILITIES@1.2.0",RATE_FLUCTUATION_VERSION="CTE_RATE_FLUCTUATION_RANKING@1.1.0",EVENT_LEDGER_FOLLOW="__FOLLOW_SELECTED__",RATE_FLUCTUATION_HISTORY_TARGET=5000,RATE_FLUCTUATION_SUPPORT_CONCURRENCY=2;
   let evaluationPreloadPromise=null,evaluationPreloadKey="";
 
   const safeName=value=>String(value||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"data";
@@ -156,44 +156,100 @@
     const ordered=(values||[]).map(Number).filter(Number.isFinite).sort((a,b)=>a-b);if(!ordered.length)return null;const middle=Math.floor(ordered.length/2);return ordered.length%2?ordered[middle]:(ordered[middle-1]+ordered[middle])/2;
   }
 
+  function rateFluctuationHistoryTarget(){
+    return typeof MAX_ANALYTICAL_HISTORY==="number"&&Number.isFinite(MAX_ANALYTICAL_HISTORY)?Math.max(1,Math.trunc(MAX_ANALYTICAL_HISTORY)):RATE_FLUCTUATION_HISTORY_TARGET;
+  }
+
+  function rateFluctuationSupportCache(){
+    if(!(state.rateFluctuationEventCache instanceof Map))state.rateFluctuationEventCache=new Map();
+    return state.rateFluctuationEventCache;
+  }
+
+  function rateFluctuationSupportKey(pair,timeframe,config=optimizerAssetConfiguration(pair,timeframe)){
+    const key=typeof scheduleKey==="function"?scheduleKey(pair,timeframe):`${pair}|${timeframe}`,lineage=config.stamp||config.computedAt||config.source||"UNAVAILABLE";
+    return `${key}|${config.length}|${config.filter}|${lineage}`;
+  }
+
+  function emptyRateFluctuationSupport(pair,timeframe,config=optimizerAssetConfiguration(pair,timeframe)){
+    return{supportingSource:"EVENT_OUTCOME_LEDGER_MAX_HISTORY",supportingEventMagnitudePips:null,supportingFinalEvents:null,supportingMagnitudeEvents:null,supportingHistoryBars:null,supportingHistoryTarget:rateFluctuationHistoryTarget(),eventLength:config.length,configurationSource:config.source,supportingConfigurationSource:config.source,supportingStatus:config.configured?"PENDING":"CONFIGURATION_UNAVAILABLE",supportingError:null,corroborated:false,pair,timeframe};
+  }
+
   function rateFluctuationEventSupport(row,timeframe){
-    const pair=row?.pair;if(!pair)return{supportingEventMagnitudePips:null,supportingFinalEvents:0,eventLength:null,configurationSource:null};
-    const key=typeof scheduleKey==="function"?scheduleKey(pair,timeframe):`${pair}|${timeframe}`,candles=row?.priceCache?.[timeframe]||state.scheduleCandles?.get?.(key)||[],config=optimizerAssetConfiguration(pair,timeframe),lastTime=candles.at?.(-1)?.time||"",cacheKey=`${key}|${config.length}|${candles.length}|${lastTime}`;
-    if(!(state.rateFluctuationEventCache instanceof Map))state.rateFluctuationEventCache=new Map();if(state.rateFluctuationEventCache.has(cacheKey))return state.rateFluctuationEventCache.get(cacheKey);
-    let result={supportingEventMagnitudePips:null,supportingFinalEvents:0,eventLength:config.length,configurationSource:config.source};
-    if(typeof buildEventRow==="function"&&candles.length){
-      try{const eventRow=buildEventRow(pair,candles,config.length),finals=(eventRow?.eventList||[]).filter(event=>event.status==="FINAL"&&Number.isFinite(Number(event.profitPips))),magnitudes=finals.map(event=>Math.abs(Number(event.profitPips)));result={...result,supportingEventMagnitudePips:finiteMedian(magnitudes),supportingFinalEvents:finals.length};}catch{}
+    const pair=row?.pair;if(!pair)return emptyRateFluctuationSupport(null,timeframe,{length:null,filter:null,source:"PAIR_UNAVAILABLE",configured:false});
+    const config=optimizerAssetConfiguration(pair,timeframe),cache=rateFluctuationSupportCache(),cacheKey=rateFluctuationSupportKey(pair,timeframe,config);
+    if(cache.has(cacheKey))return cache.get(cacheKey);
+    const initial=emptyRateFluctuationSupport(pair,timeframe,config);cache.set(cacheKey,initial);return initial;
+  }
+
+  async function rateFluctuationSupportPool(items,worker){
+    let cursor=0;const count=Math.min(RATE_FLUCTUATION_SUPPORT_CONCURRENCY,items.length);
+    await Promise.all(Array.from({length:count},async()=>{while(cursor<items.length){const item=items[cursor++];await worker(item);}}));
+  }
+
+  async function hydrateRateFluctuationEventSupport(explicitTimeframe=null,{retryErrors=false}={}){
+    const select=typeof document!=="undefined"?document.getElementById("evalTableTfFilter"):null,timeframe=explicitTimeframe||state.evaluationTableTimeframe||select?.value||null;
+    if(!timeframe||typeof loadEventRow!=="function")return false;
+    if(typeof marketDataReady==="function"&&!marketDataReady())return false;
+    const evaluationRows=(state.evaluationTableData||[]).filter(row=>row.timeframe===timeframe&&row.pair);
+    if(!evaluationRows.length)return false;
+    if(!(state.rateFluctuationSupportPromises instanceof Map))state.rateFluctuationSupportPromises=new Map();
+    const existing=state.rateFluctuationSupportPromises.get(timeframe);if(existing)return existing;
+    const jobs=[];
+    for(const row of evaluationRows){
+      const config=optimizerAssetConfiguration(row.pair,timeframe),cache=rateFluctuationSupportCache(),cacheKey=rateFluctuationSupportKey(row.pair,timeframe,config),support=cache.get(cacheKey)||emptyRateFluctuationSupport(row.pair,timeframe,config);
+      if(!config.configured){cache.set(cacheKey,{...support,supportingStatus:"CONFIGURATION_UNAVAILABLE",supportingError:"Optimizer configuration unavailable",supportingFinalEvents:null,supportingMagnitudeEvents:null,corroborated:false});continue;}
+      if(support.supportingStatus==="PENDING"||(retryErrors&&support.supportingStatus==="ERROR"))jobs.push({row,config,cacheKey});
     }
-    state.rateFluctuationEventCache.set(cacheKey,result);return result;
+    if(!jobs.length)return true;
+    const promise=(async()=>{
+      const target=rateFluctuationHistoryTarget();
+      await rateFluctuationSupportPool(jobs,async({row,config,cacheKey})=>{
+        const cache=rateFluctuationSupportCache(),base=cache.get(cacheKey)||emptyRateFluctuationSupport(row.pair,timeframe,config);cache.set(cacheKey,{...base,supportingStatus:"LOADING",supportingError:null});
+        renderRateFluctuationRanking(false);
+        try{
+          const controller=new AbortController(),eventRow=await loadEventRow(row.pair,timeframe,config.length,controller,35,target),events=Array.isArray(eventRow?.eventList)?eventRow.eventList:[],finals=events.filter(event=>event?.status==="FINAL"),pnlFinals=finals.filter(event=>Number.isFinite(Number(event?.profitPips))),magnitudes=pnlFinals.map(event=>Math.abs(Number(event.profitPips))),historyBars=Number(eventRow?.data?.length??eventRow?.historyBars),degraded=Boolean(eventRow?.degradedHistory)||(Number.isFinite(historyBars)&&historyBars<target);
+          const status=degraded?"DEGRADED_HISTORY":!finals.length?"NO_FINAL_EVENTS":!pnlFinals.length?"NO_FINITE_EVENT_PNL":"READY";
+          cache.set(cacheKey,{...base,supportingSource:"EVENT_OUTCOME_LEDGER_MAX_HISTORY",supportingEventMagnitudePips:finiteMedian(magnitudes),supportingFinalEvents:finals.length,supportingMagnitudeEvents:pnlFinals.length,supportingHistoryBars:Number.isFinite(historyBars)?historyBars:null,supportingHistoryTarget:target,eventLength:config.length,configurationSource:config.source,supportingConfigurationSource:config.source,supportingStatus:status,supportingError:null,corroborated:status==="READY"&&pnlFinals.length>0,pair:row.pair,timeframe});
+        }catch(error){
+          cache.set(cacheKey,{...base,supportingStatus:"ERROR",supportingError:error?.message||String(error),supportingFinalEvents:null,supportingMagnitudeEvents:null,supportingHistoryBars:null,supportingHistoryTarget:target,corroborated:false,pair:row.pair,timeframe});
+        }
+        renderRateFluctuationRanking(false);
+      });
+      return true;
+    })().finally(()=>{state.rateFluctuationSupportPromises.delete(timeframe);});
+    state.rateFluctuationSupportPromises.set(timeframe,promise);return promise;
   }
 
   function rateFluctuationRows(explicitTimeframe=null){
     const select=typeof document!=="undefined"?document.getElementById("evalTableTfFilter"):null,timeframe=explicitTimeframe||state.evaluationTableTimeframe||select?.value||null;
     const rows=(state.evaluationTableData||[]).filter(row=>!timeframe||row.timeframe===timeframe).map(row=>{
       const signed=Number(row.pipsPerHour),pipsPerHour=Number.isFinite(signed)?signed:null,support=rateFluctuationEventSupport(row,timeframe||row.timeframe);
-      return{pair:row.pair,timeframe:row.timeframe,signal:Number(row.signal)||0,regime:row.regime||"NEUTRAL",pipsPerHour,absolutePipsPerHour:pipsPerHour===null?null:Math.abs(pipsPerHour),supportingEventMagnitudePips:support.supportingEventMagnitudePips,supportingFinalEvents:support.supportingFinalEvents,eventLength:support.eventLength,configurationSource:support.configurationSource};
+      return{pair:row.pair,timeframe:row.timeframe,signal:Number(row.signal)||0,regime:row.regime||"NEUTRAL",pipsPerHour,absolutePipsPerHour:pipsPerHour===null?null:Math.abs(pipsPerHour),supportingSource:support.supportingSource,supportingEventMagnitudePips:support.supportingEventMagnitudePips,supportingFinalEvents:support.supportingFinalEvents,supportingMagnitudeEvents:support.supportingMagnitudeEvents,supportingHistoryBars:support.supportingHistoryBars,supportingHistoryTarget:support.supportingHistoryTarget,eventLength:support.eventLength,configurationSource:support.configurationSource,supportingConfigurationSource:support.supportingConfigurationSource,supportingStatus:support.supportingStatus,supportingError:support.supportingError,corroborated:Boolean(support.corroborated)};
     });
     rows.sort((a,b)=>{const ar=Number.isFinite(a.absolutePipsPerHour)?a.absolutePipsPerHour:-Infinity,br=Number.isFinite(b.absolutePipsPerHour)?b.absolutePipsPerHour:-Infinity;if(br!==ar)return br-ar;const am=Number.isFinite(a.supportingEventMagnitudePips)?a.supportingEventMagnitudePips:-Infinity,bm=Number.isFinite(b.supportingEventMagnitudePips)?b.supportingEventMagnitudePips:-Infinity;if(bm!==am)return bm-am;return String(a.pair).localeCompare(String(b.pair));});
     return rows.map((row,index)=>({...row,rank:index+1}));
   }
 
-  function rateFluctuationExportPayload(){
-    const rows=rateFluctuationRows(),select=typeof document!=="undefined"?document.getElementById("evalTableTfFilter"):null,timeframe=rows[0]?.timeframe||state.evaluationTableTimeframe||select?.value||null;
-    return{facility:"Rate Fluctuation Ranking",version:RATE_FLUCTUATION_VERSION,analyticalFacilitiesVersion:VERSION,exportedAt:new Date().toISOString(),timeframe,indicator:state.selectedScheduleStrategy||null,pairCount:typeof INSTRUMENTS!=="undefined"?INSTRUMENTS.length:rows.length,rowCount:rows.length,rankingRule:"Descending absolute Evaluation Table pips-per-hour; median absolute FINAL Event Ledger P/L breaks ties.",supportingEventMagnitudeDefinition:"Median absolute profitPips across FINAL HTL Asset events for the same pair/timeframe using the optimizer-backed HTL length.",rows};
+  async function rateFluctuationExportPayload(){
+    const select=typeof document!=="undefined"?document.getElementById("evalTableTfFilter"):null,timeframe=state.evaluationTableTimeframe||select?.value||null;
+    await hydrateRateFluctuationEventSupport(timeframe,{retryErrors:true});
+    const rows=rateFluctuationRows(timeframe),statusCounts={};for(const row of rows)statusCounts[row.supportingStatus]=(statusCounts[row.supportingStatus]||0)+1;
+    return{facility:"Rate Fluctuation Ranking",version:RATE_FLUCTUATION_VERSION,analyticalFacilitiesVersion:VERSION,exportedAt:new Date().toISOString(),timeframe:rows[0]?.timeframe||timeframe,indicator:state.selectedScheduleStrategy||null,pairCount:typeof INSTRUMENTS!=="undefined"?INSTRUMENTS.length:rows.length,rowCount:rows.length,rankingRule:"Descending absolute Evaluation Table pips-per-hour; median absolute FINAL Event Outcome Ledger P/L breaks exact rate ties when available.",supportingEventMagnitudeDefinition:"Median absolute profitPips across FINAL HTL Asset Event Outcome Ledger records for the same pair/timeframe using the optimizer-backed HTL length and the maximum 5,000-candle analytical history path.",supportingHistoryContract:"Same loadEventRow path as Event Ledger · Result / Profit, requested at MAX_ANALYTICAL_HISTORY; shallow Evaluation priceCache is not used for corroboration.",corroboratedPairCount:rows.filter(row=>row.corroborated).length,supportStatusCounts:statusCounts,rows};
   }
 
   function ensureRateFluctuationFacility(){
     if(typeof document==="undefined")return null;
     const container=document.getElementById("evaluationTableContainer");if(!container)return null;let facility=document.getElementById("rateFluctuationRanking");
-    if(!facility){facility=document.createElement("details");facility.id="rateFluctuationRanking";facility.className="data-details";facility.open=true;facility.innerHTML='<summary>Rate Fluctuation Ranking · 28 Currency Pairs</summary><div class="panel-head"><div class="panel-title"><h2>Rate Fluctuation Ranking</h2><p id="rateFluctuationScope">Awaiting Evaluation Table data.</p></div><div class="head-controls" id="rateFluctuationControls"></div></div><div class="performance-wrap"><table class="performance-table"><thead><tr><th>Rank</th><th>Pair</th><th>TF</th><th>Signal</th><th>Pips/Hr</th><th>|Pips/Hr|</th><th>Median |Event P/L|</th><th>FINAL events</th><th>HTL length</th><th>Regime</th></tr></thead><tbody id="rateFluctuationBody"><tr><td colspan="10">Awaiting Evaluation Table data.</td></tr></tbody></table></div>';container.appendChild(facility);}
+    if(!facility){facility=document.createElement("details");facility.id="rateFluctuationRanking";facility.className="data-details";facility.open=true;facility.innerHTML='<summary>Rate Fluctuation Ranking · 28 Currency Pairs</summary><div class="panel-head"><div class="panel-title"><h2>Rate Fluctuation Ranking</h2><p id="rateFluctuationScope">Awaiting Evaluation Table data.</p></div><div class="head-controls" id="rateFluctuationControls"></div></div><div class="performance-wrap"><table class="performance-table"><thead><tr><th>Rank</th><th>Pair</th><th>TF</th><th>Signal</th><th>Pips/Hr</th><th>|Pips/Hr|</th><th>Median |Event P/L|</th><th>FINAL events</th><th>P/L n</th><th>History</th><th>HTL length</th><th>Support</th><th>Regime</th></tr></thead><tbody id="rateFluctuationBody"><tr><td colspan="13">Awaiting Evaluation Table data.</td></tr></tbody></table></div>';container.appendChild(facility);}
     addExportButton(document.getElementById("rateFluctuationControls"),"exportRateFluctuationJson","rate-fluctuation-ranking",rateFluctuationExportPayload);return facility;
   }
 
-  function renderRateFluctuationRanking(){
+  function renderRateFluctuationRanking(startHydration=true){
     ensureRateFluctuationFacility();if(typeof document==="undefined")return;const body=document.getElementById("rateFluctuationBody"),scope=document.getElementById("rateFluctuationScope");if(!body)return;
-    const rows=rateFluctuationRows(),expected=typeof INSTRUMENTS!=="undefined"?INSTRUMENTS.length:rows.length,timeframe=rows[0]?.timeframe||state.evaluationTableTimeframe||document.getElementById("evalTableTfFilter")?.value||"—",fmt=(value,digits=1)=>Number.isFinite(value)?Number(value).toFixed(digits):"—";
-    if(scope)scope.textContent=`${timeframe} · ${rows.length} / ${expected} pairs · rank by |Pips/Hr| · supporting magnitude = median |FINAL Event P/L|`;
-    body.innerHTML=rows.map(row=>`<tr><td><b>${row.rank}</b></td><td><b>${formatPair(row.pair)}</b></td><td>${row.timeframe}</td><td class="${typeof directionClass==="function"?directionClass(row.signal):""}">${typeof signalWord==="function"?signalWord(row.signal):(row.signal>0?"BUY":row.signal<0?"SELL":"HOLD")}</td><td>${fmt(row.pipsPerHour)}</td><td><b>${fmt(row.absolutePipsPerHour)}</b></td><td>${fmt(row.supportingEventMagnitudePips)}</td><td>${row.supportingFinalEvents}</td><td>${row.eventLength??"—"}</td><td>${String(row.regime||"NEUTRAL").replaceAll("_"," ")}</td></tr>`).join("")||'<tr><td colspan="10">Awaiting synchronized Evaluation Table data.</td></tr>';
+    const rows=rateFluctuationRows(),expected=typeof INSTRUMENTS!=="undefined"?INSTRUMENTS.length:rows.length,timeframe=rows[0]?.timeframe||state.evaluationTableTimeframe||document.getElementById("evalTableTfFilter")?.value||"—",fmt=(value,digits=1)=>Number.isFinite(value)?Number(value).toFixed(digits):"—",count=value=>Number.isFinite(Number(value))?String(Number(value)):"—",supportLabel=status=>String(status||"PENDING").replaceAll("_"," "),corroborated=rows.filter(row=>row.corroborated).length;
+    if(scope)scope.textContent=`${timeframe} · ${rows.length} / ${expected} pairs · rank by |Pips/Hr| · ${corroborated} corroborated by maximum-history FINAL event outcomes`;
+    body.innerHTML=rows.map(row=>{const waiting=row.supportingStatus==="PENDING"||row.supportingStatus==="LOADING",magnitude=waiting?"…":fmt(row.supportingEventMagnitudePips),history=Number.isFinite(row.supportingHistoryBars)?`${row.supportingHistoryBars}/${row.supportingHistoryTarget}`:`—/${row.supportingHistoryTarget}`;return `<tr><td><b>${row.rank}</b></td><td><b>${formatPair(row.pair)}</b></td><td>${row.timeframe}</td><td class="${typeof directionClass==="function"?directionClass(row.signal):""}">${typeof signalWord==="function"?signalWord(row.signal):(row.signal>0?"BUY":row.signal<0?"SELL":"HOLD")}</td><td>${fmt(row.pipsPerHour)}</td><td><b>${fmt(row.absolutePipsPerHour)}</b></td><td>${magnitude}</td><td>${count(row.supportingFinalEvents)}</td><td>${count(row.supportingMagnitudeEvents)}</td><td>${history}</td><td>${row.eventLength??"—"}</td><td title="${String(row.supportingError||"").replaceAll('"','&quot;')}">${supportLabel(row.supportingStatus)}</td><td>${String(row.regime||"NEUTRAL").replaceAll("_"," ")}</td></tr>`;}).join("")||'<tr><td colspan="13">Awaiting synchronized Evaluation Table data.</td></tr>';
+    if(startHydration&&rows.some(row=>row.supportingStatus==="PENDING")&&typeof marketDataReady==="function"&&marketDataReady()&&scheduleCoverageReady())queueMicrotask(()=>void hydrateRateFluctuationEventSupport(timeframe));
   }
 
   function evaluationExportPayload(){
@@ -290,7 +346,7 @@
 
   function install(){ensureEventFilterControl();ensureEventScheduleHeaders();ensureEventLedgerPairControl();ensureRateFluctuationFacility();syncSelectedEventConfiguration();installRuntime();installExportButtons();renderRateFluctuationRanking();if(typeof marketDataReady==="function"&&marketDataReady()&&scheduleCoverageReady())void preloadEvaluationTable();}
 
-  const api=Object.freeze({VERSION,RATE_FLUCTUATION_VERSION,optimizerAssetConfiguration,cleanEventScheduleRow,evaluationExportPayload,diagnosticExportPayload,macroExportPayload,eventLedgerExportPayload,htlScheduleExportPayload,timeframeSignalScheduleExportPayload,eventLedgerSelectedPair,rateFluctuationRows,rateFluctuationExportPayload,scheduleDatasetTotal,scheduleCoverageReady,preloadEvaluationTable});
+  const api=Object.freeze({VERSION,RATE_FLUCTUATION_VERSION,optimizerAssetConfiguration,cleanEventScheduleRow,evaluationExportPayload,diagnosticExportPayload,macroExportPayload,eventLedgerExportPayload,htlScheduleExportPayload,timeframeSignalScheduleExportPayload,eventLedgerSelectedPair,rateFluctuationRows,rateFluctuationExportPayload,hydrateRateFluctuationEventSupport,scheduleDatasetTotal,scheduleCoverageReady,preloadEvaluationTable});
   global.CTEAnalyticalFacilities=api;
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);
