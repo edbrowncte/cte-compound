@@ -1,24 +1,32 @@
 (function installHtlSignalPanel(global){
   "use strict";
 
-  const VERSION="CTE_HTL_SIGNAL_PANEL@1.0.0";
+  const VERSION="CTE_HTL_SIGNAL_PANEL@1.0.1";
   const FALLBACK_TIMEFRAMES=["W","D","H4","H1","M30","M15","M5","M1","S30","S5"];
-  const FALLBACK_INDICATORS=["ASSET","DARE_N","DARE","COMBO","NAI","APEX","IOI","IOM"];
+  const FALLBACK_INDICATORS=["ASSET","DARE_N","DARE","COMBO","NAI","APEX"];
   const LABELS={ASSET:"HTL Asset",DARE_N:"DARE(N)",DARE:"DARE",COMBO:"COMBO · CSF",NAI:"NAI",APEX:"APEX",IOI:"IOI",IOM:"IOM"};
   const COLUMNS=[
     ["pair","Pair"],["timeframe","TF"],["indicator","Indicator"],["length","Length"],["filter","Filter"],["htlEvent","HTL Event"],["signal","Signal"],["agreement","Agreement"],["confidence","Confidence"],["regime","Regime"],["eventOpen","Event Open"],["currentPrice","Current Price"],["gainPips","Gain (pips)"],["completion5","≤5 bars"],["completion10","≤10 bars"],["durationMae","Duration MAE"],["durationValidationN","Duration n"],["nextEvent","Next HTL"],["completedCandle","Completed Candle"]
   ];
   let panelRows=[],sortKey="gainPips",sortDirection=-1,externalRows=null,observerQueued=false;
 
-  const finite=value=>Number.isFinite(Number(value))?Number(value):null;
+  const finite=value=>value===null||value===undefined||value===""?null:(Number.isFinite(Number(value))?Number(value):null);
   const pct=value=>finite(value)==null?"—":`${(Number(value)*100).toFixed(1)}%`;
-  const fixed=(value,digits=2)=>finite(value)==null?"—":Number(value).toFixed(digits);
   const pipScale=pair=>String(pair||"").endsWith("JPY")?100:10000;
   const formatPairLocal=pair=>typeof formatPair==="function"?formatPair(pair):String(pair||"").replace("_","/");
   const signalWordLocal=value=>{const n=Number(value);return n>0?"BUY":n<0?"SELL":"HOLD";};
   const directionFromWord=value=>String(value||"").toUpperCase().startsWith("BUY")?1:String(value||"").toUpperCase().startsWith("SELL")?-1:0;
   const appState=()=>typeof state!=="undefined"?state:null;
   const scheduleKeyLocal=(pair,timeframe)=>typeof scheduleKey==="function"?scheduleKey(pair,timeframe):`${pair}|${timeframe}`;
+  const instrumentList=()=>Array.isArray(global.INSTRUMENTS)?global.INSTRUMENTS:(typeof INSTRUMENTS!=="undefined"&&Array.isArray(INSTRUMENTS)?INSTRUMENTS:[]);
+
+  function scheduleIndicatorIds(){
+    if(typeof document!=="undefined"){
+      const values=[...(document.getElementById("scheduleStrategy")?.options||[])].map(option=>option.value).filter(Boolean);
+      if(values.length)return values;
+    }
+    return FALLBACK_INDICATORS;
+  }
 
   function directionalGain(pair,currentPrice,eventOpen,eventDirection){
     const price=finite(currentPrice),open=finite(eventOpen),direction=Number(eventDirection)||0;
@@ -37,7 +45,7 @@
       const agreement=!htlDirection||!signalDirection?"—":htlDirection===signalDirection?"MATCH":"OPPOSED";
       return{
         pair:row.pair,timeframe:tf,indicator:signal.indicator||indicator||null,length:row.length??signal.length??null,filter:row.filter??signal.filter??null,
-        htlEvent:row.currentEvent||row.htlEvent||"—",signal:signal.signal||signalWordLocal(signalDirection),agreement,confidence:signal.confidence??null,regime:signal.regime??null,
+        htlEvent:row.currentEvent||row.htlEvent||"—",signal:signal.signal||(signalDirection?signalWordLocal(signalDirection):"—"),agreement,confidence:signal.confidence??null,regime:signal.regime??null,
         eventOpen:row.currentEventOpen??row.eventOpen??null,currentPrice:row.currentPrice??row.price??null,gainPips,
         completion5:row.completionWithin5Bars??row.p5??null,completion10:row.completionWithin10Bars??row.p10??null,durationMae:row.durationMaeBars??row.durationMae??null,
         durationValidationN:row.durationValidationN??row.forecast?.integrity?.durationValidationN??null,nextEvent:row.nextHtlEvent??row.nextEvent??"—",completedCandle:signal.completedCandle??null,
@@ -54,28 +62,27 @@
 
   function liveHtlRows(timeframe){
     const s=appState();if(!s)return[];
-    const existing=(s.eventRows||[]).filter(row=>row?.pair&&(!row.timeframe||row.timeframe===timeframe));
-    const existingByPair=new Map(existing.map(row=>[row.pair,row]));
-    const pairs=Array.isArray(global.INSTRUMENTS)?global.INSTRUMENTS:(typeof INSTRUMENTS!=="undefined"?INSTRUMENTS:[]),rows=[];
-    for(const pair of pairs){
+    const eventTimeframe=document.getElementById("eventTimeframe")?.value||null;
+    const existing=eventTimeframe===timeframe?(s.eventRows||[]).filter(row=>row?.pair):[];
+    const existingByPair=new Map(existing.map(row=>[row.pair,row])),rows=[];
+    for(const pair of instrumentList()){
       let row=existingByPair.get(pair)||null;
       if(!row){
         const candles=s.scheduleCandles?.get?.(scheduleKeyLocal(pair,timeframe))||[],config=global.CTEAnalyticalFacilities?.optimizerAssetConfiguration?.(pair,timeframe)||null;
         if(candles.length&&config?.configured&&typeof buildEventRow==="function"){
           try{row=buildEventRow(pair,candles,config.length);row={...row,timeframe,length:config.length,filter:config.filter,configurationSource:config.source,historyBars:candles.length};}catch{}
         }
-      }else row={...row,timeframe:row.timeframe||timeframe};
+      }else row={...row,timeframe};
       if(row)rows.push(row);
     }
     return rows;
   }
 
   function liveSignalRows(timeframe,indicator){
-    const s=appState();if(!s)return[];
-    const pairs=Array.isArray(global.INSTRUMENTS)?global.INSTRUMENTS:(typeof INSTRUMENTS!=="undefined"?INSTRUMENTS:[]),rows=[];
-    for(const pair of pairs){
-      const key=scheduleKeyLocal(pair,timeframe),analysis=s.scheduleEvaluations?.get?.(key),output=analysis?.latest?.[indicator]||null,candles=s.scheduleCandles?.get?.(key)||[],record=s.autoConfigurations?.get?.(key)||null,config=record?.config?.[indicator]||null;
-      rows.push({pair,timeframe,indicator,direction:Number(output?.direction)||0,signal:signalWordLocal(output?.direction),confidence:output?.confidence??null,regime:output?.regime??null,length:config?.length??null,filter:config?.filter??null,configurationSource:record?.source||null,completedCandle:candles.at(-1)?.time||null});
+    const s=appState();if(!s)return[];const rows=[];
+    for(const pair of instrumentList()){
+      const key=scheduleKeyLocal(pair,timeframe),analysis=s.scheduleEvaluations?.get?.(key),output=analysis?.latest?.[indicator]||null,candles=s.scheduleCandles?.get?.(key)||[],record=s.autoConfigurations?.get?.(key)||null,config=record?.config?.[indicator]||null,direction=Number(output?.direction)||0;
+      rows.push({pair,timeframe,indicator,direction,signal:output?signalWordLocal(direction):"—",confidence:output?.confidence??null,regime:output?.regime??null,length:config?.length??null,filter:config?.filter??null,configurationSource:record?.source||null,completedCandle:candles.at(-1)?.time||null});
     }
     return rows;
   }
@@ -114,9 +121,9 @@
     let root=document.getElementById("htlSignalPanel");if(root)return root;const analysis=document.getElementById("analysisPanel");if(!analysis)return null;const firstFacility=analysis.querySelector(":scope > details.facility-details");
     root=document.createElement("section");root.id="htlSignalPanel";root.className="panel";root.innerHTML=`<div class="hsap-head"><div class="hsap-title"><h2>HTL / Signal Alignment</h2><p>Client-side join of HTL Schedule and Timeframe Signal Schedule · directional gain is measured from the active HTL event open.</p></div><div class="hsap-controls"><label class="hsap-field"><span>Timeframe</span><select id="htlSignalPanelTimeframe"></select></label><label class="hsap-field"><span>Indicator</span><select id="htlSignalPanelIndicator"></select></label><button id="htlSignalPanelRefresh" type="button">Refresh</button><button id="htlSignalPanelExport" type="button">Export JSON</button></div></div><div class="hsap-wrap"><table aria-label="HTL and timeframe signal alignment"><thead><tr id="htlSignalPanelHead"></tr></thead><tbody id="htlSignalPanelBody"><tr><td>Awaiting schedule data.</td></tr></tbody></table></div><div class="hsap-foot"><span id="htlSignalPanelStatus">Awaiting schedule data.</span><span>Gain: green favorable · red adverse · gray unavailable/flat</span></div>`;
     firstFacility?.insertAdjacentElement("afterend",root);ensureStyles();
-    const tf=document.getElementById("htlSignalPanelTimeframe"),indicator=document.getElementById("htlSignalPanelIndicator"),times=(typeof TIMEFRAMES!=="undefined"&&Array.isArray(TIMEFRAMES)?TIMEFRAMES:FALLBACK_TIMEFRAMES),strategies=FALLBACK_INDICATORS;
+    const tf=document.getElementById("htlSignalPanelTimeframe"),indicator=document.getElementById("htlSignalPanelIndicator"),times=(typeof TIMEFRAMES!=="undefined"&&Array.isArray(TIMEFRAMES)?TIMEFRAMES:FALLBACK_TIMEFRAMES),strategies=scheduleIndicatorIds();
     tf.innerHTML=times.map(item=>`<option value="${item}">${item}</option>`).join("");indicator.innerHTML=strategies.map(item=>`<option value="${item}">${LABELS[item]||item}</option>`).join("");
-    const s=appState();tf.value=s?.selectedTimeframe&&times.includes(s.selectedTimeframe)?s.selectedTimeframe:(document.getElementById("chartTimeframe")?.value||"M15");indicator.value=s?.selectedScheduleStrategy&&strategies.includes(s.selectedScheduleStrategy)?s.selectedScheduleStrategy:(document.getElementById("scheduleStrategy")?.value||"ASSET");
+    const s=appState();tf.value=s?.selectedTimeframe&&times.includes(s.selectedTimeframe)?s.selectedTimeframe:(document.getElementById("chartTimeframe")?.value||"M15");const requestedIndicator=s?.selectedScheduleStrategy||document.getElementById("scheduleStrategy")?.value||strategies[0];indicator.value=strategies.includes(requestedIndicator)?requestedIndicator:strategies[0];
     document.getElementById("htlSignalPanelHead").innerHTML=COLUMNS.map(([key,label])=>`<th><button class="hsap-sort" type="button" data-hsap-sort="${key}">${label}<span data-hsap-arrow="${key}"></span></button></th>`).join("");
     root.querySelectorAll("[data-hsap-sort]").forEach(button=>button.addEventListener("click",()=>{const key=button.dataset.hsapSort;if(sortKey===key)sortDirection*=-1;else{sortKey=key;sortDirection=1;}render();}));
     tf.addEventListener("change",()=>{externalRows=null;render();});indicator.addEventListener("change",()=>{externalRows=null;render();});document.getElementById("htlSignalPanelRefresh")?.addEventListener("click",()=>{externalRows=null;render();});document.getElementById("htlSignalPanelExport")?.addEventListener("click",exportJson);
@@ -134,13 +141,13 @@
 
   function exportPayload(){const tf=document.getElementById("htlSignalPanelTimeframe")?.value||null,indicator=document.getElementById("htlSignalPanelIndicator")?.value||null;return{facility:"HTL / Signal Alignment",version:VERSION,exportedAt:new Date().toISOString(),timeframe:tf,indicator,sort:{key:sortKey,direction:sortDirection>0?"ascending":"descending"},rows:panelRows};}
   function exportJson(){const payload=exportPayload(),blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json;charset=utf-8"}),url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=`cte-compound-htl-signal-alignment-${new Date().toISOString().replace(/[:.]/g,"-")}.json`;document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);}
-  function renderFromExports(htlScheduleExport,timeframeSignalScheduleExport,options={}){ensurePanel();const tf=options.timeframe||htlScheduleExport?.timeframe||document.getElementById("htlSignalPanelTimeframe")?.value||"M15",indicator=options.indicator||timeframeSignalScheduleExport?.indicator||document.getElementById("htlSignalPanelIndicator")?.value||"ASSET";document.getElementById("htlSignalPanelTimeframe").value=tf;document.getElementById("htlSignalPanelIndicator").value=indicator;externalRows=normalizeFromTwoExports(htlScheduleExport,timeframeSignalScheduleExport,{timeframe:tf,indicator});return render();}
+  function renderFromExports(htlScheduleExport,timeframeSignalScheduleExport,options={}){ensurePanel();const tf=options.timeframe||htlScheduleExport?.timeframe||document.getElementById("htlSignalPanelTimeframe")?.value||"M15",indicator=options.indicator||timeframeSignalScheduleExport?.indicator||document.getElementById("htlSignalPanelIndicator")?.value||"ASSET";document.getElementById("htlSignalPanelTimeframe").value=tf;const indicatorControl=document.getElementById("htlSignalPanelIndicator");if([...indicatorControl.options].some(option=>option.value===indicator))indicatorControl.value=indicator;externalRows=normalizeFromTwoExports(htlScheduleExport,timeframeSignalScheduleExport,{timeframe:tf,indicator});return render();}
 
   function scheduleRender(){if(observerQueued)return;observerQueued=true;queueMicrotask(()=>{observerQueued=false;externalRows=null;render();});}
   function install(){
     if(!ensurePanel())return false;render();
     const matrix=document.getElementById("signalMatrix"),events=document.getElementById("eventScheduleBody");if(typeof MutationObserver!=="undefined"){const observer=new MutationObserver(scheduleRender);if(matrix)observer.observe(matrix,{childList:true,subtree:true});if(events)observer.observe(events,{childList:true,subtree:true});}
-    document.getElementById("scheduleStrategy")?.addEventListener("change",()=>{const selected=document.getElementById("scheduleStrategy")?.value,control=document.getElementById("htlSignalPanelIndicator");if(control&&FALLBACK_INDICATORS.includes(selected)){control.value=selected;scheduleRender();}});
+    document.getElementById("scheduleStrategy")?.addEventListener("change",()=>{const selected=document.getElementById("scheduleStrategy")?.value,control=document.getElementById("htlSignalPanelIndicator");if(control&&[...control.options].some(option=>option.value===selected)){control.value=selected;scheduleRender();}});
     global.addEventListener?.("cte:optimizer-updated",scheduleRender);return true;
   }
 
