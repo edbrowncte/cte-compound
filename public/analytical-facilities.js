@@ -1,7 +1,7 @@
 (function installAnalyticalFacilities(global){
   "use strict";
 
-  const VERSION="CTE_ANALYTICAL_FACILITIES@1.0.2";
+  const VERSION="CTE_ANALYTICAL_FACILITIES@1.1.0",RATE_FLUCTUATION_VERSION="CTE_RATE_FLUCTUATION_RANKING@1.0.0",EVENT_LEDGER_FOLLOW="__FOLLOW_SELECTED__";
   let evaluationPreloadPromise=null,evaluationPreloadKey="";
 
   const safeName=value=>String(value||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"data";
@@ -117,6 +117,84 @@
     };
   }
 
+  function eventLedgerSelectedPair(){
+    const selection=String(state.eventLedgerPairSelection||EVENT_LEDGER_FOLLOW);
+    return typeof INSTRUMENTS!=="undefined"&&INSTRUMENTS.includes(selection)?selection:state.selectedInstrument;
+  }
+
+  function ensureEventLedgerPairControl(){
+    if(typeof document==="undefined")return null;
+    const ledger=document.querySelector(".event-ledger");if(!ledger)return null;
+    let controls=ledger.querySelector(":scope > .head-controls");
+    if(!controls){controls=document.createElement("div");controls.className="head-controls";controls.style.padding="7px 10px";ledger.querySelector("summary")?.insertAdjacentElement("afterend",controls);}
+    let select=document.getElementById("eventLedgerPairSelect");
+    if(!select){
+      const label=document.createElement("label");label.className="field";label.dataset.eventLedgerPairControl="true";
+      label.innerHTML='<span>Ledger Pair</span><select id="eventLedgerPairSelect" aria-label="Event Ledger currency pair"></select>';controls.prepend(label);select=label.querySelector("select");
+      select.innerHTML='<option value="'+EVENT_LEDGER_FOLLOW+'">Follow selected pair</option>'+INSTRUMENTS.map(pair=>'<option value="'+pair+'">'+formatPair(pair)+'</option>').join("");
+      select.addEventListener("change",()=>{state.eventLedgerPairSelection=select.value;state.eventLedgerSelectedRow=null;void loadSelectedEventLedger();});
+    }
+    if(!state.eventLedgerPairSelection)state.eventLedgerPairSelection=EVENT_LEDGER_FOLLOW;
+    select.value=INSTRUMENTS.includes(state.eventLedgerPairSelection)?state.eventLedgerPairSelection:EVENT_LEDGER_FOLLOW;
+    return select;
+  }
+
+  async function loadSelectedEventLedger(){
+    if(typeof marketDataReady==="function"&&!marketDataReady())return null;
+    const pair=eventLedgerSelectedPair(),timeframe=state.selectedTimeframe||currentEventTimeframe(),config=optimizerAssetConfiguration(pair,timeframe),node=typeof document!=="undefined"?document.getElementById("optimizerEventLedgerScope"):null;
+    ensureEventLedgerPairControl();
+    if(!config.configured){state.eventLedgerSelectedRow=null;if(node)node.textContent=`Event outcomes unavailable · optimizer configuration unavailable · ${formatPair(pair)} ${timeframe}`;const ledger=typeof document!=="undefined"?document.getElementById("eventLedger"):null;if(ledger)ledger.innerHTML='<tr><td colspan="13">Optimizer configuration unavailable for selected ledger pair/timeframe.</td></tr>';return null;}
+    const controller=new AbortController(),scope=`Optimizer v${state.optimizerRuntimeVersion||7} · ${timeframe} · HTL Asset length ${config.length}`;if(node)node.textContent=`Loading ${formatPair(pair)} ${timeframe} optimizer event outcomes…`;
+    try{
+      const requested=typeof MAX_ANALYTICAL_HISTORY==="number"?MAX_ANALYTICAL_HISTORY:null,row=await loadEventRow(pair,timeframe,config.length,controller,70,requested);
+      state.eventLedgerPair=pair;state.eventLedgerTimeframe=timeframe;state.eventLedgerSelectedRow=row;renderEventLedgerRows(row,scope);return row;
+    }catch(error){state.eventLedgerSelectedRow=null;if(node)node.textContent=`Event outcomes unavailable · ${error.message||error}`;const ledger=typeof document!=="undefined"?document.getElementById("eventLedger"):null;if(ledger)ledger.innerHTML=`<tr><td colspan="13">${error.message||"Event outcomes unavailable"}</td></tr>`;return null;}
+  }
+
+  function finiteMedian(values){
+    const ordered=(values||[]).map(Number).filter(Number.isFinite).sort((a,b)=>a-b);if(!ordered.length)return null;const middle=Math.floor(ordered.length/2);return ordered.length%2?ordered[middle]:(ordered[middle-1]+ordered[middle])/2;
+  }
+
+  function rateFluctuationEventSupport(row,timeframe){
+    const pair=row?.pair;if(!pair)return{supportingEventMagnitudePips:null,supportingFinalEvents:0,eventLength:null,configurationSource:null};
+    const key=typeof scheduleKey==="function"?scheduleKey(pair,timeframe):`${pair}|${timeframe}`,candles=row?.priceCache?.[timeframe]||state.scheduleCandles?.get?.(key)||[],config=optimizerAssetConfiguration(pair,timeframe),lastTime=candles.at?.(-1)?.time||"",cacheKey=`${key}|${config.length}|${candles.length}|${lastTime}`;
+    if(!(state.rateFluctuationEventCache instanceof Map))state.rateFluctuationEventCache=new Map();if(state.rateFluctuationEventCache.has(cacheKey))return state.rateFluctuationEventCache.get(cacheKey);
+    let result={supportingEventMagnitudePips:null,supportingFinalEvents:0,eventLength:config.length,configurationSource:config.source};
+    if(typeof buildEventRow==="function"&&candles.length){
+      try{const eventRow=buildEventRow(pair,candles,config.length),finals=(eventRow?.eventList||[]).filter(event=>event.status==="FINAL"&&Number.isFinite(Number(event.profitPips))),magnitudes=finals.map(event=>Math.abs(Number(event.profitPips)));result={...result,supportingEventMagnitudePips:finiteMedian(magnitudes),supportingFinalEvents:finals.length};}catch{}
+    }
+    state.rateFluctuationEventCache.set(cacheKey,result);return result;
+  }
+
+  function rateFluctuationRows(explicitTimeframe=null){
+    const select=typeof document!=="undefined"?document.getElementById("evalTableTfFilter"):null,timeframe=explicitTimeframe||state.evaluationTableTimeframe||select?.value||null;
+    const rows=(state.evaluationTableData||[]).filter(row=>!timeframe||row.timeframe===timeframe).map(row=>{
+      const signed=Number(row.pipsPerHour),pipsPerHour=Number.isFinite(signed)?signed:null,support=rateFluctuationEventSupport(row,timeframe||row.timeframe);
+      return{pair:row.pair,timeframe:row.timeframe,signal:Number(row.signal)||0,regime:row.regime||"NEUTRAL",pipsPerHour,absolutePipsPerHour:pipsPerHour===null?null:Math.abs(pipsPerHour),supportingEventMagnitudePips:support.supportingEventMagnitudePips,supportingFinalEvents:support.supportingFinalEvents,eventLength:support.eventLength,configurationSource:support.configurationSource};
+    });
+    rows.sort((a,b)=>{const ar=Number.isFinite(a.absolutePipsPerHour)?a.absolutePipsPerHour:-Infinity,br=Number.isFinite(b.absolutePipsPerHour)?b.absolutePipsPerHour:-Infinity;if(br!==ar)return br-ar;const am=Number.isFinite(a.supportingEventMagnitudePips)?a.supportingEventMagnitudePips:-Infinity,bm=Number.isFinite(b.supportingEventMagnitudePips)?b.supportingEventMagnitudePips:-Infinity;if(bm!==am)return bm-am;return String(a.pair).localeCompare(String(b.pair));});
+    return rows.map((row,index)=>({...row,rank:index+1}));
+  }
+
+  function rateFluctuationExportPayload(){
+    const rows=rateFluctuationRows(),select=typeof document!=="undefined"?document.getElementById("evalTableTfFilter"):null,timeframe=rows[0]?.timeframe||state.evaluationTableTimeframe||select?.value||null;
+    return{facility:"Rate Fluctuation Ranking",version:RATE_FLUCTUATION_VERSION,analyticalFacilitiesVersion:VERSION,exportedAt:new Date().toISOString(),timeframe,indicator:state.selectedScheduleStrategy||null,pairCount:typeof INSTRUMENTS!=="undefined"?INSTRUMENTS.length:rows.length,rowCount:rows.length,rankingRule:"Descending absolute Evaluation Table pips-per-hour; median absolute FINAL Event Ledger P/L breaks ties.",supportingEventMagnitudeDefinition:"Median absolute profitPips across FINAL HTL Asset events for the same pair/timeframe using the optimizer-backed HTL length.",rows};
+  }
+
+  function ensureRateFluctuationFacility(){
+    if(typeof document==="undefined")return null;
+    const container=document.getElementById("evaluationTableContainer");if(!container)return null;let facility=document.getElementById("rateFluctuationRanking");
+    if(!facility){facility=document.createElement("details");facility.id="rateFluctuationRanking";facility.className="data-details";facility.open=true;facility.innerHTML='<summary>Rate Fluctuation Ranking · 28 Currency Pairs</summary><div class="panel-head"><div class="panel-title"><h2>Rate Fluctuation Ranking</h2><p id="rateFluctuationScope">Awaiting Evaluation Table data.</p></div><div class="head-controls" id="rateFluctuationControls"></div></div><div class="performance-wrap"><table class="performance-table"><thead><tr><th>Rank</th><th>Pair</th><th>TF</th><th>Signal</th><th>Pips/Hr</th><th>|Pips/Hr|</th><th>Median |Event P/L|</th><th>FINAL events</th><th>HTL length</th><th>Regime</th></tr></thead><tbody id="rateFluctuationBody"><tr><td colspan="10">Awaiting Evaluation Table data.</td></tr></tbody></table></div>';container.appendChild(facility);}
+    addExportButton(document.getElementById("rateFluctuationControls"),"exportRateFluctuationJson","rate-fluctuation-ranking",rateFluctuationExportPayload);return facility;
+  }
+
+  function renderRateFluctuationRanking(){
+    ensureRateFluctuationFacility();if(typeof document==="undefined")return;const body=document.getElementById("rateFluctuationBody"),scope=document.getElementById("rateFluctuationScope");if(!body)return;
+    const rows=rateFluctuationRows(),expected=typeof INSTRUMENTS!=="undefined"?INSTRUMENTS.length:rows.length,timeframe=rows[0]?.timeframe||state.evaluationTableTimeframe||document.getElementById("evalTableTfFilter")?.value||"—",fmt=(value,digits=1)=>Number.isFinite(value)?Number(value).toFixed(digits):"—";
+    if(scope)scope.textContent=`${timeframe} · ${rows.length} / ${expected} pairs · rank by |Pips/Hr| · supporting magnitude = median |FINAL Event P/L|`;
+    body.innerHTML=rows.map(row=>`<tr><td><b>${row.rank}</b></td><td><b>${formatPair(row.pair)}</b></td><td>${row.timeframe}</td><td class="${typeof directionClass==="function"?directionClass(row.signal):""}">${typeof signalWord==="function"?signalWord(row.signal):(row.signal>0?"BUY":row.signal<0?"SELL":"HOLD")}</td><td>${fmt(row.pipsPerHour)}</td><td><b>${fmt(row.absolutePipsPerHour)}</b></td><td>${fmt(row.supportingEventMagnitudePips)}</td><td>${row.supportingFinalEvents}</td><td>${row.eventLength??"—"}</td><td>${String(row.regime||"NEUTRAL").replaceAll("_"," ")}</td></tr>`).join("")||'<tr><td colspan="10">Awaiting synchronized Evaluation Table data.</td></tr>';
+  }
+
   function evaluationExportPayload(){
     const timeframe=state.evaluationTableTimeframe||document.getElementById("evalTableTfFilter")?.value||null,rows=(state.evaluationTableData||[]).map(row=>{const {priceCache,...record}=row;return record;});
     return{facility:"Evaluation Table",version:VERSION,exportedAt:new Date().toISOString(),timeframe,indicator:state.selectedScheduleStrategy,rows};
@@ -131,9 +209,11 @@
     return{facility:"Macro Performance",version:VERSION,exportedAt:new Date().toISOString(),pair,timeframe,source:record?.source||null,computedAt:record?.computedAt||null,range:record?.range||null,validation:record?.validation||null,directionalOwnershipVersion:record?.directionalOwnershipVersion||null,configuration:record?.config||null,rows:record?.grossPerformance||[]};
   }
 
-  function eventLedgerExportPayload(){
-    const pair=currentEventPair(),timeframe=currentEventTimeframe(),row=(state.eventRows||[]).find(item=>item.pair===pair)||null,events=row?.eventList||state.eventEvents||[];
-    return{facility:"Event Ledger",version:VERSION,exportedAt:new Date().toISOString(),pair,timeframe,length:row?.length??(Number(document.getElementById("eventLength")?.value)||null),filter:row?.filter??(Number(document.getElementById("eventFilter")?.value)||0),configurationSource:row?.configurationSource||null,events};
+  async function eventLedgerExportPayload(){
+    const pair=eventLedgerSelectedPair(),timeframe=state.selectedTimeframe||currentEventTimeframe();let row=state.eventLedgerSelectedRow||null;
+    if(!row||row.pair!==pair||state.eventLedgerTimeframe!==timeframe)row=await loadSelectedEventLedger();
+    const config=optimizerAssetConfiguration(pair,timeframe),events=row?.eventList||[];
+    return{facility:"Event Ledger",version:VERSION,exportedAt:new Date().toISOString(),pair,timeframe,pairSelection:state.eventLedgerPairSelection||EVENT_LEDGER_FOLLOW,length:row?.length??config.length,filter:row?.filter??config.filter,configurationSource:row?.configurationSource||config.source,configurationComputedAt:row?.configurationComputedAt||config.computedAt||null,events};
   }
 
   function htlScheduleExportPayload(){
@@ -162,6 +242,7 @@
   }
 
   function installExportButtons(){
+    ensureEventLedgerPairControl();ensureRateFluctuationFacility();
     addExportButton(document.querySelector("#evaluationTableContainer .head-controls"),"exportEvaluationJson","evaluation-table",evaluationExportPayload);
     addExportButton(document.querySelector("#platformDiagnosticDetails .date-range-controls"),"exportPlatformDiagnosticJson","platform-diagnostic",diagnosticExportPayload);
     const macroHeading=[...document.querySelectorAll("#performancePanel .panel-head")].find(node=>node.querySelector("h2")?.textContent.trim().startsWith("Macro:"));if(macroHeading){let controls=macroHeading.querySelector(".head-controls");if(!controls){controls=document.createElement("div");controls.className="head-controls";macroHeading.appendChild(controls);}addExportButton(controls,"exportMacroPerformanceJson","macro-performance",macroExportPayload);}
@@ -179,6 +260,8 @@
   }
 
   function installRuntime(){
+    if(typeof loadOptimizerEventLedger==="function"){loadOptimizerEventLedger=async function(){return loadSelectedEventLedger();};}
+    if(typeof renderEvaluationTable==="function"){const prior=renderEvaluationTable;renderEvaluationTable=function(){const result=prior();renderRateFluctuationRanking();return result;};}
     if(typeof renderEventSchedule==="function"){
       const prior=renderEventSchedule;renderEventSchedule=function(){const result=prior();augmentEventScheduleRows();return result;};
     }
@@ -204,9 +287,9 @@
     document.getElementById("eventTimeframe")?.addEventListener("change",()=>syncSelectedEventConfiguration());
   }
 
-  function install(){ensureEventFilterControl();ensureEventScheduleHeaders();syncSelectedEventConfiguration();installRuntime();installExportButtons();if(typeof marketDataReady==="function"&&marketDataReady()&&scheduleCoverageReady())void preloadEvaluationTable();}
+  function install(){ensureEventFilterControl();ensureEventScheduleHeaders();ensureEventLedgerPairControl();ensureRateFluctuationFacility();syncSelectedEventConfiguration();installRuntime();installExportButtons();renderRateFluctuationRanking();if(typeof marketDataReady==="function"&&marketDataReady()&&scheduleCoverageReady())void preloadEvaluationTable();}
 
-  const api=Object.freeze({VERSION,optimizerAssetConfiguration,cleanEventScheduleRow,evaluationExportPayload,diagnosticExportPayload,macroExportPayload,eventLedgerExportPayload,htlScheduleExportPayload,timeframeSignalScheduleExportPayload,scheduleDatasetTotal,scheduleCoverageReady,preloadEvaluationTable});
+  const api=Object.freeze({VERSION,RATE_FLUCTUATION_VERSION,optimizerAssetConfiguration,cleanEventScheduleRow,evaluationExportPayload,diagnosticExportPayload,macroExportPayload,eventLedgerExportPayload,htlScheduleExportPayload,timeframeSignalScheduleExportPayload,eventLedgerSelectedPair,rateFluctuationRows,rateFluctuationExportPayload,scheduleDatasetTotal,scheduleCoverageReady,preloadEvaluationTable});
   global.CTEAnalyticalFacilities=api;
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);
