@@ -1,0 +1,32 @@
+name: Repair H2 Worker candle gateway
+
+on:
+  push:
+    branches:
+      - fix/h2-worker-candle-gateway
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/h2-worker-candle-gateway
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply fail-closed H2 gateway repair
+        run: node scripts/repair-h2-worker-gateway.mjs
+      - name: Remove one-shot repair machinery
+        run: rm scripts/repair-h2-worker-gateway.mjs .github/workflows/repair-h2-worker-gateway.yml
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/worker-base.js public/index.html scripts/test-h2-timeframe.mjs scripts/repair-h2-worker-gateway.mjs .github/workflows/repair-h2-worker-gateway.yml
+          git commit -m "Repair H2 Worker candle gateway"
+          git push origin HEAD:fix/h2-worker-candle-gateway
