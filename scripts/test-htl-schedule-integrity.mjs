@@ -4,7 +4,7 @@ import fs from "node:fs";
 await import("../public/htl-schedule-integrity.js");
 const api=globalThis.CTEHtlScheduleIntegrity;
 assert.ok(api,"HTL schedule integrity API must load headlessly");
-assert.equal(api.VERSION,"CTE_HTL_SCHEDULE_INTEGRITY@1.0.2");
+assert.equal(api.VERSION,"CTE_HTL_SCHEDULE_INTEGRITY@1.0.3");
 assert.equal(api.MIN_DURATION_VALIDATION_SAMPLES,8);
 assert.equal(api.MIN_COMPLETION_VALIDATION_SAMPLES,8);
 
