@@ -32,6 +32,8 @@ assert.match(source,/id="eventLedgerPairSelect"/,"Event Ledger must expose a pai
 assert.match(source,/Follow selected pair/,"Event Ledger pair selector must support a follow-selected toggle");
 assert.match(source,/async function eventLedgerExportPayload/,"Event Ledger JSON export must resolve the active ledger pair before export");
 assert.match(source,/eventLedgerPairSelection/,"Event Ledger JSON must preserve pair-selection provenance");
+assert.match(source,/getElementById\(\"eventLedger\"\)\?\.closest\(\"details\.event-ledger\"\)/,"Event Ledger controls and export must resolve from the actual Result / Profit table");
+assert.doesNotMatch(source,/document\.querySelector\(\"\.event-ledger\"\)/,"Generic .event-ledger selection must not confuse Historical Event Survival with Result / Profit");
 assert.match(source,/rateFluctuationRows/,"Evaluation panel must derive the 28-pair rate fluctuation ranking from underlying data");
 assert.match(source,/absolutePipsPerHour/,"Rate fluctuation ranking must use absolute Evaluation Table pips-per-hour");
 assert.match(source,/supportingEventMagnitudePips/,"Rate fluctuation ranking must expose supporting event magnitude");

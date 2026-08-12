@@ -7,6 +7,7 @@
   const safeName=value=>String(value||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"data";
   const currentEventTimeframe=()=>document.getElementById("eventTimeframe")?.value||state.selectedTimeframe;
   const currentEventPair=()=>document.getElementById("eventPair")?.value||state.selectedInstrument;
+  const eventOutcomeLedgerDetails=()=>typeof document==="undefined"?null:document.getElementById("eventLedger")?.closest("details.event-ledger")||null;
   const scheduleDatasetTotal=()=>((typeof INSTRUMENTS!=="undefined"&&Array.isArray(INSTRUMENTS)?INSTRUMENTS.length:0)*(typeof TIMEFRAMES!=="undefined"&&Array.isArray(TIMEFRAMES)?TIMEFRAMES.length:0));
   function scheduleCoverageReady(){const total=scheduleDatasetTotal();return total>0&&Number(state.scheduleEvaluations?.size||0)>=total&&!state.scheduleLoading&&Number(state.scheduleFailures?.size||0)===0;}
 
@@ -124,7 +125,7 @@
 
   function ensureEventLedgerPairControl(){
     if(typeof document==="undefined")return null;
-    const ledger=document.querySelector(".event-ledger");if(!ledger)return null;
+    const ledger=eventOutcomeLedgerDetails();if(!ledger)return null;
     let controls=ledger.querySelector(":scope > .head-controls");
     if(!controls){controls=document.createElement("div");controls.className="head-controls";controls.style.padding="7px 10px";ledger.querySelector("summary")?.insertAdjacentElement("afterend",controls);}
     let select=document.getElementById("eventLedgerPairSelect");
@@ -246,7 +247,7 @@
     addExportButton(document.querySelector("#evaluationTableContainer .head-controls"),"exportEvaluationJson","evaluation-table",evaluationExportPayload);
     addExportButton(document.querySelector("#platformDiagnosticDetails .date-range-controls"),"exportPlatformDiagnosticJson","platform-diagnostic",diagnosticExportPayload);
     const macroHeading=[...document.querySelectorAll("#performancePanel .panel-head")].find(node=>node.querySelector("h2")?.textContent.trim().startsWith("Macro:"));if(macroHeading){let controls=macroHeading.querySelector(".head-controls");if(!controls){controls=document.createElement("div");controls.className="head-controls";macroHeading.appendChild(controls);}addExportButton(controls,"exportMacroPerformanceJson","macro-performance",macroExportPayload);}
-    const ledger=document.querySelector(".event-ledger");if(ledger){let controls=ledger.querySelector(":scope > .head-controls");if(!controls){controls=document.createElement("div");controls.className="head-controls";controls.style.padding="7px 10px";ledger.querySelector("summary")?.insertAdjacentElement("afterend",controls);}addExportButton(controls,"exportEventLedgerJson","event-ledger",eventLedgerExportPayload);}
+    const ledger=eventOutcomeLedgerDetails();if(ledger){let controls=ledger.querySelector(":scope > .head-controls");if(!controls){controls=document.createElement("div");controls.className="head-controls";controls.style.padding="7px 10px";ledger.querySelector("summary")?.insertAdjacentElement("afterend",controls);}addExportButton(controls,"exportEventLedgerJson","event-ledger",eventLedgerExportPayload);}
     addExportButton(document.querySelector("#htlScheduleComposition .event-controls")||document.querySelector("#eventPanel .event-controls"),"exportHtlScheduleJson","htl-schedule",htlScheduleExportPayload);
     addExportButton(document.getElementById("scheduleTitle")?.closest(".panel-head")?.querySelector(".head-controls"),"exportTimeframeSignalScheduleJson","timeframe-signal-schedule",timeframeSignalScheduleExportPayload);
   }
