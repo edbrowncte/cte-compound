@@ -1,12 +1,14 @@
 (function installAnalyticalFacilities(global){
   "use strict";
 
-  const VERSION="CTE_ANALYTICAL_FACILITIES@1.0.1";
+  const VERSION="CTE_ANALYTICAL_FACILITIES@1.0.2";
   let evaluationPreloadPromise=null,evaluationPreloadKey="";
 
   const safeName=value=>String(value||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"data";
   const currentEventTimeframe=()=>document.getElementById("eventTimeframe")?.value||state.selectedTimeframe;
   const currentEventPair=()=>document.getElementById("eventPair")?.value||state.selectedInstrument;
+  const scheduleDatasetTotal=()=>((typeof INSTRUMENTS!=="undefined"&&Array.isArray(INSTRUMENTS)?INSTRUMENTS.length:0)*(typeof TIMEFRAMES!=="undefined"&&Array.isArray(TIMEFRAMES)?TIMEFRAMES.length:0));
+  function scheduleCoverageReady(){const total=scheduleDatasetTotal();return total>0&&Number(state.scheduleEvaluations?.size||0)>=total&&!state.scheduleLoading&&Number(state.scheduleFailures?.size||0)===0;}
 
   function optimizerAssetConfiguration(pair,timeframe){
     const key=typeof scheduleKey==="function"?scheduleKey(pair,timeframe):`${pair}|${timeframe}`,record=state.autoConfigurations?.get?.(key),entry=record?.config?.ASSET||null,fallback=typeof STRATEGY_CONFIG!=="undefined"?STRATEGY_CONFIG.ASSET||{}:{};
@@ -169,7 +171,7 @@
   }
 
   async function preloadEvaluationTable(force=false){
-    if(typeof marketDataReady!=="function"||!marketDataReady()||typeof preloadEvaluationTimeframe!=="function")return false;
+    if(typeof marketDataReady!=="function"||!marketDataReady()||typeof preloadEvaluationTimeframe!=="function"||!scheduleCoverageReady())return false;
     const timeframe=document.getElementById("evalTableTfFilter")?.value||"H1";
     if(!force&&state.evaluationTableTimeframe===timeframe&&(state.evaluationTableData||[]).length===INSTRUMENTS.length)return true;
     if(evaluationPreloadPromise&&evaluationPreloadKey===timeframe)return evaluationPreloadPromise;
@@ -196,15 +198,15 @@
       const prior=loadOptimizerRecords;loadOptimizerRecords=async function(){const result=await prior();syncSelectedEventConfiguration();if(state.eventRows?.length)renderEventSchedule();return result;};
     }
     if(typeof loadSchedule==="function"){
-      const prior=loadSchedule;loadSchedule=async function(mode="full"){const result=await prior(mode);if(mode==="focused"||mode==="full")void preloadEvaluationTable();return result;};
+      const prior=loadSchedule;loadSchedule=async function(mode="full"){const result=await prior(mode);if(scheduleCoverageReady())void preloadEvaluationTable();return result;};
     }
     document.getElementById("eventPair")?.addEventListener("change",()=>syncSelectedEventConfiguration());
     document.getElementById("eventTimeframe")?.addEventListener("change",()=>syncSelectedEventConfiguration());
   }
 
-  function install(){ensureEventFilterControl();ensureEventScheduleHeaders();syncSelectedEventConfiguration();installRuntime();installExportButtons();if(typeof marketDataReady==="function"&&marketDataReady())void preloadEvaluationTable();}
+  function install(){ensureEventFilterControl();ensureEventScheduleHeaders();syncSelectedEventConfiguration();installRuntime();installExportButtons();if(typeof marketDataReady==="function"&&marketDataReady()&&scheduleCoverageReady())void preloadEvaluationTable();}
 
-  const api=Object.freeze({VERSION,optimizerAssetConfiguration,cleanEventScheduleRow,evaluationExportPayload,diagnosticExportPayload,macroExportPayload,eventLedgerExportPayload,htlScheduleExportPayload,timeframeSignalScheduleExportPayload,preloadEvaluationTable});
+  const api=Object.freeze({VERSION,optimizerAssetConfiguration,cleanEventScheduleRow,evaluationExportPayload,diagnosticExportPayload,macroExportPayload,eventLedgerExportPayload,htlScheduleExportPayload,timeframeSignalScheduleExportPayload,scheduleDatasetTotal,scheduleCoverageReady,preloadEvaluationTable});
   global.CTEAnalyticalFacilities=api;
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);
