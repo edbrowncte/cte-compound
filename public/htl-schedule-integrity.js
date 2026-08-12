@@ -1,7 +1,7 @@
 (function installHtlScheduleIntegrity(global){
   "use strict";
 
-  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.0.1";
+  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.0.2";
   const MIN_DURATION_VALIDATION_SAMPLES=8;
   const MIN_COMPLETION_VALIDATION_SAMPLES=8;
   const MIN_OUTLIER_TRIM_SAMPLES=10;
@@ -10,6 +10,7 @@
 
   const mean=values=>values.length?values.reduce((sum,value)=>sum+value,0)/values.length:null;
   const median=values=>{if(!values.length)return null;const ordered=[...values].sort((a,b)=>a-b),middle=Math.floor(ordered.length/2);return ordered.length%2?ordered[middle]:(ordered[middle-1]+ordered[middle])/2;};
+  const quantile=(values,q)=>{if(!values.length)return null;const ordered=[...values].sort((a,b)=>a-b),position=(ordered.length-1)*q,base=Math.floor(position),fraction=position-base;return ordered[base+1]===undefined?ordered[base]:ordered[base]+fraction*(ordered[base+1]-ordered[base]);};
 
   function durationErrorSeries(events){
     const completed=(events||[]).filter(event=>event?.status==="FINAL"),errors=[];
@@ -26,10 +27,10 @@
   function trimDurationErrors(errors){
     const values=errors.map(item=>item.errorBars).filter(Number.isFinite);
     if(values.length<MIN_OUTLIER_TRIM_SAMPLES)return{retained:errors.slice(),excluded:[],threshold:null,medianError:median(values),mad:null};
-    const center=median(values),absoluteDeviations=values.map(value=>Math.abs(value-center)),mad=median(absoluteDeviations);
-    if(!Number.isFinite(mad)||mad<=0)return{retained:errors.slice(),excluded:[],threshold:null,medianError:center,mad};
-    const threshold=center+(MAD_LIMIT*MAD_SIGMA*mad),retained=[],excluded=[];
-    for(const item of errors)(item.errorBars<=threshold?retained:excluded).push(item);
+    const center=median(values),absoluteDeviations=values.map(value=>Math.abs(value-center)),mad=median(absoluteDeviations),q1=quantile(values,.25),q3=quantile(values,.75),iqr=Number.isFinite(q1)&&Number.isFinite(q3)?q3-q1:null;
+    const threshold=Number.isFinite(mad)&&mad>0?center+(MAD_LIMIT*MAD_SIGMA*mad):Number.isFinite(q3)?q3+(3*Math.max(Number(iqr)||0,1)):null;
+    if(!Number.isFinite(threshold))return{retained:errors.slice(),excluded:[],threshold:null,medianError:center,mad};
+    const retained=[],excluded=[];for(const item of errors)(item.errorBars<=threshold?retained:excluded).push(item);
     if(retained.length<MIN_DURATION_VALIDATION_SAMPLES)return{retained:errors.slice(),excluded:[],threshold:null,medianError:center,mad};
     return{retained,excluded,threshold,medianError:center,mad};
   }
