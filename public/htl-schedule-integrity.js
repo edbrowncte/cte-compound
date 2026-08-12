@@ -1,7 +1,7 @@
 (function installHtlScheduleIntegrity(global){
   "use strict";
 
-  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.0.0";
+  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.0.1";
   const MIN_DURATION_VALIDATION_SAMPLES=8;
   const MIN_COMPLETION_VALIDATION_SAMPLES=8;
   const MIN_OUTLIER_TRIM_SAMPLES=10;
@@ -62,13 +62,32 @@
     return{...row,durationMae:validation.durationMae,p5:validation.completionWithin5Bars,p10:validation.completionWithin10Bars,forecast,durationValidationN:validation.durationValidationN,durationValidationRawN:validation.durationValidationRawN,durationOutliersExcluded:validation.durationOutliersExcluded,durationOutlierThresholdBars:validation.durationOutlierThresholdBars,completionValidationN:validation.completionValidationN,durationValidationStatus:validation.durationStatus,completionValidationStatus:validation.completionStatus,scheduleIntegrityVersion:VERSION};
   }
 
-  function install(){
-    if(typeof buildEventRow!=="function")return false;
-    const prior=buildEventRow;
-    const wrapped=function(...args){return applyIntegrity(prior(...args));};
-    buildEventRow=wrapped;global.buildEventRow=wrapped;return true;
+  function describe(row){
+    if(!row)return"";
+    const duration=`Duration validation ${row.durationValidationN??0}/${row.durationValidationRawN??0}${row.durationOutliersExcluded?` · ${row.durationOutliersExcluded} robust outlier${row.durationOutliersExcluded===1?"":"s"} excluded`:""}`;
+    const completion=`Completion sample ${row.completionValidationN??0}`;
+    return `${duration} · ${completion} · FINAL events only`;
   }
 
-  global.CTEHtlScheduleIntegrity=Object.freeze({VERSION,MIN_DURATION_VALIDATION_SAMPLES,MIN_COMPLETION_VALIDATION_SAMPLES,MIN_OUTLIER_TRIM_SAMPLES,durationErrorSeries,trimDurationErrors,scheduleValidation,applyIntegrity});
+  function annotateSchedule(){
+    const body=document.getElementById("eventScheduleBody");if(!body)return;
+    for(const tr of body.querySelectorAll("tr[data-pair]")){
+      const row=(global.state?.eventRows||[]).find(item=>item.pair===tr.dataset.pair);if(!row)continue;
+      const cells=tr.children;
+      if(cells[5])cells[5].title=`Completion ≤5 · ${describe(row)}`;
+      if(cells[6])cells[6].title=`Completion ≤10 · ${describe(row)}`;
+      if(cells[8])cells[8].title=`Duration MAE · ${describe(row)}`;
+    }
+  }
+
+  function install(){
+    if(typeof buildEventRow!=="function")return false;
+    const priorBuild=buildEventRow,wrappedBuild=function(...args){return applyIntegrity(priorBuild(...args));};buildEventRow=wrappedBuild;global.buildEventRow=wrappedBuild;
+    if(typeof renderEventSchedule==="function"){const priorRender=renderEventSchedule;renderEventSchedule=function(...args){const result=priorRender(...args);annotateSchedule();return result;};global.renderEventSchedule=renderEventSchedule;}
+    if(typeof renderEventDetail==="function"){const priorDetail=renderEventDetail;renderEventDetail=function(row,...args){const result=priorDetail(row,...args),method=document.getElementById("eventMethod");if(method&&row&&!method.textContent.includes("Duration validation"))method.textContent+=` · ${describe(row)}`;return result;};global.renderEventDetail=renderEventDetail;}
+    return true;
+  }
+
+  global.CTEHtlScheduleIntegrity=Object.freeze({VERSION,MIN_DURATION_VALIDATION_SAMPLES,MIN_COMPLETION_VALIDATION_SAMPLES,MIN_OUTLIER_TRIM_SAMPLES,durationErrorSeries,trimDurationErrors,scheduleValidation,applyIntegrity,describe});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);
