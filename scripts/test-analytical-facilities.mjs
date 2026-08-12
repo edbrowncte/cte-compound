@@ -3,7 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const source=fs.readFileSync(new URL("../public/analytical-facilities.js",import.meta.url),"utf8"),worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8"),pkg=JSON.parse(fs.readFileSync(new URL("../package.json",import.meta.url),"utf8"));
-assert.match(source,/CTE_ANALYTICAL_FACILITIES@1\.0\.1/);
+assert.match(source,/CTE_ANALYTICAL_FACILITIES@1\.0\.2/);
 assert.match(source,/record\?\.config\?\.ASSET/,"HTL Schedule must resolve pair × timeframe HTL Asset configuration from optimizer records");
 assert.match(source,/loadEventRow=async function\(pair,timeframe,_length/,"HTL event-row loader must replace the detached global length with optimizer-backed row configuration");
 assert.match(source,/if\(!config\.configured\)throw new Error\(`Optimizer configuration unavailable/,"HTL Schedule must not silently substitute a generic configuration when optimizer configuration is absent");
@@ -11,8 +11,10 @@ assert.match(source,/length:config\.length,filter:config\.filter,configurationSo
 assert.match(source,/data-event-sort="length"/,"HTL Schedule must expose a sortable Length column");
 assert.match(source,/data-event-sort="filter"/,"HTL Schedule must expose a sortable Filter column");
 assert.match(source,/id="eventFilter"/,"HTL selected-row controls must expose Filter beside Length");
-assert.match(source,/preloadEvaluationTimeframe\(timeframe\)/,"Evaluation Table must have an explicit preload path");
-assert.match(source,/if\(mode==="focused"\|\|mode==="full"\)void preloadEvaluationTable\(\)/,"Evaluation Table preload must follow the initial focused/full schedule load instead of waiting for the Evaluation tab");
+assert.match(source,/preloadEvaluationTimeframe\(timeframe\)/,"Evaluation Table must retain an explicit preload path");
+assert.match(source,/!scheduleCoverageReady\(\)\)return false/,"Automatic Evaluation preload must yield while the 28 × 10 schedule universe is incomplete or loading");
+assert.match(source,/loadSchedule=async function\(mode="full"\)\{const result=await prior\(mode\);if\(scheduleCoverageReady\(\)\)void preloadEvaluationTable\(\);return result;\}/,"Every completed schedule mode, including progressive backfill, must be able to start Evaluation preload only after full schedule coverage");
+assert.doesNotMatch(source,/if\(mode==="focused"\|\|mode==="full"\)void preloadEvaluationTable\(\)/,"Focused schedule completion must no longer launch a higher-priority Evaluation preload ahead of progressive schedule coverage");
 for(const id of ["exportEvaluationJson","exportPlatformDiagnosticJson","exportMacroPerformanceJson","exportEventLedgerJson","exportHtlScheduleJson","exportTimeframeSignalScheduleJson"])assert.match(source,new RegExp(id),`${id} must be installed`);
 for(const facility of ["Evaluation Table","Platform Diagnostic","Macro Performance","Event Ledger","HTL Schedule","Timeframe Signal Schedule"])assert.match(source,new RegExp(facility.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")),`${facility} must have an underlying JSON payload`);
 assert.match(source,/state\.diagnosticLast/,"Platform Diagnostic JSON must export the underlying diagnostic result, not scrape the visible cards");
@@ -30,15 +32,23 @@ assert.match(worker,/ioi-iom-performance\.js[^]*analytical-facilities\.js/,"anal
 assert.ok(pkg.scripts.check.includes("node --check public/analytical-facilities.js"));
 assert.ok(pkg.scripts.check.includes("node scripts/test-analytical-facilities.mjs"));
 
-const state={autoConfigurations:new Map([["EUR_USD|M15",{source:"COMPUTE_CONFIGURATION",computedAt:"2026-08-10T20:00:00Z",stamp:"2026-08-10T19:45:00Z",version:7,settings:{assetLength:10},config:{ASSET:{length:30,filter:0}}}]])};
-const sandbox={console,Math,Number,Array,Object,String,Boolean,Date,Map,Set,state,STRATEGY_CONFIG:{ASSET:{length:10,filter:0}},MAX_ANALYTICAL_LENGTH:500,scheduleKey:(pair,timeframe)=>`${pair}|${timeframe}`,CTEHtlScheduleIntegrity:{VERSION:"CTE_HTL_SCHEDULE_INTEGRITY@1.0.3"}};sandbox.globalThis=sandbox;
+const INSTRUMENTS=Array.from({length:28},(_,index)=>`PAIR_${index}`),TIMEFRAMES=Array.from({length:10},(_,index)=>`TF_${index}`);
+const state={autoConfigurations:new Map([["EUR_USD|M15",{source:"COMPUTE_CONFIGURATION",computedAt:"2026-08-10T20:00:00Z",stamp:"2026-08-10T19:45:00Z",version:7,settings:{assetLength:10},config:{ASSET:{length:30,filter:0}}}]]),scheduleEvaluations:new Map(),scheduleFailures:new Map(),scheduleLoading:false};
+const sandbox={console,Math,Number,Array,Object,String,Boolean,Date,Map,Set,state,INSTRUMENTS,TIMEFRAMES,STRATEGY_CONFIG:{ASSET:{length:10,filter:0}},MAX_ANALYTICAL_LENGTH:500,scheduleKey:(pair,timeframe)=>`${pair}|${timeframe}`,CTEHtlScheduleIntegrity:{VERSION:"CTE_HTL_SCHEDULE_INTEGRITY@1.0.3"}};sandbox.globalThis=sandbox;
 vm.runInNewContext(source,sandbox,{filename:"analytical-facilities.js"});
 const resolved=sandbox.CTEAnalyticalFacilities.optimizerAssetConfiguration("EUR_USD","M15");
 assert.equal(resolved.length,30);assert.equal(resolved.filter,0);assert.equal(resolved.source,"COMPUTE_CONFIGURATION");assert.equal(resolved.configured,true);
 const missing=sandbox.CTEAnalyticalFacilities.optimizerAssetConfiguration("GBP_USD","M15");assert.equal(missing.configured,false);assert.equal(missing.source,"OPTIMIZER_UNAVAILABLE");
+assert.equal(sandbox.CTEAnalyticalFacilities.scheduleDatasetTotal(),280);
+for(let index=0;index<64;index++)state.scheduleEvaluations.set(`FOCUSED_${index}`,{});
+assert.equal(sandbox.CTEAnalyticalFacilities.scheduleCoverageReady(),false,"the exact 64-dataset focused universe shown by the diagnostic must not release Evaluation preload");
+for(let index=64;index<280;index++)state.scheduleEvaluations.set(`FULL_${index}`,{});
+assert.equal(sandbox.CTEAnalyticalFacilities.scheduleCoverageReady(),true,"280/280 with no failures and no active schedule load must release Evaluation preload");
+state.scheduleLoading=true;assert.equal(sandbox.CTEAnalyticalFacilities.scheduleCoverageReady(),false,"Evaluation preload must not contend with an active schedule load");state.scheduleLoading=false;
+state.scheduleFailures.set("PAIR_0|TF_0",{error:"test"});assert.equal(sandbox.CTEAnalyticalFacilities.scheduleCoverageReady(),false,"unresolved schedule failures must keep Evaluation preload deferred");state.scheduleFailures.clear();
 
 const fullIntegrity={completedEvents:197,provisionalEvents:1,durationValidationN:86,durationValidationRawN:91,durationOutliersExcluded:5,durationOutlierThresholdBars:22.5,durationMae:11.57,completionValidationN:73,completionWithin5Bars:.41,completionWithin10Bars:.72,durationStatus:"SUFFICIENT",completionStatus:"SUFFICIENT",excludedDurationEvents:[{eventNumber:51,errorBars:31}]};
 const clean=sandbox.CTEAnalyticalFacilities.cleanEventScheduleRow({pair:"AUD_NZD",length:20,filter:0,configurationSource:"COMPUTE_CONFIGURATION",price:1.1234,currentEvent:"BUY",eventOpen:1.122,currentEventOpen:1.122,location:"AA",p5:.41,p10:.72,events:197,durationMae:11.57,durationValidationN:86,durationValidationRawN:91,durationOutliersExcluded:5,durationOutlierThresholdBars:22.5,durationValidationStatus:"SUFFICIENT",completionValidationN:73,completionValidationStatus:"SUFFICIENT",scheduleIntegrityVersion:"CTE_HTL_SCHEDULE_INTEGRITY@1.0.3",forecast:{integrity:fullIntegrity},envelopeMae:2.1,brier:.08,historicalBrier:.1,nextEvent:"SELL",envelopeLow:1.12,envelopeHigh:1.13,historyBars:5000},"M15");
 assert.equal(clean.durationMaeBars,11.57);assert.equal(clean.durationValidationN,86);assert.equal(clean.durationValidationRawN,91);assert.equal(clean.durationOutliersExcluded,5);assert.equal(clean.durationOutlierThresholdBars,22.5);assert.equal(clean.durationValidationStatus,"SUFFICIENT");assert.equal(clean.completionValidationN,73);assert.equal(clean.completionValidationStatus,"SUFFICIENT");assert.equal(clean.scheduleIntegrityVersion,"CTE_HTL_SCHEDULE_INTEGRITY@1.0.3");
 assert.equal(clean.integrity.version,"CTE_HTL_SCHEDULE_INTEGRITY@1.0.3");assert.equal(clean.integrity.duration.maeBars,11.57);assert.equal(clean.integrity.duration.validationN,86);assert.equal(clean.integrity.duration.rawValidationN,91);assert.equal(clean.integrity.duration.outliersExcluded,5);assert.equal(clean.integrity.completion.validationN,73);assert.equal(clean.integrity.completion.within5Bars,.41);assert.equal(clean.integrity.completion.within10Bars,.72);assert.deepEqual(clean.integrity.record,fullIntegrity);
-console.log("Analytical facilities certification passed: every populated HTL Schedule row is pair/timeframe optimizer-backed by Length + Filter, Evaluation Table preloads, six requested facilities export JSON, and HTL Schedule exports preserve PR #153 guard provenance with a stable methodology version and nested integrity record.");
+console.log("Analytical facilities certification passed: optimizer-backed HTL rows, guarded JSON provenance, schedule-first 280/280 coverage, deferred Evaluation preload, and all requested analytical JSON exports are certified.");
