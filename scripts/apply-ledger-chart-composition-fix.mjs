@@ -21,6 +21,16 @@ if(occurrences!==2)throw new Error(`Expected exactly 2 generic event-ledger sele
 analytical=analytical.split(ledgerSelector).join('eventOutcomeLedgerDetails()');
 fs.writeFileSync(analyticalPath,analytical);
 
+const indexPath="public/index.html";
+let html=fs.readFileSync(indexPath,"utf8");
+html=replaceOnce(
+  html,
+  '    const eventLedger=document.querySelector(".event-ledger");\n',
+  '    const eventLedger=el("eventLedger")?.closest("details.event-ledger");\n',
+  "configuration optimizer event ledger reparenting"
+);
+fs.writeFileSync(indexPath,html);
+
 const indicatorPath="public/indicator-only.js";
 let indicator=fs.readFileSync(indicatorPath,"utf8");
 indicator=replaceOnce(indicator,
@@ -34,10 +44,19 @@ const analyticalTestPath="scripts/test-analytical-facilities.mjs";
 let analyticalTest=fs.readFileSync(analyticalTestPath,"utf8");
 analyticalTest=replaceOnce(analyticalTest,
   'assert.match(source,/eventLedgerPairSelection/,"Event Ledger JSON must preserve pair-selection provenance");\n',
-  'assert.match(source,/eventLedgerPairSelection/,"Event Ledger JSON must preserve pair-selection provenance");\nassert.match(source,/getElementById\\(\\"eventLedger\\"\\)\\?\\.closest\\(\\"details\\.event-ledger\\"\\)/,"Event Ledger controls and composition must resolve from the actual Result / Profit table");\nassert.doesNotMatch(source,/document\\.querySelector\\(\\"\\.event-ledger\\"\\)/,"Generic .event-ledger selection must not confuse Historical Event Survival with Result / Profit");\nassert.match(source,/const eventLedger=eventOutcomeLedgerDetails\\(\\)/,"Configuration Optimizer must move the actual Result / Profit Event Ledger into Event Outcome Ledger");\n',
+  'assert.match(source,/eventLedgerPairSelection/,"Event Ledger JSON must preserve pair-selection provenance");\nassert.match(source,/getElementById\\(\\"eventLedger\\"\\)\\?\\.closest\\(\\"details\\.event-ledger\\"\\)/,"Event Ledger controls and export must resolve from the actual Result / Profit table");\nassert.doesNotMatch(source,/document\\.querySelector\\(\\"\\.event-ledger\\"\\)/,"Generic .event-ledger selection must not confuse Historical Event Survival with Result / Profit");\n',
   "analytical ledger composition assertions"
 );
 fs.writeFileSync(analyticalTestPath,analyticalTest);
+
+const compositionTestPath="scripts/test-platform-composition-upgrade.mjs";
+let compositionTest=fs.readFileSync(compositionTestPath,"utf8");
+compositionTest=replaceOnce(compositionTest,
+  'assert.match(html,/Configuration Optimizer · Event Outcome Ledger/);\n',
+  'assert.match(html,/Configuration Optimizer · Event Outcome Ledger/);\nassert.match(html,/const eventLedger=el\\(\\"eventLedger\\"\\)\\?\\.closest\\(\\"details\\.event-ledger\\"\\)/,"Configuration Optimizer must move the actual Result / Profit Event Ledger, not another .event-ledger panel");\n',
+  "platform composition ledger assertion"
+);
+fs.writeFileSync(compositionTestPath,compositionTest);
 
 const indicatorTestPath="scripts/test-indicator-only.mjs";
 let indicatorTest=fs.readFileSync(indicatorTestPath,"utf8");
@@ -48,4 +67,4 @@ indicatorTest=replaceOnce(indicatorTest,
 );
 fs.writeFileSync(indicatorTestPath,indicatorTest);
 
-console.log("Applied Event Outcome Ledger targeting and Indicator Only/chart control composition repair.");
+console.log("Applied Event Outcome Ledger targeting/reparenting and Indicator Only/chart control composition repair.");
