@@ -19,8 +19,8 @@ export const VALIDATION = "REGISTERED_HORIZON_STRATEGY_V1_GROSS";
 export const MAX_COMPUTE_BARS = 5000;
 export const OPTIMIZER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const PAIRS = ["EUR_USD","GBP_USD","USD_JPY","USD_CAD","USD_CHF","AUD_USD","NZD_USD","EUR_GBP","EUR_JPY","EUR_CHF","EUR_AUD","EUR_CAD","EUR_NZD","GBP_JPY","GBP_CHF","GBP_AUD","GBP_CAD","GBP_NZD","AUD_JPY","AUD_CHF","AUD_CAD","AUD_NZD","NZD_JPY","NZD_CHF","NZD_CAD","CAD_JPY","CAD_CHF","CHF_JPY"];
-export const TIMEFRAMES = ["W","D","H4","H1","M30","M15","M5","M1","S30","S5"];
-export const TIMEFRAME_SECONDS = {W:604800,D:86400,H4:14400,H1:3600,M30:1800,M15:900,M5:300,M1:60,S30:30,S5:5};
+export const TIMEFRAMES = ["W","D","H4","H2","H1","M30","M15","M5","M1","S30","S5"];
+export const TIMEFRAME_SECONDS = {W:604800,D:86400,H4:14400,H2:7200,H1:3600,M30:1800,M15:900,M5:300,M1:60,S30:30,S5:5};
 export const STRATEGIES = ["ASSET","DARE_N","DARE","COMBO","NAI","APEX"];
 export const LENGTH_GRID = [10,20,30,40,50];
 export const FILTER_GRID = Object.freeze({
@@ -122,7 +122,7 @@ export function optimizeDataset(data,pair,baseSettings=DEFAULT_STRATEGY_SETTINGS
   return{settings:normalizeStrategySettings(settings),config,grossPerformance:registeredExportRows(finalResult,pair,"UNSPECIFIED")};
 }
 export function currentOptimizer(records){const now=Date.now();return Object.fromEntries(Object.entries(records||{}).filter(([,record])=>record?.version===OPTIMIZER_VERSION&&record?.strategyEngineVersion===STRATEGY_ENGINE_VERSION&&now-Date.parse(record.computedAt||record.stamp||0)<OPTIMIZER_TTL_MS));}
-export async function loadOptimizerRecords(storage,{migrateLegacy=true}={}){const records={},canList=typeof storage.list==="function";if(canList){const listed=await storage.list({prefix:OPTIMIZER_STORAGE_PREFIX});for(const [storageKey,record] of listed)records[storageKey.slice(OPTIMIZER_STORAGE_PREFIX.length)]=record;}const legacy=await storage.get("optimizer");if(legacy&&typeof legacy==="object"){for(const [datasetKey,record] of Object.entries(legacy)){if(record?.version!==OPTIMIZER_VERSION||record?.strategyEngineVersion!==STRATEGY_ENGINE_VERSION)continue;if(!(datasetKey in records)){if(migrateLegacy&&canList)await storage.put(`${OPTIMIZER_STORAGE_PREFIX}${datasetKey}`,record);records[datasetKey]=record;}}if(migrateLegacy&&canList)await storage.delete("optimizer");}return currentOptimizer(records);}
+export async function loadOptimizerRecords(storage,{migrateLegacy=true}={}){const records={},canList=typeof storage.list==="function";if(canList){const listed=await storage.list({prefix:OPTIMIZER_STORAGE_PREFIX});for(const [storageKey,record]of listed)records[storageKey.slice(OPTIMIZER_STORAGE_PREFIX.length)]=record;}const legacy=await storage.get("optimizer");if(legacy&&typeof legacy==="object"){for(const [datasetKey,record]of Object.entries(legacy)){if(record?.version!==OPTIMIZER_VERSION||record?.strategyEngineVersion!==STRATEGY_ENGINE_VERSION)continue;if(!(datasetKey in records)){if(migrateLegacy&&canList)await storage.put(`${OPTIMIZER_STORAGE_PREFIX}${datasetKey}`,record);records[datasetKey]=record;}}if(migrateLegacy&&canList)await storage.delete("optimizer");}return currentOptimizer(records);}
 export async function saveOptimizerRecord(storage,datasetKey,record){await storage.put(`${OPTIMIZER_STORAGE_PREFIX}${datasetKey}`,record);return record;}
 
 export async function computeConfiguration(engine,value={}){

@@ -41,8 +41,20 @@ export const RUNTIME_OPTIMIZER_VERSION = 7;
 export const RUNTIME_OPTIMIZER_HISTORY_BARS = 5000;
 export const RUNTIME_OPTIMIZER_STORAGE_PREFIX = `optimizer:v${RUNTIME_OPTIMIZER_VERSION}:`;
 export const DIRECTIONAL_OWNERSHIP_VERSION = "ALTERNATING_DIRECTIONAL_OWNERSHIP@1.0.0";
+export const H2_BOOTSTRAP_SOURCE = "H2_BOOTSTRAP_FROM_H1";
 
 export function runtimeOptimizerStorageKey(datasetKey){return `${RUNTIME_OPTIMIZER_STORAGE_PREFIX}${datasetKey}`;}
+export function bootstrapH2OptimizerCoverage(records){
+  const output={...(records||{})};
+  for(const pair of PAIRS){
+    const h2Key=`${pair}|H2`;
+    if(output[h2Key])continue;
+    const h1Key=`${pair}|H1`,h1=output[h1Key];
+    if(!h1)continue;
+    output[h2Key]={...h1,source:H2_BOOTSTRAP_SOURCE,bootstrapFrom:h1Key,range:h1.range?{...h1.range,bootstrapFromTimeframe:"H1"}:h1.range};
+  }
+  return output;
+}
 export async function loadRuntimeOptimizer(storage,{migrateLegacy=true}={}){
   const records={},canList=typeof storage.list==="function";
   if(canList){const listed=await storage.list({prefix:RUNTIME_OPTIMIZER_STORAGE_PREFIX});for(const [storageKey,record] of listed)records[storageKey.slice(RUNTIME_OPTIMIZER_STORAGE_PREFIX.length)]=record;}
@@ -54,7 +66,7 @@ export async function loadRuntimeOptimizer(storage,{migrateLegacy=true}={}){
     }
     if(migrateLegacy&&canList)await storage.delete("optimizer");
   }
-  return currentRuntimeOptimizer(records);
+  return bootstrapH2OptimizerCoverage(currentRuntimeOptimizer(records));
 }
 export async function saveRuntimeOptimizerRecord(storage,datasetKey,record){await storage.put(runtimeOptimizerStorageKey(datasetKey),record);return record;}
 

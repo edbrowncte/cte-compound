@@ -7,6 +7,7 @@ import {
   loadOptimizerRecords,
   OPTIMIZER_VERSION,
   PAIRS,
+  TIMEFRAMES,
   ANALYTICAL_CERTIFICATION,
 } from "./horizon-platform-engine.js";
 import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
@@ -34,7 +35,7 @@ export class HtlEngine extends NemotronEngine {
   }
   async status(){
     const status=await super.status(),records=await loadOptimizerRecords(this.ctx.storage);
-    return{...status,armed:true,optimizerVersion:OPTIMIZER_VERSION,optimizerCoverage:Object.keys(records).length,optimizerTotal:PAIRS.length*10,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,strategyContract:"SIX_INDEPENDENT_REGISTERED_HORIZON_STATE_MACHINES",performanceContract:"3000_BAR_NEXT_OPEN_OPPOSITE_STRATEGY_EVENT_GROSS",analyticalCertification:ANALYTICAL_CERTIFICATION,executionCertification:"ARMED_PRIVATE_USER"};
+    return{...status,armed:true,optimizerVersion:OPTIMIZER_VERSION,optimizerCoverage:Object.keys(records).length,optimizerTotal:PAIRS.length*TIMEFRAMES.length,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION,strategyContract:"SIX_INDEPENDENT_REGISTERED_HORIZON_STATE_MACHINES",performanceContract:"3000_BAR_NEXT_OPEN_OPPOSITE_STRATEGY_EVENT_GROSS",analyticalCertification:ANALYTICAL_CERTIFICATION,executionCertification:"ARMED_PRIVATE_USER"};
   }
   async computeConfiguration(value){return computeRegisteredConfiguration(this,value);}
   async optimizeNext(state,token){return optimizeRegisteredNext(this,state,token);}
