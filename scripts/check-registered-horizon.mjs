@@ -26,16 +26,20 @@ checks(engine,[
   [/executionCertification:"ARMED_PRIVATE_USER"/,"private execution certification"],
   [/async reconcile\(/,"active inherited reconciliation"],
   [/async execute\(/,"active inherited automated execution"],
-  [/NEMOTRON_CANDIDATE_TOOL@3\.0\.0/,"Nemotron structured integration"],
+  [/NEMOTRON_CANDIDATE_TOOL@4\.0\.0/,"Nemotron structured integration"],
   [/(?:MULTI_NEW_ENTRY_CANDIDATES_ONLY|CAPITALIZATION_NEW_ENTRY_DISCRETION|AGE_CAPITAL_REALLOCATION_DISCRETION)/,"bounded Nemotron capitalization discretion"],
-  [/response_format:\{type:"json_schema"/,"Nemotron constrained structured output"],
+  [/name:"selectCandidate"/,"Nemotron candidate function"],
+  [/tool_choice:"required"/,"Nemotron required function selection"],
+  [/parallel_tool_calls:false/,"Nemotron single function-call boundary"],
   [/transactions\/sinceid/,"lost-response transaction synchronization"],
   [/pendingOrders/,"durable pending-order state"],
   [/clientExtensions:\{id:clientId/,"idempotent order identity"]
 ]);
 
+if(/response_format:\{type:"json_schema"/.test(engine))throw new Error("Forbidden Nemotron response_format JSON-mode selection contract; use the required selectCandidate function tool.");
+
 for(const forbidden of [/async reconcile\(/,/async execute\(/,/ONE_RAW_ASSET_RECOVERED_INVERSE_CROSSING_CLOCK/,/POST_CROSS_STRATEGY_QUALIFICATION/,/BLOCKED_PENDING_/,/ANALYTICAL_CERTIFICATION_BLOCK/,/PENDING_USER_DEPLOYMENT_APPROVAL/]){
   if(forbidden.test(registeredEngine))throw new Error(`Forbidden registered analytical override: ${forbidden}`);
 }
 
-console.log("Registered six-strategy Horizon analytical, frozen 3,000-bar performance/optimizer, armed private execution, OANDA, ledger, and bounded Nemotron capitalization boundaries verified.");
+console.log("Registered six-strategy Horizon analytical, frozen 3,000-bar performance/optimizer, armed private execution, OANDA, ledger, and bounded Nemotron required function-tool boundaries verified.");
