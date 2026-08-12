@@ -1,7 +1,7 @@
 (function installAnalyticalFacilities(global){
   "use strict";
 
-  const VERSION="CTE_ANALYTICAL_FACILITIES@1.0.0";
+  const VERSION="CTE_ANALYTICAL_FACILITIES@1.0.1";
   let evaluationPreloadPromise=null,evaluationPreloadKey="";
 
   const safeName=value=>String(value||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"data";
@@ -59,6 +59,9 @@
 
   function cleanEventScheduleRow(row,timeframe=currentEventTimeframe()){
     if(!row)return null;
+    const integrityVersion=row.scheduleIntegrityVersion||global.CTEHtlScheduleIntegrity?.VERSION||null,sourceIntegrity=row.forecast?.integrity||null;
+    const durationValidationN=row.durationValidationN??sourceIntegrity?.durationValidationN??null,durationValidationRawN=row.durationValidationRawN??sourceIntegrity?.durationValidationRawN??null,durationOutliersExcluded=row.durationOutliersExcluded??sourceIntegrity?.durationOutliersExcluded??0,durationOutlierThresholdBars=row.durationOutlierThresholdBars??sourceIntegrity?.durationOutlierThresholdBars??null,durationValidationStatus=row.durationValidationStatus??sourceIntegrity?.durationStatus??null;
+    const completionValidationN=row.completionValidationN??sourceIntegrity?.completionValidationN??null,completionValidationStatus=row.completionValidationStatus??sourceIntegrity?.completionStatus??null;
     return{
       pair:row.pair,
       timeframe,
@@ -75,6 +78,32 @@
       completionWithin10Bars:row.p10,
       events:row.events,
       durationMaeBars:row.durationMae,
+      durationValidationN,
+      durationValidationRawN,
+      durationOutliersExcluded,
+      durationOutlierThresholdBars,
+      durationValidationStatus,
+      completionValidationN,
+      completionValidationStatus,
+      scheduleIntegrityVersion:integrityVersion,
+      integrity:{
+        version:integrityVersion,
+        duration:{
+          maeBars:row.durationMae,
+          validationN:durationValidationN,
+          rawValidationN:durationValidationRawN,
+          outliersExcluded:durationOutliersExcluded,
+          outlierThresholdBars:durationOutlierThresholdBars,
+          status:durationValidationStatus,
+        },
+        completion:{
+          validationN:completionValidationN,
+          within5Bars:row.p5,
+          within10Bars:row.p10,
+          status:completionValidationStatus,
+        },
+        record:sourceIntegrity,
+      },
       envelopeMaeBps:row.envelopeMae,
       onsetBrier:row.brier,
       historicalBrier:row.historicalBrier,
@@ -106,7 +135,7 @@
   }
 
   function htlScheduleExportPayload(){
-    const timeframe=currentEventTimeframe();return{facility:"HTL Schedule",version:VERSION,exportedAt:new Date().toISOString(),timeframe,rows:(state.eventRows||[]).map(row=>cleanEventScheduleRow(row,timeframe))};
+    const timeframe=currentEventTimeframe();return{facility:"HTL Schedule",version:VERSION,exportedAt:new Date().toISOString(),timeframe,scheduleIntegrityVersion:global.CTEHtlScheduleIntegrity?.VERSION||null,rows:(state.eventRows||[]).map(row=>cleanEventScheduleRow(row,timeframe))};
   }
 
   function timeframeSignalScheduleExportPayload(){
