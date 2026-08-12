@@ -1,7 +1,7 @@
 (function installHtlScheduleIntegrity(global){
   "use strict";
 
-  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.0.2";
+  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.0.3";
   const MIN_DURATION_VALIDATION_SAMPLES=8;
   const MIN_COMPLETION_VALIDATION_SAMPLES=8;
   const MIN_OUTLIER_TRIM_SAMPLES=10;
@@ -71,9 +71,9 @@
   }
 
   function annotateSchedule(){
-    const body=document.getElementById("eventScheduleBody");if(!body)return;
+    const body=document.getElementById("eventScheduleBody"),appState=typeof state!=="undefined"?state:null;if(!body||!appState)return;
     for(const tr of body.querySelectorAll("tr[data-pair]")){
-      const row=(global.state?.eventRows||[]).find(item=>item.pair===tr.dataset.pair);if(!row)continue;
+      const row=(appState.eventRows||[]).find(item=>item.pair===tr.dataset.pair);if(!row)continue;
       const cells=tr.children;
       if(cells[5])cells[5].title=`Completion ≤5 · ${describe(row)}`;
       if(cells[6])cells[6].title=`Completion ≤10 · ${describe(row)}`;
