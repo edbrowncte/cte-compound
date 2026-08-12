@@ -63,11 +63,15 @@ assert.equal(survival.p25UltimateDownsideBps,-35);
 assert.deepEqual(survival.survivalCurve.map(item=>item.additionalLifeBars),[1,5,10,18]);
 
 const twentyEightRows=Array.from({length:28},(_,index)=>({pair:`PAIR_${index+1}`,price:1,eventOpen:1,eventList:[...survivalHistory,currentSell]}));
-assert.equal(api.buildSurvivalRows(twentyEightRows,5).length,28,"survival table must preserve one row for each of the 28 schedule pairs");
+assert.equal(api.buildSurvivalRows(twentyEightRows,5).length,28,"a single selected horizon must preserve one row for each of the 28 schedule pairs");
+const fullSurvivalRows=api.buildSurvivalRows(twentyEightRows);
+assert.equal(fullSurvivalRows.length,112,"the default HTL survival table must publish 28 pairs × four additional-life horizons");
+assert.equal(new Set(fullSurvivalRows.map(item=>item.pair)).size,28);
+assert.deepEqual([...new Set(fullSurvivalRows.map(item=>item.additionalEventLifeBars))],[1,5,10,18]);
 
 const worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8"),source=fs.readFileSync(new URL("../public/htl-schedule-integrity.js",import.meta.url),"utf8"),index=fs.readFileSync(new URL("../public/index.html",import.meta.url),"utf8");
 assert.match(index,/completed=events\.filter\(event=>event\.status==="FINAL"\)/,"base HTL forecast must continue to exclude PROVISIONAL events");
 assert.match(source,/MIN_DURATION_VALIDATION_SAMPLES=8/);assert.match(source,/MIN_COMPLETION_VALIDATION_SAMPLES=8/);assert.match(source,/event\?\.status==="FINAL"/);assert.match(source,/MAD_LIMIT=4\.5/);assert.match(source,/INSUFFICIENT_SAMPLE/);assert.match(source,/Duration validation/);assert.match(source,/FINAL events only/);
 assert.match(source,/Historical Event Survival · Current Event Maturity/);assert.match(source,/Additional event life/);assert.match(source,/Historical survival/);assert.match(source,/Mean favorable move/);assert.match(source,/Mean adverse move/);assert.match(source,/Median ultimate upside/);assert.match(source,/25th-pctl downside/);assert.match(source,/exportEventSurvivalJson/);assert.match(source,/cte-compound-htl-event-survival-/);
 assert.match(worker,/htl-schedule-integrity\.js[^]*analytical-facilities\.js/,"HTL schedule integrity must install before the analytical-facilities wrapper so all event rows inherit guarded validation");
-console.log("HTL Schedule integrity and survival certification passed: FINAL-only history, guarded validation, current-age survival conditioning, direction-aware favorable/adverse excursions, 28-row coverage, and JSON export are wired.");
+console.log("HTL Schedule integrity and survival certification passed: FINAL-only history, guarded validation, current-age survival conditioning, direction-aware favorable/adverse excursions, 28×4 survival coverage, and JSON export are wired.");
