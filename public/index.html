@@ -448,7 +448,7 @@
           </div>
         </div>
         <div class="matrix-wrap">
-          <table id="signalMatrix" aria-label="28 currency pairs by ten timeframes with buy and sell signals"></table>
+          <table id="signalMatrix" aria-label="28 currency pairs by eleven timeframes with buy and sell signals"></table>
         </div>
         <div class="matrix-foot">
           <div class="legend"><span><b>BUY/SELL</b> = latest active compartment direction</span><span><b>%</b> = normalized signal confidence</span><span><b>—</b> = no result</span></div>
@@ -497,6 +497,7 @@
                 <span>Filter by TF</span>
                 <select id="evalTableTfFilter">
                   <option value="H1" selected>H1</option>
+                  <option value="H2">H2</option>
                   <option value="S5">S5</option>
                   <option value="S30">S30</option>
                   <option value="M1">M1</option>
@@ -700,7 +701,7 @@
     "NZD_JPY","NZD_CHF","NZD_CAD","CAD_JPY","CAD_CHF","CHF_JPY"
   ]);
 
-  const TIMEFRAMES = Object.freeze(["W","D","H4","H1","M30","M15","M5","M1","S30","S5"]);
+  const TIMEFRAMES = Object.freeze(["W","D","H4","H2","H1","M30","M15","M5","M1","S30","S5"]);
   const OANDA_URL = "https://api-fxtrade.oanda.com";
   const MAX_ANALYTICAL_HISTORY=5000,MAX_ANALYTICAL_LENGTH=500;
   const STRATEGIES = Object.freeze([
