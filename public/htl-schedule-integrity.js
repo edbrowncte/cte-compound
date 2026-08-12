@@ -106,18 +106,24 @@
     };
   }
 
-  function buildSurvivalRows(rows,additionalLifeBars=DEFAULT_ADDITIONAL_LIFE_BARS){
-    return (Array.isArray(rows)?rows:[]).map(row=>{
-      const events=Array.isArray(row?.eventList)?row.eventList:[],current=events.at(-1)||null,stats=survivalStatistics(events,current,additionalLifeBars);
-      return{
+  function normalizeHorizons(horizons){
+    const input=Array.isArray(horizons)?horizons:horizons===undefined?SURVIVAL_HORIZONS:[horizons];
+    return [...new Set(input.map(value=>Math.max(1,Math.trunc(Number(value)||0))).filter(Number.isFinite))].sort((a,b)=>a-b);
+  }
+
+  function buildSurvivalRows(rows,horizons=SURVIVAL_HORIZONS){
+    const resolvedHorizons=normalizeHorizons(horizons),timeframe=typeof document!=="undefined"?document.getElementById("eventTimeframe")?.value||null:null;
+    return (Array.isArray(rows)?rows:[]).flatMap(row=>{
+      const events=Array.isArray(row?.eventList)?row.eventList:[],current=events.at(-1)||null,stats=survivalStatistics(events,current,DEFAULT_ADDITIONAL_LIFE_BARS),curve=new Map(stats.survivalCurve.map(item=>[item.additionalLifeBars,item.historicalSurvival]));
+      return resolvedHorizons.map(horizon=>({
         pair:row?.pair||null,
-        timeframe:typeof document!=="undefined"?document.getElementById("eventTimeframe")?.value||null:null,
+        timeframe,
         currentEvent:stats.direction>0?"BUY":stats.direction<0?"SELL":null,
         currentEventOpen:finiteNumber(current?.openPrice??row?.eventOpen),
         currentPrice:finiteNumber(row?.price),
         currentAgeBars:stats.ageBars,
-        additionalEventLifeBars:stats.additionalLifeBars,
-        historicalSurvival:stats.historicalSurvival,
+        additionalEventLifeBars:horizon,
+        historicalSurvival:curve.has(horizon)?curve.get(horizon):(stats.n?(events.filter(event=>event?.status==="FINAL"&&Math.sign(Number(event.direction)||0)===stats.direction&&Number(event.bars)>=stats.ageBars+horizon).length/stats.n):null),
         n:stats.n,
         meanBars:stats.meanBars,
         medianBars:stats.medianBars,
@@ -127,19 +133,13 @@
         medianUltimateDownsideBps:stats.medianUltimateDownsideBps,
         p25UltimateUpsideBps:stats.p25UltimateUpsideBps,
         p25UltimateDownsideBps:stats.p25UltimateDownsideBps,
-        survivalCurve:stats.survivalCurve,
-      };
+      }));
     }).filter(row=>row.pair);
   }
 
-  function survivalAdditionalLifeBars(){
-    if(typeof document==="undefined")return DEFAULT_ADDITIONAL_LIFE_BARS;
-    return Math.max(1,Math.min(250,Math.trunc(Number(document.getElementById("eventSurvivalAdditionalBars")?.value)||DEFAULT_ADDITIONAL_LIFE_BARS)));
-  }
-
   function survivalExportPayload(){
-    const appState=typeof state!=="undefined"?state:null,additionalEventLifeBars=survivalAdditionalLifeBars(),timeframe=typeof document!=="undefined"?document.getElementById("eventTimeframe")?.value||null:null;
-    return{facility:"HTL Event Survival",version:SURVIVAL_VERSION,scheduleIntegrityVersion:VERSION,exportedAt:new Date().toISOString(),timeframe,additionalEventLifeBars,basis:"FINAL same-direction events with total bars greater than or equal to the current event age",units:{bars:"bars",moves:"basis points from event open"},rows:buildSurvivalRows(appState?.eventRows||[],additionalEventLifeBars)};
+    const appState=typeof state!=="undefined"?state:null,timeframe=typeof document!=="undefined"?document.getElementById("eventTimeframe")?.value||null:null,rows=buildSurvivalRows(appState?.eventRows||[],SURVIVAL_HORIZONS);
+    return{facility:"HTL Event Survival",version:SURVIVAL_VERSION,scheduleIntegrityVersion:VERSION,exportedAt:new Date().toISOString(),timeframe,horizons:[...SURVIVAL_HORIZONS],pairCount:new Set(rows.map(row=>row.pair)).size,rowCount:rows.length,basis:"FINAL same-direction events with total bars greater than or equal to the current event age",units:{bars:"bars",moves:"basis points from event open"},rows};
   }
 
   function downloadSurvivalJson(){
@@ -153,18 +153,16 @@
     let panel=document.getElementById("eventSurvivalAnalysis");if(panel)return panel;
     const eventPanel=document.getElementById("eventPanel"),anchor=document.getElementById("eventScheduleInterpretation");if(!eventPanel||!anchor)return null;
     panel=document.createElement("details");panel.id="eventSurvivalAnalysis";panel.className="event-ledger";panel.open=true;
-    panel.innerHTML=`<summary>Historical Event Survival · Current Event Maturity</summary><div class="head-controls" style="padding:7px 10px;justify-content:flex-start"><label class="field"><span>Additional event life</span><input id="eventSurvivalAdditionalBars" type="number" min="1" max="250" step="1" value="${DEFAULT_ADDITIONAL_LIFE_BARS}"></label><button id="exportEventSurvivalJson" type="button">Export JSON</button><span class="event-note" id="eventSurvivalBasis">FINAL same-direction events conditioned on having reached the current event age.</span></div><div class="event-table-wrap"><table class="event-table" id="eventSurvivalTable"><thead><tr><th>Currency pair</th><th>Current event</th><th>Age (bars)</th><th>Additional event life</th><th>Historical survival</th><th>n</th><th>Mean bars</th><th>Median bars</th><th>Mean favorable move</th><th>Mean adverse move</th><th>Median ultimate upside</th><th>Median ultimate downside</th><th>25th-pctl upside</th><th>25th-pctl downside</th></tr></thead><tbody id="eventSurvivalBody"></tbody></table></div>`;
+    panel.innerHTML=`<summary>Historical Event Survival · Current Event Maturity</summary><div class="head-controls" style="padding:7px 10px;justify-content:flex-start"><button id="exportEventSurvivalJson" type="button">Export JSON</button><span class="event-note" id="eventSurvivalBasis">FINAL same-direction events conditioned on having reached the current event age · horizons +1 / +5 / +10 / +18 bars.</span></div><div class="event-table-wrap"><table class="event-table" id="eventSurvivalTable"><thead><tr><th>Currency pair</th><th>Current event</th><th>Age (bars)</th><th>Additional event life</th><th>Historical survival</th><th>n</th><th>Mean bars</th><th>Median bars</th><th>Mean favorable move</th><th>Mean adverse move</th><th>Median ultimate upside</th><th>Median ultimate downside</th><th>25th-pctl upside</th><th>25th-pctl downside</th></tr></thead><tbody id="eventSurvivalBody"></tbody></table></div>`;
     anchor.insertAdjacentElement("afterend",panel);
-    document.getElementById("eventSurvivalAdditionalBars")?.addEventListener("change",renderSurvivalTable);
-    document.getElementById("eventSurvivalAdditionalBars")?.addEventListener("input",renderSurvivalTable);
     document.getElementById("exportEventSurvivalJson")?.addEventListener("click",downloadSurvivalJson);
     return panel;
   }
 
   function renderSurvivalTable(){
     const panel=ensureSurvivalPanel(),body=typeof document!=="undefined"?document.getElementById("eventSurvivalBody"):null,appState=typeof state!=="undefined"?state:null;if(!panel||!body||!appState)return;
-    const additional=survivalAdditionalLifeBars(),rows=buildSurvivalRows(appState.eventRows||[],additional);
-    body.innerHTML=rows.length?rows.map(row=>`<tr data-survival-pair="${row.pair}"><td>${typeof formatPair==="function"?formatPair(row.pair):String(row.pair).replace("_","/")}</td><td class="${row.currentEvent==="BUY"?"buy":row.currentEvent==="SELL"?"sell":""}">${row.currentEvent||"—"}</td><td>${row.currentAgeBars??"—"}</td><td>+${row.additionalEventLifeBars} bars</td><td>${formatPercent(row.historicalSurvival)}</td><td>${row.n}</td><td>${formatNumber(row.meanBars,2)}</td><td>${formatNumber(row.medianBars,2)}</td><td>${formatNumber(row.meanFavorableMoveBps,2)} bps</td><td>${formatNumber(row.meanAdverseMoveBps,2)} bps</td><td>${formatNumber(row.medianUltimateUpsideBps,2)} bps</td><td>${formatNumber(row.medianUltimateDownsideBps,2)} bps</td><td>${formatNumber(row.p25UltimateUpsideBps,2)} bps</td><td>${formatNumber(row.p25UltimateDownsideBps,2)} bps</td></tr>`).join(""):`<tr><td colspan="14">Load the HTL Schedule to calculate survival statistics for all 28 pairs.</td></tr>`;
+    const rows=buildSurvivalRows(appState.eventRows||[],SURVIVAL_HORIZONS);
+    body.innerHTML=rows.length?rows.map(row=>`<tr data-survival-pair="${row.pair}" data-survival-horizon="${row.additionalEventLifeBars}"><td>${typeof formatPair==="function"?formatPair(row.pair):String(row.pair).replace("_","/")}</td><td class="${row.currentEvent==="BUY"?"buy":row.currentEvent==="SELL"?"sell":""}">${row.currentEvent||"—"}</td><td>${row.currentAgeBars??"—"}</td><td>+${row.additionalEventLifeBars} bars</td><td>${formatPercent(row.historicalSurvival)}</td><td>${row.n}</td><td>${formatNumber(row.meanBars,2)}</td><td>${formatNumber(row.medianBars,2)}</td><td>${formatNumber(row.meanFavorableMoveBps,2)} bps</td><td>${formatNumber(row.meanAdverseMoveBps,2)} bps</td><td>${formatNumber(row.medianUltimateUpsideBps,2)} bps</td><td>${formatNumber(row.medianUltimateDownsideBps,2)} bps</td><td>${formatNumber(row.p25UltimateUpsideBps,2)} bps</td><td>${formatNumber(row.p25UltimateDownsideBps,2)} bps</td></tr>`).join(""):`<tr><td colspan="14">Load the HTL Schedule to calculate survival statistics for all 28 pairs.</td></tr>`;
   }
 
   function annotateSchedule(){
