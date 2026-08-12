@@ -7,6 +7,7 @@ const html=fs.readFileSync("public/index.html","utf8"),mentor=fs.readFileSync("p
 assert.match(html,/<details class="selector-panel" id="selectorPanel">/);
 assert.match(html,/Signal Schedules · Timeframe \+ HTL/);
 assert.match(html,/Configuration Optimizer · Event Outcome Ledger/);
+assert.match(html,/const eventLedger=el\(\"eventLedger\"\)\?\.closest\(\"details\.event-ledger\"\)/,"Configuration Optimizer must move the actual Result / Profit Event Ledger, not another .event-ledger panel");
 assert.match(html,/id="modelComposition"/);
 assert.match(html,/Capitalization and Account Value Proliferation/);
 assert.match(html,/Event P\/L \(pips\)/);
