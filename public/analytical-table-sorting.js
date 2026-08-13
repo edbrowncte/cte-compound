@@ -1,14 +1,14 @@
 (function installAnalyticalTableSorting(global){
   "use strict";
 
-  const VERSION="CTE_ANALYTICAL_TABLE_SORTING@1.0.0";
+  const VERSION="CTE_ANALYTICAL_TABLE_SORTING@1.0.1";
   const RATE_COLUMNS=Object.freeze([
     ["Rank","number"],["Pair","text"],["Timeframe","text"],["Signal","text"],["Pips/Hr","number"],["|Pips/Hr|","number"],["Median |Event P/L|","number"],["FINAL events","number"],["P/L n","number"],["History","number"],["HTL length","number"],["Support","text"],["Regime","text"]
   ]);
   const EVENT_LEDGER_COLUMNS=Object.freeze([
     ["Event","event"],["Timeframe","text"],["Status","text"],["Result","text"],["Event P/L (pips)","number"],["Start","date"],["Bars","number"],["High","number"],["Low","number"],["Spread μ","number"],["Spread σ²","number"],["Slope","number"],["Area","number"],["Source crosses","number"]
   ]);
-  let rateSort=null,eventLedgerSort=null,rateQueued=false,ledgerQueued=false,documentQueued=false;
+  let rateSort=null,eventLedgerSort=null,rateQueued=false,ledgerQueued=false;
 
   function parseValue(value,type="text"){
     const text=String(value??"").trim();
@@ -67,8 +67,8 @@
       button.style.cssText="border:0;background:transparent;color:inherit;padding:0;font:inherit;font-weight:inherit;letter-spacing:inherit;white-space:nowrap";
       th.appendChild(button);
     }
-    const active=sort?.index===index;
-    button.textContent=active?`${label} ${sort.direction>0?"▲":"▼"}`:label;
+    const active=sort?.index===index,nextText=active?`${label} ${sort.direction>0?"▲":"▼"}`:label;
+    if(button.textContent!==nextText)button.textContent=nextText;
     th.setAttribute("aria-sort",active?(sort.direction>0?"ascending":"descending"):"none");
     return button;
   }
@@ -131,7 +131,7 @@
       }
       if(row.cells[1]){
         row.cells[1].dataset.eventLedgerTimeframe="true";
-        row.cells[1].textContent=timeframe;
+        if(row.cells[1].textContent!==timeframe)row.cells[1].textContent=timeframe;
       }
     }
     EVENT_LEDGER_COLUMNS.forEach(([label],index)=>headerButton(header.cells[index],label,"data-event-ledger-table-sort",index,eventLedgerSort));
@@ -163,14 +163,6 @@
     if(typeof document==="undefined")return false;
     configureRateTable();
     configureEventLedger();
-    if(document.body&&document.body.dataset.cteAnalyticalTableSortObserved!=="true"&&typeof MutationObserver!=="undefined"){
-      document.body.dataset.cteAnalyticalTableSortObserved="true";
-      new MutationObserver(()=>{
-        if(documentQueued)return;
-        documentQueued=true;
-        queueMicrotask(()=>{documentQueued=false;configureRateTable();configureEventLedger();});
-      }).observe(document.body,{childList:true,subtree:true});
-    }
     return true;
   }
 
