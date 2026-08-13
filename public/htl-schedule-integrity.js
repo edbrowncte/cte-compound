@@ -1,8 +1,8 @@
 (function installHtlScheduleIntegrity(global){
   "use strict";
 
-  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.1.0";
-  const SURVIVAL_VERSION="CTE_HTL_EVENT_SURVIVAL@1.0.0";
+  const VERSION="CTE_HTL_SCHEDULE_INTEGRITY@1.2.0";
+  const SURVIVAL_VERSION="CTE_HTL_EVENT_SURVIVAL@1.1.0";
   const MIN_DURATION_VALIDATION_SAMPLES=8;
   const MIN_COMPLETION_VALIDATION_SAMPLES=8;
   const MIN_OUTLIER_TRIM_SAMPLES=10;
@@ -10,6 +10,10 @@
   const MAD_LIMIT=4.5;
   const DEFAULT_ADDITIONAL_LIFE_BARS=5;
   const SURVIVAL_HORIZONS=Object.freeze([1,5,10,18]);
+  const SURVIVAL_COLUMNS=Object.freeze([
+    ["pair","Currency pair"],["currentEvent","Current event"],["currentAgeBars","Age (bars)"],["additionalEventLifeBars","Additional event life"],["historicalSurvival","Historical survival"],["n","n"],["meanBars","Mean bars"],["medianBars","Median bars"],["meanFavorableMoveBps","Mean favorable move"],["meanAdverseMoveBps","Mean adverse move"],["medianUltimateUpsideBps","Median ultimate upside"],["medianUltimateDownsideBps","Median ultimate downside"],["p25UltimateUpsideBps","25th-pctl upside"],["p25UltimateDownsideBps","25th-pctl downside"]
+  ]);
+  let survivalSort={key:"pair",direction:1};
 
   const mean=values=>values.length?values.reduce((sum,value)=>sum+value,0)/values.length:null;
   const median=values=>{if(!values.length)return null;const ordered=[...values].sort((a,b)=>a-b),middle=Math.floor(ordered.length/2);return ordered.length%2?ordered[middle]:(ordered[middle-1]+ordered[middle])/2;};
@@ -17,6 +21,9 @@
   const finiteNumber=value=>{const number=Number(value);return Number.isFinite(number)?number:null;};
   const formatNumber=(value,digits=2)=>Number.isFinite(Number(value))?Number(value).toFixed(digits):"—";
   const formatPercent=value=>Number.isFinite(Number(value))?`${(Number(value)*100).toFixed(1)}%`:"—";
+
+  function sortRows(rows,{key,direction}=survivalSort){return [...rows].sort((left,right)=>{const a=left?.[key],b=right?.[key],aMissing=a===null||a===undefined||Number.isNaN(a),bMissing=b===null||b===undefined||Number.isNaN(b);if(aMissing!==bMissing)return aMissing?1:-1;if(aMissing&&bMissing)return 0;const comparison=typeof a==="number"&&typeof b==="number"?a-b:String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:"base"});return direction*comparison;});}
+  function survivalHeader(){return SURVIVAL_COLUMNS.map(([key,label])=>`<th aria-sort="${survivalSort.key===key?(survivalSort.direction>0?"ascending":"descending"):"none"}"><button type="button" data-survival-sort="${key}">${label}${survivalSort.key===key?` ${survivalSort.direction>0?"▲":"▼"}`:""}</button></th>`).join("");}
 
   function durationErrorSeries(events){
     const completed=(events||[]).filter(event=>event?.status==="FINAL"),errors=[];
@@ -153,15 +160,17 @@
     let panel=document.getElementById("eventSurvivalAnalysis");if(panel)return panel;
     const eventPanel=document.getElementById("eventPanel"),anchor=document.getElementById("eventScheduleInterpretation");if(!eventPanel||!anchor)return null;
     panel=document.createElement("details");panel.id="eventSurvivalAnalysis";panel.className="event-ledger";panel.open=true;
-    panel.innerHTML=`<summary>Historical Event Survival · Current Event Maturity</summary><div class="head-controls" style="padding:7px 10px;justify-content:flex-start"><button id="exportEventSurvivalJson" type="button">Export JSON</button><span class="event-note" id="eventSurvivalBasis">FINAL same-direction events conditioned on having reached the current event age · horizons +1 / +5 / +10 / +18 bars.</span></div><div class="event-table-wrap"><table class="event-table" id="eventSurvivalTable"><thead><tr><th>Currency pair</th><th>Current event</th><th>Age (bars)</th><th>Additional event life</th><th>Historical survival</th><th>n</th><th>Mean bars</th><th>Median bars</th><th>Mean favorable move</th><th>Mean adverse move</th><th>Median ultimate upside</th><th>Median ultimate downside</th><th>25th-pctl upside</th><th>25th-pctl downside</th></tr></thead><tbody id="eventSurvivalBody"></tbody></table></div>`;
+    panel.innerHTML=`<summary>Historical Event Survival · Current Event Maturity</summary><div class="head-controls" style="padding:7px 10px;justify-content:flex-start"><button id="exportEventSurvivalJson" type="button">Export JSON</button><span class="event-note" id="eventSurvivalBasis">FINAL same-direction events conditioned on having reached the current event age · horizons +1 / +5 / +10 / +18 bars.</span></div><div class="event-table-wrap"><table class="event-table" id="eventSurvivalTable"><thead><tr>${survivalHeader()}</tr></thead><tbody id="eventSurvivalBody"></tbody></table></div>`;
     anchor.insertAdjacentElement("afterend",panel);
     document.getElementById("exportEventSurvivalJson")?.addEventListener("click",downloadSurvivalJson);
+    panel.addEventListener("click",event=>{const button=event.target.closest("[data-survival-sort]");if(!button)return;const key=button.dataset.survivalSort;if(survivalSort.key===key)survivalSort={key,direction:-survivalSort.direction};else survivalSort={key,direction:1};renderSurvivalTable();});
     return panel;
   }
 
   function renderSurvivalTable(){
     const panel=ensureSurvivalPanel(),body=typeof document!=="undefined"?document.getElementById("eventSurvivalBody"):null,appState=typeof state!=="undefined"?state:null;if(!panel||!body||!appState)return;
-    const rows=buildSurvivalRows(appState.eventRows||[],SURVIVAL_HORIZONS);
+    const head=panel.querySelector("#eventSurvivalTable thead tr");if(head)head.innerHTML=survivalHeader();
+    const rows=sortRows(buildSurvivalRows(appState.eventRows||[],SURVIVAL_HORIZONS));
     body.innerHTML=rows.length?rows.map(row=>`<tr data-survival-pair="${row.pair}" data-survival-horizon="${row.additionalEventLifeBars}"><td>${typeof formatPair==="function"?formatPair(row.pair):String(row.pair).replace("_","/")}</td><td class="${row.currentEvent==="BUY"?"buy":row.currentEvent==="SELL"?"sell":""}">${row.currentEvent||"—"}</td><td>${row.currentAgeBars??"—"}</td><td>+${row.additionalEventLifeBars} bars</td><td>${formatPercent(row.historicalSurvival)}</td><td>${row.n}</td><td>${formatNumber(row.meanBars,2)}</td><td>${formatNumber(row.medianBars,2)}</td><td>${formatNumber(row.meanFavorableMoveBps,2)} bps</td><td>${formatNumber(row.meanAdverseMoveBps,2)} bps</td><td>${formatNumber(row.medianUltimateUpsideBps,2)} bps</td><td>${formatNumber(row.medianUltimateDownsideBps,2)} bps</td><td>${formatNumber(row.p25UltimateUpsideBps,2)} bps</td><td>${formatNumber(row.p25UltimateDownsideBps,2)} bps</td></tr>`).join(""):`<tr><td colspan="14">Load the HTL Schedule to calculate survival statistics for all 28 pairs.</td></tr>`;
   }
 
@@ -185,6 +194,6 @@
     return true;
   }
 
-  global.CTEHtlScheduleIntegrity=Object.freeze({VERSION,SURVIVAL_VERSION,MIN_DURATION_VALIDATION_SAMPLES,MIN_COMPLETION_VALIDATION_SAMPLES,MIN_OUTLIER_TRIM_SAMPLES,DEFAULT_ADDITIONAL_LIFE_BARS,SURVIVAL_HORIZONS,durationErrorSeries,trimDurationErrors,scheduleValidation,applyIntegrity,describe,normalizedExcursion,survivalStatistics,buildSurvivalRows,survivalExportPayload,renderSurvivalTable});
+  global.CTEHtlScheduleIntegrity=Object.freeze({VERSION,SURVIVAL_VERSION,MIN_DURATION_VALIDATION_SAMPLES,MIN_COMPLETION_VALIDATION_SAMPLES,MIN_OUTLIER_TRIM_SAMPLES,DEFAULT_ADDITIONAL_LIFE_BARS,SURVIVAL_HORIZONS,SURVIVAL_COLUMNS,durationErrorSeries,trimDurationErrors,scheduleValidation,applyIntegrity,describe,normalizedExcursion,survivalStatistics,buildSurvivalRows,sortRows,survivalExportPayload,renderSurvivalTable});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);

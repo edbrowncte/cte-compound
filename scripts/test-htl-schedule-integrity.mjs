@@ -2,12 +2,22 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 await import("../public/htl-schedule-integrity.js");
-const api=globalThis.CTEHtlScheduleIntegrity;
+await import("../public/analytical-table-sorting.js");
+const api=globalThis.CTEHtlScheduleIntegrity,tableApi=globalThis.CTEAnalyticalTableSorting;
 assert.ok(api,"HTL schedule integrity API must load headlessly");
-assert.equal(api.VERSION,"CTE_HTL_SCHEDULE_INTEGRITY@1.1.0");
-assert.equal(api.SURVIVAL_VERSION,"CTE_HTL_EVENT_SURVIVAL@1.0.0");
+assert.ok(tableApi,"analytical table sorting API must load headlessly");
+assert.equal(api.VERSION,"CTE_HTL_SCHEDULE_INTEGRITY@1.2.0");
+assert.equal(api.SURVIVAL_VERSION,"CTE_HTL_EVENT_SURVIVAL@1.1.0");
+assert.equal(tableApi.VERSION,"CTE_ANALYTICAL_TABLE_SORTING@1.0.0");
 assert.equal(api.MIN_DURATION_VALIDATION_SAMPLES,8);
 assert.equal(api.MIN_COMPLETION_VALIDATION_SAMPLES,8);
+assert.equal(api.SURVIVAL_COLUMNS.length,14,"every Historical Event Survival column must participate in the sort contract");
+assert.equal(tableApi.RATE_COLUMNS[2][0],"Timeframe","Rate Fluctuation must expose the full Timeframe column label");
+assert.equal(tableApi.EVENT_LEDGER_COLUMNS[1][0],"Timeframe","Event Ledger must expose Timeframe immediately after Event");
+assert.equal(tableApi.RATE_COLUMNS.length,13,"every Rate Fluctuation column must participate in the sort contract");
+assert.equal(tableApi.EVENT_LEDGER_COLUMNS.length,14,"every expanded Event Ledger column must participate in the sort contract");
+assert.ok(tableApi.compareValues("2.5","10.2","number",1)<0,"numeric table sorting must compare values numerically");
+assert.ok(tableApi.compareValues("SELL 9","BUY 12","event",-1)>0,"event-number sorting must use the event number rather than the BUY/SELL prefix");
 
 const completed=Array.from({length:20},(_,index)=>({
   number:index+1,
@@ -68,10 +78,14 @@ const fullSurvivalRows=api.buildSurvivalRows(twentyEightRows);
 assert.equal(fullSurvivalRows.length,112,"the default HTL survival table must publish 28 pairs × four additional-life horizons");
 assert.equal(new Set(fullSurvivalRows.map(item=>item.pair)).size,28);
 assert.deepEqual([...new Set(fullSurvivalRows.map(item=>item.additionalEventLifeBars))],[1,5,10,18]);
+const survivalSorted=api.sortRows([{pair:"B",meanBars:2},{pair:"A",meanBars:8}],{key:"pair",direction:1});assert.deepEqual(survivalSorted.map(item=>item.pair),["A","B"]);
+const survivalNumeric=api.sortRows([{pair:"A",meanBars:2},{pair:"B",meanBars:8}],{key:"meanBars",direction:-1});assert.deepEqual(survivalNumeric.map(item=>item.meanBars),[8,2]);
 
-const worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8"),source=fs.readFileSync(new URL("../public/htl-schedule-integrity.js",import.meta.url),"utf8"),index=fs.readFileSync(new URL("../public/index.html",import.meta.url),"utf8");
+const worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8"),source=fs.readFileSync(new URL("../public/htl-schedule-integrity.js",import.meta.url),"utf8"),tableSource=fs.readFileSync(new URL("../public/analytical-table-sorting.js",import.meta.url),"utf8"),index=fs.readFileSync(new URL("../public/index.html",import.meta.url),"utf8");
 assert.match(index,/completed=events\.filter\(event=>event\.status==="FINAL"\)/,"base HTL forecast must continue to exclude PROVISIONAL events");
 assert.match(source,/MIN_DURATION_VALIDATION_SAMPLES=8/);assert.match(source,/MIN_COMPLETION_VALIDATION_SAMPLES=8/);assert.match(source,/event\?\.status==="FINAL"/);assert.match(source,/MAD_LIMIT=4\.5/);assert.match(source,/INSUFFICIENT_SAMPLE/);assert.match(source,/Duration validation/);assert.match(source,/FINAL events only/);
-assert.match(source,/Historical Event Survival · Current Event Maturity/);assert.match(source,/Additional event life/);assert.match(source,/Historical survival/);assert.match(source,/Mean favorable move/);assert.match(source,/Mean adverse move/);assert.match(source,/Median ultimate upside/);assert.match(source,/25th-pctl downside/);assert.match(source,/exportEventSurvivalJson/);assert.match(source,/cte-compound-htl-event-survival-/);
+assert.match(source,/Historical Event Survival · Current Event Maturity/);assert.match(source,/data-survival-sort/);assert.match(source,/aria-sort/);assert.match(source,/Additional event life/);assert.match(source,/Historical survival/);assert.match(source,/Mean favorable move/);assert.match(source,/Mean adverse move/);assert.match(source,/Median ultimate upside/);assert.match(source,/25th-pctl downside/);assert.match(source,/exportEventSurvivalJson/);assert.match(source,/cte-compound-htl-event-survival-/);
+assert.match(tableSource,/RATE_COLUMNS/);assert.match(tableSource,/EVENT_LEDGER_COLUMNS/);assert.match(tableSource,/\["Timeframe","text"\]/);assert.match(tableSource,/data-rate-table-sort/);assert.match(tableSource,/data-event-ledger-table-sort/);assert.match(tableSource,/data\.eventLedgerTimeframe|eventLedgerTimeframe/);assert.match(tableSource,/colSpan=14/);
 assert.match(worker,/htl-schedule-integrity\.js[^]*analytical-facilities\.js/,"HTL schedule integrity must install before the analytical-facilities wrapper so all event rows inherit guarded validation");
-console.log("HTL Schedule integrity and survival certification passed: FINAL-only history, guarded validation, current-age survival conditioning, direction-aware favorable/adverse excursions, 28×4 survival coverage, and JSON export are wired.");
+assert.match(worker,/htl-signal-panel\.js[^]*analytical-table-sorting\.js[^]*runtime-integrity\.js/,"sortable analytical table controls must load after analytical facilities and before final runtime integrity");
+console.log("HTL Schedule integrity and analytical table certification passed: FINAL-only history, guarded validation, sortable 28×4 survival coverage, sortable Rate Fluctuation with Timeframe, sortable Result / Profit ledger with Timeframe, and JSON export are wired.");
