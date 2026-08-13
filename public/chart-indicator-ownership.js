@@ -1,7 +1,7 @@
 (function installChartIndicatorOwnership(global){
   "use strict";
 
-  const VERSION="CTE_CHART_INDICATOR_OWNERSHIP@1.0.4";
+  const VERSION="CTE_CHART_INDICATOR_OWNERSHIP@1.1.0";
   const MAX_VISIBLE_HISTORY=MAX_ANALYTICAL_HISTORY;
 
   function ownedDefinition(strategy){
@@ -13,41 +13,12 @@
     };
   }
 
-  function selectedCross(left,right,index){
-    if(index<1||!Array.isArray(left)||!Array.isArray(right))return 0;
-    const values=[left[index],right[index],left[index-1],right[index-1]];
-    if(!values.every(Number.isFinite))return 0;
-    if(left[index]>right[index]&&left[index-1]<=right[index-1])return 1;
-    if(left[index]<right[index]&&left[index-1]>=right[index-1])return -1;
-    return 0;
-  }
-
   function selectedHtlCausal(data,length){
-    const series=htlCore(data,length),families=[
-      ["HL2_UPR",series?.hl2,series?.upr],
-      ["MUI_UI",series?.mui,series?.ui],
-      ["ZUI_IUZ",series?.zui,series?.iuz]
-    ],validFamilies=families.filter(([,left,right])=>Array.isArray(left)&&Array.isArray(right)),crosses=new Map();
-    if(!validFamilies.length)throw new Error("HTL source families are unavailable for the selected chart");
-    if(validFamilies.length!==families.length){
-      const missing=families.filter(([,left,right])=>!Array.isArray(left)||!Array.isArray(right)).map(([name])=>name);
-      console.warn(`Selected HTL chart skipped unavailable source family: ${missing.join(", ")}`);
-    }
-    for(let index=1;index<data.length;index++){
-      const vote=validFamilies.reduce((sum,[,left,right])=>sum+selectedCross(left,right,index),0);
-      if(vote)crosses.set(index,{index,direction:Math.sign(vote)});
-    }
-    const asset=Array(data.length).fill(null),inverse=Array(data.length).fill(null),assetMean=Array(data.length).fill(null),sourceTotal=Array(data.length).fill(0);let active=null,total=0;
-    const begin=event=>({index:event.index,direction:event.direction,price:event.direction>0?data[event.index]?.high:data[event.index]?.low,extremeIndex:event.index});
-    const update=(episode,index)=>{const candle=data[index];if(!candle)return;const price=episode.direction>0?candle.high:candle.low;if(!Number.isFinite(price))return;if((episode.direction>0&&price>episode.price)||(episode.direction<0&&price<episode.price)){episode.price=price;episode.extremeIndex=index;}};
-    const first=Math.max(1,length*3-1),denominator=length*(length+1)/2;
-    for(let index=0;index<data.length;index++){
-      const event=crosses.get(index);if(event){total++;if(!active||event.direction!==active.direction)active=begin(event);}
-      if(active)update(active,index);sourceTotal[index]=total;if(index<first||!active||!Number.isFinite(active.price))continue;
-      asset[index]=active.price;const start=index-length+1;if(start<0)continue;const window=asset.slice(start,index+1);
-      if(window.length!==length||!window.every(Number.isFinite))continue;const current=asset[index],mean=window.reduce((sum,value,position)=>sum+(position+1)*value,0)/denominator,average=window.reduce((sum,value)=>sum+value,0)/length,deviation=Math.sqrt(window.reduce((sum,value)=>sum+(value-average)**2,0)/length);assetMean[index]=mean;inverse[index]=deviation>0?(2*mean)-current:null;
-    }
-    return{asset,inverse,assetMean,sourceTotal,series,causal:true};
+    const H=global.CTE_HORIZON_HTL;
+    if(!H?.build)throw new Error("Canonical HTL calculation authority is unavailable for the selected chart");
+    const resolvedLength=clamp(Math.round(Number(length)||10),3,MAX_ANALYTICAL_LENGTH),htl=H.build(Array.isArray(data)?data:[],resolvedLength);
+    if(!Array.isArray(htl?.asset)||!Array.isArray(htl?.inverse)||!Array.isArray(htl?.assetMean)||!Array.isArray(htl?.assetMeanInverse))throw new Error("Canonical revised HTL package is incomplete");
+    return{...htl,causal:true};
   }
 
   function assetSignalSeries(candles,htl,filter=0){
@@ -64,31 +35,30 @@
   function selectedIndicatorSet(candles,length,strategy){
     const data=Array.isArray(candles)?candles:[],resolvedLength=clamp(Math.round(Number(length)||10),3,MAX_ANALYTICAL_LENGTH),id=CHART_INDICATORS[strategy]?strategy:"ASSET";
     if(!data.length)return normalizeUnifiedIndicators(data,{});
-    const htl=selectedHtlCausal(data,resolvedLength),selected={};
+    const S=global.CTE_HORIZON_STRATEGIES;
+    if(!S?.buildIndicators)throw new Error("Canonical Horizon strategy calculation authority is unavailable for the selected chart");
+    const indicators=S.buildIndicators(data,resolvedLength),selected={};
 
     if(id==="ASSET"){
-      selected.asset=htl.asset;
-      selected.inverse=htl.inverse;
+      selected.asset=indicators.asset;
+      selected.inverse=indicators.inverse;
     }else if(id==="DARE"){
-      const meanAsset=htlPairAverage(htl.asset,htl.inverse),meanCenter=htlSeriesWma(meanAsset,resolvedLength);
-      selected.meanAsset=meanAsset;
-      selected.meanInverse=meanAsset.map((value,index)=>Number.isFinite(value)&&Number.isFinite(meanCenter[index])?(2*meanCenter[index])-value:null);
+      selected.meanAsset=indicators.assetMean;
+      selected.meanInverse=indicators.assetMeanInverse;
     }else if(id==="DARE_N"){
-      const meanAsset=htlPairAverage(htl.asset,htl.inverse),meanCenter=htlSeriesWma(meanAsset,resolvedLength),meanInverse=meanAsset.map((value,index)=>Number.isFinite(value)&&Number.isFinite(meanCenter[index])?(2*meanCenter[index])-value:null);
-      selected.dareNAsset=htlNorm(meanAsset,meanCenter,htlSeriesStdev(meanAsset,resolvedLength));
-      selected.dareNInverse=htlNorm(meanInverse,htlSeriesWma(meanInverse,resolvedLength),htlSeriesStdev(meanInverse,resolvedLength));
+      selected.dareNAsset=indicators.dareNAsset;
+      selected.dareNInverse=indicators.dareNInverse;
     }else if(id==="NAI"){
-      selected.naiAsset=htlNorm(htl.asset,htlSeriesWma(htl.asset,resolvedLength),htlSeriesStdev(htl.asset,resolvedLength));
-      selected.naiInverse=htlNorm(htl.inverse,htlSeriesWma(htl.inverse,resolvedLength),htlSeriesStdev(htl.inverse,resolvedLength));
+      selected.naiAsset=indicators.naiAsset;
+      selected.naiInverse=indicators.naiInverse;
     }else if(id==="APEX"){
-      selected.zup=Array.isArray(htl.series?.zup)?htl.series.zup:[];
-      selected.puz=Array.isArray(htl.series?.puz)?htl.series.puz:[];
+      selected.zup=indicators.zup;
+      selected.puz=indicators.puz;
     }else if(id==="COMBO"){
-      const meanAsset=htlPairAverage(htl.asset,htl.inverse),meanCenter=htlSeriesWma(meanAsset,resolvedLength),meanInverse=meanAsset.map((value,index)=>Number.isFinite(value)&&Number.isFinite(meanCenter[index])?(2*meanCenter[index])-value:null);
-      selected.meanAsset=meanAsset;
-      selected.meanInverse=meanInverse;
-      selected.naiAsset=htlNorm(htl.asset,htlSeriesWma(htl.asset,resolvedLength),htlSeriesStdev(htl.asset,resolvedLength));
-      selected.naiInverse=htlNorm(htl.inverse,htlSeriesWma(htl.inverse,resolvedLength),htlSeriesStdev(htl.inverse,resolvedLength));
+      selected.meanAsset=indicators.assetMean;
+      selected.meanInverse=indicators.assetMeanInverse;
+      selected.naiAsset=indicators.naiAsset;
+      selected.naiInverse=indicators.naiInverse;
     }
     return normalizeUnifiedIndicators(data,selected);
   }
