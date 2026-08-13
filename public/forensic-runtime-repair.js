@@ -66,7 +66,7 @@
   }
   function healthForSupportKey(key){const [pair,timeframe,length]=String(key||"").split("|");return loadHealth.get(healthKey(pair,timeframe,length))||null;}
 
-  function normalizeSupportRecord(record,health=null){
+  function normalizeSupportRecord(record,health={degradedHistory:false}){
     if(!record||typeof record!=="object")return record;
     const status=String(record.supportingStatus||""),bars=Number(record.supportingHistoryBars),target=Number(record.supportingHistoryTarget),finals=Number(record.supportingFinalEvents),magnitudes=Number(record.supportingMagnitudeEvents),gap=target-bars;
     const authoritativeHealthy=health?.degradedHistory===false;
