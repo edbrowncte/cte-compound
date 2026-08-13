@@ -1,4 +1,4 @@
-import { HtlEngine as DualIndicatorOnlyEngine, __indicatorOnlyDualTest } from "./engine-indicator-only-dual.js";
+import { __indicatorOnlyDualTest } from "./engine-indicator-only-dual.js";
 import { __indicatorOnlyTest } from "./engine-indicator-only.js";
 
 const EXECUTION_OBSERVABILITY_VERSION="EXECUTION_MODE_OBSERVABILITY@1.0.0";
@@ -9,7 +9,7 @@ function latestCandle(lanes=[]){
   return values.sort((left,right)=>Date.parse(right)-Date.parse(left))[0]||null;
 }
 
-function executionSnapshot(parent={},state={}){
+export function executionSnapshot(parent={},state={}){
   const tickets=__indicatorOnlyDualTest.normalizeTickets(state.indicatorOnlyTickets,state),active=tickets.filter(ticket=>ticket.enabled),runtime=state.indicatorOnlyTicketRuntime||{},legacy=__indicatorOnlyTest.normalizeIndicatorOnly(state.indicatorOnly),lanes=active.map(ticket=>{
     const lane=runtime[ticket.slot]||runtime[String(ticket.slot)]||{};
     return{
@@ -49,10 +49,3 @@ function executionSnapshot(parent={},state={}){
 }
 
 export const __executionObservabilityTest=Object.freeze({EXECUTION_OBSERVABILITY_VERSION,latestCandle,executionSnapshot});
-
-export class HtlEngine extends DualIndicatorOnlyEngine{
-  async status(){
-    const parent=await super.status(),state=(await this.ctx.storage.get("state"))||{};
-    return{...parent,...executionSnapshot(parent,state)};
-  }
-}
