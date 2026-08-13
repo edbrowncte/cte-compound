@@ -1,0 +1,1 @@
+Rate Fluctuation / Event Outcome corroboration repair and routine Indicator Signal Chain Inspection documentation. HTL Schedule market-table implementation remains specified but not implemented in this branch.
