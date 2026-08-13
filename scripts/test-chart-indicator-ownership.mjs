@@ -4,19 +4,27 @@ import fs from "node:fs";
 const ownership=fs.readFileSync(new URL("../public/chart-indicator-ownership.js",import.meta.url),"utf8");
 const worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8");
 
-assert.match(ownership,/CTE_CHART_INDICATOR_OWNERSHIP@1\.0\.4/);
+assert.match(ownership,/CTE_CHART_INDICATOR_OWNERSHIP@1\.1\.0/);
 assert.match(ownership,/const MAX_VISIBLE_HISTORY=MAX_ANALYTICAL_HISTORY/,"main chart maximum viewport must equal the 5,000-candle analytical history contract");
 assert.match(ownership,/canonicalChartDefinition=function\(strategy\)\{return ownedDefinition\(strategy\);\}/,"chart definition must be the selected indicator only");
 assert.doesNotMatch(ownership,/fan=CHART_INDICATORS\.ASSET|price:\[\.\.\.fan/,"HTL Asset must not be injected into every indicator selection");
-assert.match(ownership,/function selectedCross\(left,right,index\)/,"selected chart must own a guarded HTL crossing helper");
-assert.match(ownership,/!Array\.isArray\(left\)\|\|!Array\.isArray\(right\)/,"selected HTL crossing must reject unavailable source arrays before numeric indexing");
-assert.match(ownership,/function selectedHtlCausal\(data,length\)/,"selected chart must have an isolated causal HTL builder");
-assert.match(ownership,/validFamilies=families\.filter\(\(\[,left,right\]\)=>Array\.isArray\(left\)&&Array\.isArray\(right\)\)/,"selected HTL builder must validate every source family before crossing evaluation");
+assert.match(ownership,/function selectedHtlCausal\(data,length\)/,"selected chart must expose the canonical HTL adapter");
+assert.match(ownership,/const H=global\.CTE_HORIZON_HTL/,"selected chart must use the canonical HTL authority");
+assert.match(ownership,/htl=H\.build\(Array\.isArray\(data\)\?data:\[\],resolvedLength\)/,"selected chart must consume canonical revised HTL values");
+assert.match(ownership,/const S=global\.CTE_HORIZON_STRATEGIES/,"non-ASSET chart strategies must use the canonical strategy authority");
+assert.match(ownership,/const indicators=S\.buildIndicators\(data,resolvedLength\)/,"DARE, DARE(N), NAI, COMBO and APEX must consume canonical strategy indicators");
+assert.doesNotMatch(ownership,/const series=htlCore\(data,length\)/,"chart must not reconstruct HTL source-cross geometry");
+assert.doesNotMatch(ownership,/deviation>0\?\(2\*mean\)-current:null/,"chart must not gate Asset Inverse on local Asset deviation");
+assert.match(ownership,/Array\.isArray\(htl\?\.assetMean\).*Array\.isArray\(htl\?\.assetMeanInverse\)/s,"selected HTL package must require Asset Mean and Asset Mean Inverse");
 assert.match(ownership,/function assetSignalSeries\(candles,htl,filter=0\)/,"HTL Asset signals must have a dedicated safe transition path");
 assert.match(ownership,/function renderAssetOnlyChart\(/,"HTL Asset must have its own direct chart renderer");
 assert.match(ownership,/CTEUnifiedChart\.render\(\{canvas,candles:data,indicators,indicatorSet:definition,signals/,"HTL Asset must render directly without generic indicator normalization/render wrappers");
 assert.match(ownership,/if\(strategy==="ASSET"\)renderAssetOnlyChart\(/,"main chart must route HTL Asset around the generic indicator path");
 assert.match(ownership,/if\(strategy==="ASSET"\)renderAssetOnlyChart\(\{canvasId:"evalChart"/s,"evaluation chart must use the same direct HTL Asset contract");
+assert.match(ownership,/selected\.meanAsset=indicators\.assetMean;\s*selected\.meanInverse=indicators\.assetMeanInverse;/s,"DARE chart must be rooted in Asset Mean and Asset Mean Inverse");
+assert.match(ownership,/selected\.dareNAsset=indicators\.dareNAsset;\s*selected\.dareNInverse=indicators\.dareNInverse;/s,"DARE(N) chart must consume canonical normalized Asset Mean roots");
+assert.match(ownership,/selected\.naiAsset=indicators\.naiAsset;\s*selected\.naiInverse=indicators\.naiInverse;/s,"NAI chart must consume canonical normalized Asset roots");
+assert.match(ownership,/selected\.zup=indicators\.zup;\s*selected\.puz=indicators\.puz;/s,"APEX must remain on zup/puz");
 assert.match(ownership,/CHART_INDICATORS\.COMBO=\{\s*price:\[\["meanAsset"/s,"COMBO must own a composite display without the HTL Asset fan");
 const comboBlock=ownership.match(/CHART_INDICATORS\.COMBO=\{([\s\S]*?)\n  \};/)?.[1]||"";
 assert.doesNotMatch(comboBlock,/\["asset"|\["inverse"/,"COMBO display must not carry HTL Asset/Inverse lines");
@@ -40,4 +48,4 @@ assert.match(ownership,/body\.style\.minHeight="0"/,"legacy weekly minimum heigh
 assert.match(ownership,/ResizeObserver\(synchronizeWeeklyBar\)/,"Weekly Bar must remain synchronized through chart resize/maximize changes");
 assert.match(worker,/html=html\.replace\('\<\/body\>'[^;]*chart-indicator-ownership\.js/s,"ownership repair must load after the main inline chart runtime");
 
-console.log("Chart indicator ownership certification passed: direct HTL Asset render/signals, guarded causal selection, full loaded-history startup through preference/data lifecycles, isolated auxiliary surfaces, singular ownership, duplicate metadata removal, and Weekly Bar sizing are enforced.");
+console.log("Chart indicator ownership certification passed: canonical revised HTL/strategy authority, direct Asset render/signals, full loaded-history startup, isolated auxiliary surfaces, singular ownership, duplicate metadata removal, and Weekly Bar sizing are enforced.");
