@@ -1,4 +1,4 @@
-import { HtlEngine as DualIndicatorOnlyEngine } from "./engine-indicator-only-dual.js";
+import { HtlEngine as DualIndicatorOnlyEngine } from "./engine-execution-observability.js";
 
 const API="https://api-fxtrade.oanda.com";
 const CLOSE_RETRY_VERSION="OANDA_CLOSE_RETRY_GUARD@1.0.0";
