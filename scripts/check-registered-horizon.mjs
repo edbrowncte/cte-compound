@@ -1,7 +1,7 @@
 import {readFile} from "node:fs/promises";
 
 const readMany=async paths=>(await Promise.all(paths.map(path=>readFile(new URL(path,import.meta.url),"utf8")))).join("\n");
-const worker=await readMany(["../src/worker.js","../src/worker-horizon-base.js","../src/worker-base.js","../src/horizon-candidate-orders.js"]);
+const worker=await readMany(["../src/worker.js","../src/worker-horizon-base.js","../src/worker-base.js"]);
 const engine=await readMany(["../src/engine.js","../src/engine-nemotron-base.js","../src/engine-horizon-base.js","../src/engine-base.js","../src/horizon-platform-engine.js","../src/horizon-registered-performance.js","../src/horizon-strategy-v1.js"]);
 const registeredEngine=await readFile(new URL("../src/engine.js",import.meta.url),"utf8");
 const checks=(source,items)=>{for(const[pattern,label]of items)if(!pattern.test(source))throw new Error(`Missing ${label}`);};
@@ -10,8 +10,7 @@ checks(worker,[
   [/api-fxtrade\.oanda\.com/,"live OANDA origin"],
   [/handleManualOrder/,"manual orders"],
   [/handleOpenTrades/,"open trades"],
-  [/handleTradeAction/,"trade management"],
-  [/handleCandidateOrder/,"candidate order route"]
+  [/handleTradeAction/,"trade management"]
 ]);
 
 checks(engine,[
@@ -42,4 +41,4 @@ for(const forbidden of [/async reconcile\(/,/async execute\(/,/ONE_RAW_ASSET_REC
   if(forbidden.test(registeredEngine))throw new Error(`Forbidden registered analytical override: ${forbidden}`);
 }
 
-console.log("Registered six-strategy Horizon analytical, frozen 3,000-bar performance/optimizer, armed private execution, OANDA, ledger, and bounded Nemotron required function-tool boundaries verified.");
+console.log("Registered six-strategy Horizon analytical, frozen 3,000-bar performance/optimizer, armed private execution, OANDA, ledger, and bounded Nemotron required function-tool boundaries verified without an A/B/C candidate-order bridge.");
