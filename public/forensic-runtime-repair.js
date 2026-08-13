@@ -1,9 +1,10 @@
 (function installForensicRuntimeRepair(root){
   "use strict";
 
-  const VERSION="CTE_FORENSIC_RUNTIME_REPAIR@1.0.0";
+  const VERSION="CTE_FORENSIC_RUNTIME_REPAIR@1.0.1";
   const H=root.CTE_HORIZON_HTL;
   const finite=Number.isFinite;
+  const loadHealth=new Map();
   const mean=values=>values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;
 
   function pipScale(pair){return String(pair||"").endsWith("JPY")?100:10000;}
@@ -57,36 +58,44 @@
     return events;
   }
 
-  function normalizeSupportRecord(record){
+  const healthKey=(pair,timeframe,length)=>`${pair}|${timeframe}|${Number(length)}`;
+  function recordLoadHealth(pair,timeframe,length,row,requestedCount){
+    const bars=Number(row?.data?.length??row?.historyBars),target=Number(requestedCount);
+    const health={pair,timeframe,length:Number(row?.length??length),degradedHistory:Boolean(row?.degradedHistory),historyBars:finite(bars)?bars:null,historyTarget:finite(target)?target:null};
+    loadHealth.set(healthKey(pair,timeframe,health.length),health);return health;
+  }
+  function healthForSupportKey(key){const [pair,timeframe,length]=String(key||"").split("|");return loadHealth.get(healthKey(pair,timeframe,length))||null;}
+
+  function normalizeSupportRecord(record,health=null){
     if(!record||typeof record!=="object")return record;
     const status=String(record.supportingStatus||""),bars=Number(record.supportingHistoryBars),target=Number(record.supportingHistoryTarget),finals=Number(record.supportingFinalEvents),magnitudes=Number(record.supportingMagnitudeEvents),gap=target-bars;
-    if(status==="DEGRADED_HISTORY"&&!record.supportingError&&finite(bars)&&finite(target)&&gap>=0&&gap<=1&&finals>0&&magnitudes>0){
+    const authoritativeHealthy=health?.degradedHistory===false;
+    if(status==="DEGRADED_HISTORY"&&authoritativeHealthy&&!record.supportingError&&finite(bars)&&finite(target)&&gap>=0&&gap<=1&&finals>0&&magnitudes>0){
       return{...record,supportingStatus:"READY",corroborated:true,historyCompletion:"MAX_REQUEST_COMPLETED_CANDLES",historyCompletionGap:gap};
     }
     return record;
   }
 
   class RateFluctuationSupportMap extends Map{
-    set(key,value){return super.set(key,normalizeSupportRecord(value));}
+    set(key,value){return super.set(key,normalizeSupportRecord(value,healthForSupportKey(key)));}
   }
 
-  function installEventFeatures(){
-    root.eventFeatures=enrichedEventFeatures;
-    try{eventFeatures=enrichedEventFeatures;}catch{}
+  function installEventFeatures(){root.eventFeatures=enrichedEventFeatures;try{eventFeatures=enrichedEventFeatures;}catch{}}
+  function installLoadHealth(){
+    if(typeof loadEventRow!=="function"||loadEventRow?.cteForensicHealthWrapper)return false;
+    const prior=loadEventRow;
+    const wrapped=async function(pair,timeframe,length,controller,priority=60,requestedCount=null){const row=await prior(pair,timeframe,length,controller,priority,requestedCount);if(requestedCount!==null&&requestedCount!==undefined)recordLoadHealth(pair,timeframe,length,row,requestedCount);return row;};
+    Object.defineProperty(wrapped,"cteForensicHealthWrapper",{value:true});root.loadEventRow=wrapped;try{loadEventRow=wrapped;}catch{}return true;
   }
-
   function installSupportCache(){
     if(typeof state==="undefined")return false;
-    const replacement=new RateFluctuationSupportMap();
-    const prior=state.rateFluctuationEventCache;
-    if(prior instanceof Map)for(const[key,value]of prior)replacement.set(key,value);
-    state.rateFluctuationEventCache=replacement;
+    state.rateFluctuationEventCache=new RateFluctuationSupportMap();
     state.rateFluctuationSupportPromises=new Map();
     return true;
   }
 
   installEventFeatures();
-  const install=()=>{installEventFeatures();installSupportCache();};
-  root.CTEForensicRuntimeRepair=Object.freeze({VERSION,pipScale,enrichedEventFeatures,normalizeSupportRecord,RateFluctuationSupportMap,installEventFeatures,installSupportCache});
+  const install=()=>{installEventFeatures();installLoadHealth();installSupportCache();};
+  root.CTEForensicRuntimeRepair=Object.freeze({VERSION,pipScale,enrichedEventFeatures,recordLoadHealth,healthForSupportKey,normalizeSupportRecord,RateFluctuationSupportMap,installEventFeatures,installLoadHealth,installSupportCache});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(typeof globalThis!=="undefined"?globalThis:self);
