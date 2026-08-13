@@ -1,7 +1,8 @@
 (function installCteHorizonContract(root) {
   "use strict";
 
-  const VERSION = "CTE_HORIZON_HTL_ASSET_CROSSING@1.0.0";
+  const VERSION = "CTE_HORIZON_HTL_ASSET_CROSSING@2.0.0";
+  const FORMULA = "CTE_HTL_ASSET_DIRECT_MIRROR_MEAN@1.0.0";
 
   const finite = Number.isFinite;
   const mean = values => values.length
@@ -61,6 +62,13 @@
       ? (-value * deviation[index]) + center[index]
       : null,
   );
+
+  function mirrorAroundWma(values, length) {
+    const internalWma = wma(values, length);
+    return values.map((value, index) =>
+      finite(value) && finite(internalWma[index]) ? (2 * internalWma[index]) - value : null,
+    );
+  }
 
   function crossDirection(left, right, index) {
     if (index < 1) return 0;
@@ -324,19 +332,25 @@
     const series = coreSeries(clean, normalizedLength);
     const stream = crossingStream(clean, series);
     const assetResult = extremaAsset(clean, stream);
-    const assetMean = wma(assetResult.values, normalizedLength);
+    const inverse = mirrorAroundWma(assetResult.values, normalizedLength);
+    const assetMean = pairAverage(assetResult.values, inverse);
+    const assetMeanInverse = mirrorAroundWma(assetMean, normalizedLength);
+    const inverseWma = wma(assetResult.values, normalizedLength);
     const assetDeviation = stdev(assetResult.values, normalizedLength);
-    const assetZ = normalizedDifference(assetResult.values, assetMean, assetDeviation);
-    const inverse = recoverInverse(assetZ, assetDeviation, assetMean);
+    const assetZ = normalizedDifference(assetResult.values, inverseWma, assetDeviation);
     const crossings = assetCrossings(clean, assetResult.values, inverse);
     return {
       version: VERSION,
+      formula: FORMULA,
       length: normalizedLength,
       candles: clean,
       series,
       asset: assetResult.values,
       inverse,
       assetMean,
+      assetMeanInverse,
+      meanAsset: assetMean,
+      meanInverse: assetMeanInverse,
       assetDeviation,
       assetZ,
       anchors: assetResult.anchors,
@@ -352,6 +366,7 @@
 
   const api = Object.freeze({
     VERSION,
+    FORMULA,
     build,
     coreSeries,
     crossingStream,
@@ -361,8 +376,10 @@
     crossingIdentity,
     wma,
     stdev,
+    pairAverage,
     normalizedDifference,
     recoverInverse,
+    mirrorAroundWma,
   });
 
   root.CTE_HORIZON_HTL = api;
