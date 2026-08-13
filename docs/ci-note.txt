@@ -1,1 +1,0 @@
-Mandatory analytical and registered Horizon gates required before merge.
