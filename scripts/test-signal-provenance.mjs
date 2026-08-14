@@ -8,7 +8,7 @@ import {
   executionClockProbeDue,
   __signalProvenanceTest,
 } from "../src/engine-signal-provenance.js";
-import { LIVE_SIGNAL_PRICE_VERSION, AUTOMATIC_SIGNAL_EXECUTION_VERSION, __liveSignalPriceTest } from "../src/engine-live-signal-price.js";
+import { LIVE_SIGNAL_PRICE_VERSION, AUTOMATIC_SIGNAL_EXECUTION_VERSION, IO_EVENT_CHRONOLOGY_VERSION, __liveSignalPriceTest } from "../src/engine-live-signal-price.js";
 import {
   STRATEGY_ENGINE_VERSION,
   normalizeStrategySettings,
@@ -64,7 +64,7 @@ assert.equal(io.complete, true);
 const buyQuote=__liveSignalPriceTest.executableSignalQuote({time:"2026-08-14T04:00:00.000Z",closeoutBid:"1.16780",closeoutAsk:"1.16792",bids:[{price:"1.16781"}],asks:[{price:"1.16791"}]},1);
 assert.equal(buyQuote.price,1.16791);assert.equal(buyQuote.side,"ASK");assert.equal(buyQuote.time,"2026-08-14T04:00:00.000Z");
 const sellQuote=__liveSignalPriceTest.executableSignalQuote({time:"2026-08-14T04:00:01.000Z",closeoutBid:"1.16779",closeoutAsk:"1.16793",bids:[{price:"1.16778"}],asks:[{price:"1.16794"}]},-1);
-assert.equal(sellQuote.price,1.16778);assert.equal(sellQuote.side,"BID");assert.match(__liveSignalPriceTest.PRICE_BASIS,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE/);assert.match(LIVE_SIGNAL_PRICE_VERSION,/2\.1\.1/);assert.match(AUTOMATIC_SIGNAL_EXECUTION_VERSION,/IMMEDIATE_ONE_ATTEMPT/);
+assert.equal(sellQuote.price,1.16778);assert.equal(sellQuote.side,"BID");assert.match(__liveSignalPriceTest.PRICE_BASIS,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE/);assert.match(LIVE_SIGNAL_PRICE_VERSION,/2\.2\.0/);assert.match(AUTOMATIC_SIGNAL_EXECUTION_VERSION,/IMMEDIATE_ONE_ATTEMPT/);assert.match(IO_EVENT_CHRONOLOGY_VERSION,/MONOTONIC_CHRONOLOGY/);
 assert.equal(__liveSignalPriceTest.executableSignalQuote({closeoutAsk:"1.16792"},1),null);assert.equal(__liveSignalPriceTest.executableSignalQuote({closeoutBid:"1.16779"},-1),null);assert.equal(__liveSignalPriceTest.executableSignalQuote({tradeable:false,asks:[{price:"1.16791"}]},1),null);
 
 const state = {};
@@ -109,6 +109,6 @@ assert.match(source, /fillPriceBasis: "OANDA_ORDER_FILL_PRICE_SEPARATE"/);
 assert.match(source, /executionClockParentProbeObserved/);
 assert.match(source, /executionClockEarlyProbeStatus/);
 const liveSource=await readFile(new URL("../src/engine-live-signal-price.js",import.meta.url),"utf8");
-assert.match(liveSource,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION/);assert.match(liveSource,/sourceCandleClose/);assert.match(liveSource,/signalPriceSide/);assert.match(liveSource,/SIGNAL_PROVENANCE_REGISTERED/);assert.match(liveSource,/IMMEDIATE_ONE_ATTEMPT_SIGNAL_EXECUTION/);assert.doesNotMatch(liveSource,/price\.asks\?\.\[0\]\?\.price\?\?price\.closeoutAsk|price\.bids\?\.\[0\]\?\.price\?\?price\.closeoutBid/);
+assert.match(liveSource,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION/);assert.match(liveSource,/sourceCandleClose/);assert.match(liveSource,/signalPriceSide/);assert.match(liveSource,/SIGNAL_PROVENANCE_REGISTERED/);assert.match(liveSource,/IMMEDIATE_ONE_ATTEMPT_SIGNAL_EXECUTION/);assert.match(liveSource,/INDICATOR_ONLY_RETROGRADE_EVENT_REJECTED/);assert.doesNotMatch(liveSource,/price\.asks\?\.\[0\]\?\.price\?\?price\.closeoutAsk|price\.bids\?\.\[0\]\?\.price\?\?price\.closeoutBid/);
 
-console.log("Signal provenance verified: canonical crossing context stays auditable while the automatic execution boundary captures a tradeable OANDA ask for BUY or bid for SELL exactly once, independently from the later fill price.");
+console.log("Signal provenance verified: canonical crossing context stays auditable while automatic execution captures a tradeable OANDA ASK/BID once, rejects retrograde repaint identities, and records fill price separately.");
