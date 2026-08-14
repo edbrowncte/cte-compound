@@ -1,5 +1,5 @@
 import horizonWorker from "./worker-horizon-base.js";
-export { HtlEngine } from "./engine-close-retry.js";
+export { HtlEngine } from "./engine-signal-provenance.js";
 
 const headers={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers});
