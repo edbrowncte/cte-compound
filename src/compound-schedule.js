@@ -8,11 +8,12 @@ import {
   buildIntegratedIIICore,
 } from "./horizon-strategy-v1.js";
 
-export const COMPOUND_SCHEDULE_VERSION="COMPOUND_MCP_SCHEDULE@1.0.0";
+export const COMPOUND_SCHEDULE_VERSION="COMPOUND_MCP_SCHEDULE@1.0.1";
 export const COMPOUND_MCP_PROTOCOL_VERSION="2024-11-05";
 export const COMPOUND_SCHEDULE_STRATEGIES=Object.freeze(["ASSET","DARE_N","DARE","COMBO","NAI","APEX"]);
 const MIN_SCHEDULE_BARS=180;
 const MAX_SCHEDULE_BARS=650;
+const TERMINAL_CANDLE_REQUEST_MARGIN=2;
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const finite=value=>Number.isFinite(Number(value))?Number(value):0;
@@ -30,7 +31,7 @@ export function normalizeScheduleStrategies(values=[]){
   return out;
 }
 
-export function requiredScheduleBars(settingsInput=DEFAULT_STRATEGY_SETTINGS,strategiesInput=["ASSET"]){
+function scheduleHistoryLength(settingsInput=DEFAULT_STRATEGY_SETTINGS,strategiesInput=["ASSET"]){
   const settings=normalizeStrategySettings(settingsInput),strategies=normalizeScheduleStrategies(strategiesInput);
   let length=settings.assetLength;
   for(const strategy of strategies){
@@ -39,7 +40,16 @@ export function requiredScheduleBars(settingsInput=DEFAULT_STRATEGY_SETTINGS,str
     else if(strategy==="APEX")length=Math.max(length,settings.apexLength);
     else length=Math.max(length,settings.assetLength);
   }
-  return clamp(Math.max(MIN_SCHEDULE_BARS,(length*3)+2),MIN_SCHEDULE_BARS,MAX_SCHEDULE_BARS);
+  return length;
+}
+
+export function requiredCompletedScheduleBars(settingsInput=DEFAULT_STRATEGY_SETTINGS,strategiesInput=["ASSET"]){
+  const length=scheduleHistoryLength(settingsInput,strategiesInput);
+  return clamp(Math.max(MIN_SCHEDULE_BARS,length*3),MIN_SCHEDULE_BARS,MAX_SCHEDULE_BARS-TERMINAL_CANDLE_REQUEST_MARGIN);
+}
+
+export function requiredScheduleBars(settingsInput=DEFAULT_STRATEGY_SETTINGS,strategiesInput=["ASSET"]){
+  return requiredCompletedScheduleBars(settingsInput,strategiesInput)+TERMINAL_CANDLE_REQUEST_MARGIN;
 }
 
 function relation(left,right,threshold=0){
@@ -53,8 +63,8 @@ function output(direction,score,regime,metrics={}){return{direction,signal:direc
 export function evaluateCompoundScheduleDataset(candlesInput,settingsInput=DEFAULT_STRATEGY_SETTINGS,strategiesInput=["ASSET"]){
   const candles=normalizeCandles(candlesInput),settings=normalizeStrategySettings(settingsInput),strategies=normalizeScheduleStrategies(strategiesInput);
   if(!candles.length)throw new Error("NO_COMPLETED_SCHEDULE_CANDLES");
-  const required=requiredScheduleBars(settings,strategies);
-  if(candles.length<required)throw new Error(`INSUFFICIENT_COMPOUND_SCHEDULE_CANDLES:${candles.length}:${required}`);
+  const requiredCompleted=requiredCompletedScheduleBars(settings,strategies),requested=requiredScheduleBars(settings,strategies);
+  if(candles.length<requiredCompleted)throw new Error(`INSUFFICIENT_COMPOUND_SCHEDULE_CANDLES:${candles.length}:${requiredCompleted}`);
   const index=candles.length-1,htl=buildIntegratedHtlAsset(candles,settings.assetLength),outputs={};
   const asset=relation(htl.asset[index],htl.inverseAsset[index]);
   outputs.ASSET=output(asset.direction,asset.score,"HTL EVENT",{asset:asset.left,inverse:asset.right,spread:asset.score});
@@ -84,7 +94,8 @@ export function evaluateCompoundScheduleDataset(candlesInput,settingsInput=DEFAU
   return{
     version:COMPOUND_SCHEDULE_VERSION,
     bars:candles.length,
-    requestedBars:required,
+    requiredCompletedBars:requiredCompleted,
+    requestedBars:requested,
     completedCandleTime:candles[index].time,
     currentPrice:candles[index].close,
     settings,
