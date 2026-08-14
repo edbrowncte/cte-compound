@@ -3,7 +3,9 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const source=fs.readFileSync(new URL("../public/forensic-runtime-repair.js",import.meta.url),"utf8");
-const sandbox={console,Math,Number,Array,Object,String,Boolean,Date,Map,Set};sandbox.globalThis=sandbox;
+const workerExact=fs.readFileSync(new URL("../src/worker-exact-account.js",import.meta.url),"utf8");
+const index=fs.readFileSync(new URL("../public/index.html",import.meta.url),"utf8");
+const sandbox={console,Math,Number,Array,Object,String,Boolean,Date,Map,Set,setTimeout,clearTimeout,AbortController};sandbox.globalThis=sandbox;
 vm.runInNewContext(source,sandbox,{filename:"forensic-runtime-repair.js"});
 const repair=sandbox.CTEForensicRuntimeRepair;
 assert.ok(repair,"forensic repair API must install");
@@ -45,12 +47,21 @@ assert.equal(genuinelyShort.supportingStatus,"DEGRADED_HISTORY");
 const missingPnl=repair.normalizeSupportRecord({supportingStatus:"DEGRADED_HISTORY",supportingError:null,supportingHistoryBars:4999,supportingHistoryTarget:5000,supportingFinalEvents:400,supportingMagnitudeEvents:0,corroborated:false});
 assert.equal(missingPnl.supportingStatus,"DEGRADED_HISTORY","one-candle tolerance must not hide missing P/L evidence");
 
+const bucketMark=repair.positionPriceFromRaw({time:"2026-08-14T08:00:00.000Z",tradeable:true,bids:[{price:"0.57506"}],asks:[{price:"0.57508"}],closeoutBid:"0.57501",closeoutAsk:"0.57513"});
+assert.equal(bucketMark.bid,.57506);assert.equal(bucketMark.ask,.57508);assert.equal(bucketMark.priceBasis,"LIVE_OANDA_BID_ASK_BUCKETS","open-position mark must prefer actual bid/ask liquidity over closeout fallback prices");
+const closeoutFallback=repair.positionPriceFromRaw({closeoutBid:"0.57501",closeoutAsk:"0.57513"});assert.equal(closeoutFallback.bid,.57501);assert.equal(closeoutFallback.ask,.57513);assert.equal(closeoutFallback.priceBasis,"OANDA_CLOSEOUT_FALLBACK");
+
 const audChf={instrument:"AUD_CHF",long:{units:"1800",averagePrice:"0.57528",unrealizedPL:"0.11"},short:{units:"0"},unrealizedPL:"0.11"};
-const livePrice={bid:.57506,ask:.57508,time:"2026-08-14T08:00:00.000Z",homeConversion:{positive:1.23,negative:1.24}};
+const livePrice={bid:.57506,ask:.57508,time:"2026-08-14T08:00:00.000Z",homeConversion:{positive:1.23,negative:1.24},priceBasis:"LIVE_OANDA_BID_ASK_BUCKETS"};
 const liveMark=repair.livePositionMark(audChf,livePrice,"USD");
-assert.ok(liveMark);assert.equal(Number(liveMark.pips.toFixed(1)),-2.2);assert.ok(liveMark.quotePnl<0);assert.ok(liveMark.unrealizedPL<0,"a long below entry must never acquire a positive live-mark P/L through currency conversion");assert.equal(liveMark.homeConversionFactor,1.24,"negative quote P/L must use the negative-units home conversion factor");
+assert.ok(liveMark);assert.equal(Number(liveMark.pips.toFixed(1)),-2.2);assert.ok(liveMark.quotePnl<0);assert.ok(liveMark.unrealizedPL<0,"a long below entry must never acquire a positive live-mark P/L through currency conversion");assert.equal(liveMark.homeConversionFactor,1.24,"negative quote P/L must use the negative-units home conversion factor");assert.equal(liveMark.priceBasis,"LIVE_OANDA_BID_ASK_BUCKETS");
 const sameQuote=repair.livePositionMark(audChf,{...livePrice,homeConversion:{}},"CHF");assert.ok(sameQuote.unrealizedPL<0);assert.equal(sameQuote.homeConversionFactor,1);
 const unavailableConversion=repair.livePositionMark(audChf,{...livePrice,homeConversion:{}},"USD");assert.equal(unavailableConversion.unrealizedPL,null,"cross-currency home P/L must not be fabricated without a conversion factor");
-assert.match(repair.VERSION,/1\.1\.0/);
 
-console.log("Forensic runtime repair certified: canonical event outcomes remain intact and open-position Pips, Change, and home-currency P/L share one live executable mark with sign-preserving OANDA conversion semantics.");
+assert.equal(repair.transactionChangesAccount({type:"HEARTBEAT",lastTransactionID:"100"}),false);assert.equal(repair.transactionChangesAccount({type:"ORDER_FILL",id:"101"}),true);assert.equal(repair.transactionIdentity({type:"ORDER_FILL",id:"101"}),"101");assert.equal(repair.transactionIdentity({type:"HEARTBEAT",lastTransactionID:"102"}),"102");
+assert.match(repair.VERSION,/1\.2\.0/);assert.match(repair.ACCOUNT_POSITION_STREAM_VERSION,/OANDA_ACCOUNT_POSITION_STREAM_TRUTH/);assert.equal(repair.POSITION_RECONCILIATION_WATCHDOG_MS,60000);
+assert.match(source,/\/api\/oanda\/transactions\/stream/);assert.match(source,/positionTransactionStreamConnected/);assert.match(source,/positionRefreshQueued/);assert.match(source,/ACCOUNT_STREAM_BOOTSTRAP/);assert.match(source,/ACCOUNT_STREAM_WATCHDOG/);assert.match(source,/TRANSACTION_STREAM:/);assert.match(source,/startAccountTransactionStream/);assert.match(source,/startPositionMonitor=wrapped/);assert.doesNotMatch(source,/setInterval\([^\n]*10000/);
+assert.match(workerExact,/https:\/\/stream-fxtrade\.oanda\.com/);assert.match(workerExact,/\/api\/oanda\/transactions\/stream/);assert.match(workerExact,/transactions\/stream/);assert.match(workerExact,/requireCloudflareAccess/);assert.match(workerExact,/verifyFullAccountIdentity/);assert.match(workerExact,/X-CTE-Account-Stream/);
+assert.match(index,/state\.positionTimer=setInterval\(refreshOpenPositions,10000\)/,"legacy HTML poll remains only as the base implementation that the runtime streaming-truth layer replaces");
+
+console.log("Forensic runtime repair certified: Open Positions is bootstrapped from OANDA openPositions, account membership/units/side are invalidated immediately by the exact-account transaction stream, live bid/ask buckets drive the mark, queued transaction refreshes cannot be dropped during an in-flight snapshot, and the old 10-second poll is replaced by a 60-second reconciliation watchdog.");

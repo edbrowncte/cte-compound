@@ -1,7 +1,10 @@
 (function installForensicRuntimeRepair(root){
   "use strict";
 
-  const VERSION="CTE_FORENSIC_RUNTIME_REPAIR@1.1.0";
+  const VERSION="CTE_FORENSIC_RUNTIME_REPAIR@1.2.0";
+  const ACCOUNT_POSITION_STREAM_VERSION="OANDA_ACCOUNT_POSITION_STREAM_TRUTH@1.0.0";
+  const POSITION_RECONCILIATION_WATCHDOG_MS=60000;
+  const POSITION_STREAM_RECONNECT_MS=1500;
   const H=root.CTE_HORIZON_HTL;
   const finite=Number.isFinite;
   const loadHealth=new Map();
@@ -86,11 +89,22 @@
     return{positive:finite(positive)&&positive>0?positive:null,negative:finite(negative)&&negative>0?negative:null};
   }
 
+  function positionPriceFromRaw(raw={}){
+    const bucketBid=Number(raw?.bids?.[0]?.price),bucketAsk=Number(raw?.asks?.[0]?.price),closeoutBid=Number(raw?.closeoutBid),closeoutAsk=Number(raw?.closeoutAsk);
+    return{
+      bid:finite(bucketBid)?bucketBid:finite(closeoutBid)?closeoutBid:NaN,
+      ask:finite(bucketAsk)?bucketAsk:finite(closeoutAsk)?closeoutAsk:NaN,
+      time:raw?.time||null,
+      tradeable:raw?.tradeable!==false,
+      priceBasis:finite(bucketBid)&&finite(bucketAsk)?"LIVE_OANDA_BID_ASK_BUCKETS":"OANDA_CLOSEOUT_FALLBACK",
+    };
+  }
+
   function livePositionMark(position,price,accountCurrency=""){
     const pair=String(position?.instrument||""),longUnits=Number(position?.long?.units||0),shortUnits=Math.abs(Number(position?.short?.units||0)),isLong=longUnits>0,units=isLong?longUnits:shortUnits,details=isLong?position?.long:position?.short,entry=Number(details?.averagePrice),current=Number(isLong?price?.bid:price?.ask);
     if(!pair||!(units>0)||!finite(entry)||!finite(current))return null;
     const direction=isLong?1:-1,delta=(current-entry)*direction,pips=delta*(String(pair).endsWith("JPY")?100:10000),change=entry?delta/entry*100:null,quotePnl=delta*units,quoteCurrency=pair.split("_")[1]||"",account=String(accountCurrency||"").toUpperCase(),factors=price?.homeConversion||conversionFactorsFromPrice(price),factor=quoteCurrency===account?1:(quotePnl>=0?factors?.positive:factors?.negative),unrealized=finite(factor)&&factor>0?quotePnl*factor:null;
-    return{pair,isLong,units,entry,current,pips,change,quotePnl,quoteCurrency,accountCurrency:account,homeConversionFactor:finite(factor)?factor:null,unrealizedPL:finite(unrealized)?unrealized:null,markTime:price?.time||null};
+    return{pair,isLong,units,entry,current,pips,change,quotePnl,quoteCurrency,accountCurrency:account,homeConversionFactor:finite(factor)?factor:null,unrealizedPL:finite(unrealized)?unrealized:null,markTime:price?.time||null,priceBasis:price?.priceBasis||null};
   }
 
   function applyLivePositionMarks(){
@@ -111,9 +125,101 @@
   function installLivePositionAccounting(){
     if(typeof state==="undefined")return false;
     if(typeof applyAccountFacts==="function"&&!applyAccountFacts?.cteLiveMarkWrapper){const prior=applyAccountFacts,wrapped=function(account,...rest){state.accountCurrency=String(account?.currency||state.accountCurrency||"").toUpperCase();return prior(account,...rest);};Object.defineProperty(wrapped,"cteLiveMarkWrapper",{value:true});try{applyAccountFacts=wrapped;root.applyAccountFacts=wrapped;}catch{}}
-    if(typeof setPositionPrice==="function"&&!setPositionPrice?.cteLiveMarkWrapper){const prior=setPositionPrice,wrapped=function(raw){const result=prior(raw);const stored=state.positionPrices?.get?.(raw?.instrument);if(stored){stored.homeConversion=conversionFactorsFromPrice(raw);stored.quoteHomeConversionFactors=raw?.quoteHomeConversionFactors||null;}return result;};Object.defineProperty(wrapped,"cteLiveMarkWrapper",{value:true});try{setPositionPrice=wrapped;root.setPositionPrice=wrapped;}catch{}}
+    if(typeof setPositionPrice==="function"&&!setPositionPrice?.cteLiveMarkWrapper){const prior=setPositionPrice,wrapped=function(raw){const result=prior(raw);const stored=state.positionPrices?.get?.(raw?.instrument);if(stored){const market=positionPriceFromRaw(raw);if(finite(market.bid))stored.bid=market.bid;if(finite(market.ask))stored.ask=market.ask;stored.time=market.time||stored.time;stored.tradeable=market.tradeable;stored.priceBasis=market.priceBasis;stored.homeConversion=conversionFactorsFromPrice(raw);stored.quoteHomeConversionFactors=raw?.quoteHomeConversionFactors||null;}return result;};Object.defineProperty(wrapped,"cteLiveMarkWrapper",{value:true});try{setPositionPrice=wrapped;root.setPositionPrice=wrapped;}catch{}}
     if(typeof renderOpenPositions==="function"&&!renderOpenPositions?.cteLiveMarkWrapper){const prior=renderOpenPositions,wrapped=function(...args){applyLivePositionMarks();return prior(...args);};Object.defineProperty(wrapped,"cteLiveMarkWrapper",{value:true});try{renderOpenPositions=wrapped;root.renderOpenPositions=wrapped;}catch{}}
     if(typeof renderModelOperatingPerspective==="function"&&!renderModelOperatingPerspective?.cteLiveMarkWrapper){const prior=renderModelOperatingPerspective,wrapped=function(...args){applyLivePositionMarks();return prior(...args);};Object.defineProperty(wrapped,"cteLiveMarkWrapper",{value:true});try{renderModelOperatingPerspective=wrapped;root.renderModelOperatingPerspective=wrapped;}catch{}}
+    return true;
+  }
+
+  function transactionChangesAccount(transaction){return Boolean(transaction&&typeof transaction==="object"&&String(transaction.type||"").toUpperCase()!=="HEARTBEAT");}
+  function transactionIdentity(transaction){const value=transaction?.id??transaction?.lastTransactionID;return value===undefined||value===null?null:String(value);}
+  function setPositionStreamStatus(text,live=false){
+    if(typeof document==="undefined")return;
+    const node=document.getElementById("positionsStreamStatus");if(!node)return;node.textContent=text;node.classList.toggle("live",Boolean(live));
+  }
+  function positionStreamStatus(){
+    if(typeof state==="undefined")return"Account stream unavailable";
+    if(typeof accountReady==="function"&&!accountReady())return"Not connected";
+    if(state.positionTransactionStreamConnected&&state.positionStreamController)return"Account + pricing streams live";
+    if(state.positionTransactionStreamConnected)return"Account transaction stream live";
+    return"Account stream reconnecting";
+  }
+  function publishPositionStreamStatus(){const text=positionStreamStatus(),live=text.includes("live");setPositionStreamStatus(text,live);return text;}
+
+  function queuePositionTruthRefresh(transaction=null){
+    if(typeof state==="undefined")return false;
+    if(transaction){state.positionLastTransactionType=String(transaction.type||"TRANSACTION");state.positionLastTransactionID=transactionIdentity(transaction);state.positionLastTransactionAt=transaction.time||new Date().toISOString();}
+    state.positionRefreshQueued=true;
+    if(state.positionTransactionRefreshTimer)return true;
+    state.positionTransactionRefreshTimer=setTimeout(()=>{
+      state.positionTransactionRefreshTimer=null;
+      const reason=transaction?`TRANSACTION_STREAM:${String(transaction.type||"TRANSACTION")}`:"TRANSACTION_STREAM";
+      if(typeof refreshOpenPositions==="function")void refreshOpenPositions(reason);
+    },25);
+    return true;
+  }
+
+  async function startAccountTransactionStream(){
+    if(typeof state==="undefined"||typeof fetch!=="function"||typeof accountReady!=="function"||!accountReady())return false;
+    if(state.positionTransactionStreamController&&!state.positionTransactionStreamController.signal?.aborted)return true;
+    clearTimeout(state.positionTransactionReconnectTimer);state.positionTransactionReconnectTimer=null;
+    const controller=new AbortController();state.positionTransactionStreamController=controller;state.positionTransactionStreamConnected=false;state.positionTransactionStreamVersion=ACCOUNT_POSITION_STREAM_VERSION;publishPositionStreamStatus();
+    try{
+      const response=await fetch("/api/oanda/transactions/stream",{method:"GET",headers:{Accept:"application/octet-stream"},credentials:"same-origin",cache:"no-store",signal:controller.signal});
+      if(!response.ok){const payload=await response.json().catch(()=>({}));throw new Error(payload.error||payload.code||`HTTP ${response.status}`);}
+      state.positionTransactionStreamConnected=true;state.positionTransactionStreamError=null;state.positionTransactionConnectedAt=new Date().toISOString();publishPositionStreamStatus();
+      queuePositionTruthRefresh({type:"STREAM_CONNECTED",time:state.positionTransactionConnectedAt});
+      const reader=response.body?.getReader?.();if(!reader)throw new Error("Transaction stream response body is unavailable.");
+      const decoder=new TextDecoder();let buffer="";
+      while(accountReady()&&!controller.signal.aborted){
+        const{value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split("\n");buffer=lines.pop()||"";
+        for(const line of lines){if(!line.trim())continue;let transaction;try{transaction=JSON.parse(line);}catch{continue;}
+          const id=transactionIdentity(transaction);if(id)state.positionLastTransactionID=id;
+          if(String(transaction?.type||"").toUpperCase()==="HEARTBEAT"){state.positionTransactionHeartbeatAt=transaction.time||new Date().toISOString();publishPositionStreamStatus();continue;}
+          if(transactionChangesAccount(transaction))queuePositionTruthRefresh(transaction);
+        }
+      }
+    }catch(error){if(controller.signal.aborted)return false;state.positionTransactionStreamError=String(error?.message||error);}
+    finally{
+      if(state.positionTransactionStreamController===controller)state.positionTransactionStreamController=null;
+      state.positionTransactionStreamConnected=false;publishPositionStreamStatus();
+      if(typeof accountReady==="function"&&accountReady()&&!controller.signal.aborted){clearTimeout(state.positionTransactionReconnectTimer);state.positionTransactionReconnectTimer=setTimeout(()=>{state.positionTransactionReconnectTimer=null;if(accountReady())void startAccountTransactionStream();},POSITION_STREAM_RECONNECT_MS);}
+    }
+    return false;
+  }
+
+  function stopAccountTransactionStream(){
+    if(typeof state==="undefined")return;
+    clearTimeout(state.positionTransactionReconnectTimer);state.positionTransactionReconnectTimer=null;clearTimeout(state.positionTransactionRefreshTimer);state.positionTransactionRefreshTimer=null;
+    state.positionTransactionStreamController?.abort?.();state.positionTransactionStreamController=null;state.positionTransactionStreamConnected=false;state.positionRefreshQueued=false;publishPositionStreamStatus();
+  }
+
+  function installStreamingPositionTruth(){
+    if(typeof state==="undefined")return false;
+    state.positionTransactionStreamVersion=ACCOUNT_POSITION_STREAM_VERSION;
+    if(typeof refreshOpenPositions==="function"&&!refreshOpenPositions?.cteStreamingTruthWrapper){
+      const prior=refreshOpenPositions,wrapped=async function(reason="ACCOUNT_POSITION_RECONCILIATION"){
+        if(typeof accountReady==="function"&&!accountReady())return;
+        if(state.positionsBusy){state.positionRefreshQueued=true;state.positionRefreshQueuedReason=reason;return;}
+        let passes=0,currentReason=reason;
+        do{
+          state.positionRefreshQueued=false;state.positionRefreshQueuedReason=null;state.positionRefreshSource=currentReason;await prior();state.positionSnapshotAt=new Date().toISOString();state.positionSnapshotSource=currentReason;passes++;currentReason="QUEUED_TRANSACTION_RECONCILIATION";
+        }while(state.positionRefreshQueued&&passes<4&&(typeof accountReady!=="function"||accountReady()));
+        if(state.positionRefreshQueued){clearTimeout(state.positionTransactionRefreshTimer);state.positionTransactionRefreshTimer=setTimeout(()=>{state.positionTransactionRefreshTimer=null;if(typeof refreshOpenPositions==="function"&&(typeof accountReady!=="function"||accountReady()))void refreshOpenPositions("QUEUED_TRANSACTION_RECONCILIATION");},25);}
+        publishPositionStreamStatus();
+      };
+      Object.defineProperty(wrapped,"cteStreamingTruthWrapper",{value:true});try{refreshOpenPositions=wrapped;root.refreshOpenPositions=wrapped;}catch{}
+    }
+    if(typeof startPositionMonitor==="function"&&!startPositionMonitor?.cteStreamingTruthWrapper){
+      const wrapped=function(){clearInterval(state.positionTimer);state.positionTimer=null;void refreshOpenPositions("ACCOUNT_STREAM_BOOTSTRAP");void startAccountTransactionStream();state.positionTimer=setInterval(()=>{if(typeof accountReady==="function"&&accountReady())void refreshOpenPositions("ACCOUNT_STREAM_WATCHDOG");},POSITION_RECONCILIATION_WATCHDOG_MS);};
+      Object.defineProperty(wrapped,"cteStreamingTruthWrapper",{value:true});try{startPositionMonitor=wrapped;root.startPositionMonitor=wrapped;}catch{}
+    }
+    if(typeof stopPositionMonitor==="function"&&!stopPositionMonitor?.cteStreamingTruthWrapper){
+      const prior=stopPositionMonitor,wrapped=function(...args){stopAccountTransactionStream();const result=prior(...args);publishPositionStreamStatus();return result;};Object.defineProperty(wrapped,"cteStreamingTruthWrapper",{value:true});try{stopPositionMonitor=wrapped;root.stopPositionMonitor=wrapped;}catch{}
+    }
+    if(typeof startPositionStream==="function"&&!startPositionStream?.cteStreamingTruthWrapper){
+      const prior=startPositionStream,wrapped=function(...args){const result=prior(...args);setTimeout(publishPositionStreamStatus,50);return result;};Object.defineProperty(wrapped,"cteStreamingTruthWrapper",{value:true});try{startPositionStream=wrapped;root.startPositionStream=wrapped;}catch{}
+    }
     return true;
   }
 
@@ -132,7 +238,7 @@
   }
 
   installEventFeatures();
-  const install=()=>{installEventFeatures();installLoadHealth();installSupportCache();installLivePositionAccounting();};
-  root.CTEForensicRuntimeRepair=Object.freeze({VERSION,pipScale,enrichedEventFeatures,recordLoadHealth,healthForSupportKey,normalizeSupportRecord,RateFluctuationSupportMap,conversionFactorsFromPrice,livePositionMark,applyLivePositionMarks,installEventFeatures,installLoadHealth,installSupportCache,installLivePositionAccounting});
+  const install=()=>{installEventFeatures();installLoadHealth();installSupportCache();installLivePositionAccounting();installStreamingPositionTruth();};
+  root.CTEForensicRuntimeRepair=Object.freeze({VERSION,ACCOUNT_POSITION_STREAM_VERSION,POSITION_RECONCILIATION_WATCHDOG_MS,POSITION_STREAM_RECONNECT_MS,pipScale,enrichedEventFeatures,recordLoadHealth,healthForSupportKey,normalizeSupportRecord,RateFluctuationSupportMap,conversionFactorsFromPrice,positionPriceFromRaw,livePositionMark,applyLivePositionMarks,transactionChangesAccount,transactionIdentity,queuePositionTruthRefresh,startAccountTransactionStream,stopAccountTransactionStream,positionStreamStatus,publishPositionStreamStatus,installEventFeatures,installLoadHealth,installSupportCache,installLivePositionAccounting,installStreamingPositionTruth});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(typeof globalThis!=="undefined"?globalThis:self);
