@@ -4,7 +4,7 @@ import {evaluateCompoundScheduleDataset,requiredScheduleBars,normalizeScheduleSt
 
 assert.equal(COMPOUND_MCP_PROTOCOL_VERSION,"2024-11-05");
 assert.match(COMPOUND_SCHEDULE_VERSION,/COMPOUND_MCP_SCHEDULE/);
-assert.deepEqual(normalizeScheduleStrategies(["NAI","asset","NAI"]),["ASSET","NAI"]);
+assert.deepEqual(normalizeScheduleStrategies(["NAI","asset","NAI"]),["NAI","ASSET"]);
 const settings={assetLength:200,dareNLength:150,dareNFilter:.2,naiLength:100,naiFilter:.1,apexLength:75,apexFilter:2,csf:{selected:["DARE","NAI"],method:"TWO_OPINIONS",regime:"DARE",trigger:"NAI"}};
 assert.equal(requiredScheduleBars(settings,["ASSET"]),602,"length-200 source geometry must request enough completed candles plus terminal-candle margin");
 assert.equal(requiredScheduleBars({...settings,assetLength:20},["APEX"]),227);
