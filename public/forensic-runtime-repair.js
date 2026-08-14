@@ -1,7 +1,7 @@
 (function installForensicRuntimeRepair(root){
   "use strict";
 
-  const VERSION="CTE_FORENSIC_RUNTIME_REPAIR@1.0.1";
+  const VERSION="CTE_FORENSIC_RUNTIME_REPAIR@1.1.0";
   const H=root.CTE_HORIZON_HTL;
   const finite=Number.isFinite;
   const loadHealth=new Map();
@@ -80,6 +80,43 @@
     set(key,value){return super.set(key,normalizeSupportRecord(value,healthForSupportKey(key)));}
   }
 
+  function conversionFactorsFromPrice(price={}){
+    const source=price?.quoteHomeConversionFactors||price?.homeConversions||null;
+    const positive=Number(source?.positiveUnits),negative=Number(source?.negativeUnits);
+    return{positive:finite(positive)&&positive>0?positive:null,negative:finite(negative)&&negative>0?negative:null};
+  }
+
+  function livePositionMark(position,price,accountCurrency=""){
+    const pair=String(position?.instrument||""),longUnits=Number(position?.long?.units||0),shortUnits=Math.abs(Number(position?.short?.units||0)),isLong=longUnits>0,units=isLong?longUnits:shortUnits,details=isLong?position?.long:position?.short,entry=Number(details?.averagePrice),current=Number(isLong?price?.bid:price?.ask);
+    if(!pair||!(units>0)||!finite(entry)||!finite(current))return null;
+    const direction=isLong?1:-1,delta=(current-entry)*direction,pips=delta*(String(pair).endsWith("JPY")?100:10000),change=entry?delta/entry*100:null,quotePnl=delta*units,quoteCurrency=pair.split("_")[1]||"",account=String(accountCurrency||"").toUpperCase(),factors=price?.homeConversion||conversionFactorsFromPrice(price),factor=quoteCurrency===account?1:(quotePnl>=0?factors?.positive:factors?.negative),unrealized=finite(factor)&&factor>0?quotePnl*factor:null;
+    return{pair,isLong,units,entry,current,pips,change,quotePnl,quoteCurrency,accountCurrency:account,homeConversionFactor:finite(factor)?factor:null,unrealizedPL:finite(unrealized)?unrealized:null,markTime:price?.time||null};
+  }
+
+  function applyLivePositionMarks(){
+    if(typeof state==="undefined"||!(state.positionPrices instanceof Map))return[];
+    const marks=[];
+    for(const position of state.openPositions||[]){
+      const price=state.positionPrices.get(position.instrument);if(!price)continue;
+      const mark=livePositionMark(position,price,state.accountCurrency||"");if(!mark)continue;
+      const long=Number(position.long?.units||0)>0,details=long?position.long:position.short,broker=Number(details?.unrealizedPL??position.unrealizedPL);
+      position.cteBrokerUnrealizedPL=finite(broker)?broker:null;position.cteLiveMark=mark;
+      if(finite(mark.unrealizedPL)){position.unrealizedPL=mark.unrealizedPL;if(details)details.unrealizedPL=mark.unrealizedPL;}
+      else if(finite(broker)&&Math.sign(broker)!==0&&Math.sign(mark.quotePnl)!==0&&Math.sign(broker)!==Math.sign(mark.quotePnl)){position.unrealizedPL=Number.NaN;if(details)details.unrealizedPL=Number.NaN;}
+      marks.push(mark);
+    }
+    return marks;
+  }
+
+  function installLivePositionAccounting(){
+    if(typeof state==="undefined")return false;
+    if(typeof applyAccountFacts==="function"&&!applyAccountFacts?.cteLiveMarkWrapper){const prior=applyAccountFacts,wrapped=function(account,...rest){state.accountCurrency=String(account?.currency||state.accountCurrency||"").toUpperCase();return prior(account,...rest);};Object.defineProperty(wrapped,"cteLiveMarkWrapper",{value:true});try{applyAccountFacts=wrapped;root.applyAccountFacts=wrapped;}catch{}}
+    if(typeof setPositionPrice==="function"&&!setPositionPrice?.cteLiveMarkWrapper){const prior=setPositionPrice,wrapped=function(raw){const result=prior(raw);const stored=state.positionPrices?.get?.(raw?.instrument);if(stored){stored.homeConversion=conversionFactorsFromPrice(raw);stored.quoteHomeConversionFactors=raw?.quoteHomeConversionFactors||null;}return result;};Object.defineProperty(wrapped,"cteLiveMarkWrapper",{value:true});try{setPositionPrice=wrapped;root.setPositionPrice=wrapped;}catch{}}
+    if(typeof renderOpenPositions==="function"&&!renderOpenPositions?.cteLiveMarkWrapper){const prior=renderOpenPositions,wrapped=function(...args){applyLivePositionMarks();return prior(...args);};Object.defineProperty(wrapped,"cteLiveMarkWrapper",{value:true});try{renderOpenPositions=wrapped;root.renderOpenPositions=wrapped;}catch{}}
+    if(typeof renderModelOperatingPerspective==="function"&&!renderModelOperatingPerspective?.cteLiveMarkWrapper){const prior=renderModelOperatingPerspective,wrapped=function(...args){applyLivePositionMarks();return prior(...args);};Object.defineProperty(wrapped,"cteLiveMarkWrapper",{value:true});try{renderModelOperatingPerspective=wrapped;root.renderModelOperatingPerspective=wrapped;}catch{}}
+    return true;
+  }
+
   function installEventFeatures(){root.eventFeatures=enrichedEventFeatures;try{eventFeatures=enrichedEventFeatures;}catch{}}
   function installLoadHealth(){
     if(typeof loadEventRow!=="function"||loadEventRow?.cteForensicHealthWrapper)return false;
@@ -95,7 +132,7 @@
   }
 
   installEventFeatures();
-  const install=()=>{installEventFeatures();installLoadHealth();installSupportCache();};
-  root.CTEForensicRuntimeRepair=Object.freeze({VERSION,pipScale,enrichedEventFeatures,recordLoadHealth,healthForSupportKey,normalizeSupportRecord,RateFluctuationSupportMap,installEventFeatures,installLoadHealth,installSupportCache});
+  const install=()=>{installEventFeatures();installLoadHealth();installSupportCache();installLivePositionAccounting();};
+  root.CTEForensicRuntimeRepair=Object.freeze({VERSION,pipScale,enrichedEventFeatures,recordLoadHealth,healthForSupportKey,normalizeSupportRecord,RateFluctuationSupportMap,conversionFactorsFromPrice,livePositionMark,applyLivePositionMarks,installEventFeatures,installLoadHealth,installSupportCache,installLivePositionAccounting});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(typeof globalThis!=="undefined"?globalThis:self);

@@ -4,7 +4,7 @@ import { candles, currentEvent } from "./horizon-platform-engine.js";
 import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
 import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
 
-const IO_DUAL_VERSION="INDICATOR_ONLY_DUAL@1.0.0";
+const IO_DUAL_VERSION="INDICATOR_ONLY_DUAL@1.1.0";
 const TF_MS=Object.freeze({S5:5000,S30:30000,M1:60000,M5:300000,M15:900000,M30:1800000,H1:3600000,H4:14400000,D:86400000,W:604800000});
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
 
@@ -71,7 +71,7 @@ export class HtlEngine extends IndicatorOnlyUnitsEngine{
   async tickTicket(state,ticket,token,accountId){
     const runtime=ticketRuntime(state,ticket.slot),now=Date.now();if(Number(runtime.nextDue)>now)return;
     runtime.nextDue=now+ticketCadenceMs(ticket);
-    const count=Math.max(650,Math.min(1200,ticket.length*3+100)),data=await candles(ticket.pair,token,ticket.timeframe,count),lastCandle=data.at(-1)?.time;state.lastScanAt=new Date().toISOString();
+    const count=Math.max(650,Math.min(5000,ticket.length*3+100)),data=await candles(ticket.pair,token,ticket.timeframe,count),lastCandle=data.at(-1)?.time;state.lastScanAt=new Date().toISOString();
     if(!lastCandle){state.lastNoOrderReason=`IO Ticket ${ticket.slot} · no completed ${ticket.timeframe} candle for ${ticket.pair}`;return;}
     const settings=__indicatorOnlyTest.indicatorOnlySettings(ticket),event=currentEvent(data,ticket.pair,ticket.timeframe,ticket.indicator,settings),positions=await this.loadPositions(token,accountId),position=positions.find(item=>item.instrument===ticket.pair),existing=__indicatorOnlyTest.positionDirection(position),observedAt=eventObservedAt(event,ticket.timeframe);
     state.openPositionsCount=positions.length;runtime.lastCandle=lastCandle;runtime.lastSignalAt=new Date().toISOString();runtime.lastDirection=Number(event?.direction||0);runtime.lastEventId=event?.id||null;runtime.lastSignal=event?.direction>0?"BUY":event?.direction<0?"SELL":null;runtime.units=ticket.units;runtime.eventStartTime=event?.startTime||null;runtime.eventObservedAt=observedAt;runtime.eventBars=Number(event?.bars)||null;

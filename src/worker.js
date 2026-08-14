@@ -1,5 +1,5 @@
 import horizonWorker from "./worker-horizon-base.js";
-export { HtlEngine } from "./engine-signal-provenance.js";
+export { HtlEngine } from "./engine-live-signal-price.js";
 import { requireCloudflareAccess } from "./access-auth.js";
 import { PAIRS, TIMEFRAMES } from "./horizon-platform-engine.js";
 import {

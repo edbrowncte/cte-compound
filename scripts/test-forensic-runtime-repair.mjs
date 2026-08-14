@@ -45,4 +45,12 @@ assert.equal(genuinelyShort.supportingStatus,"DEGRADED_HISTORY");
 const missingPnl=repair.normalizeSupportRecord({supportingStatus:"DEGRADED_HISTORY",supportingError:null,supportingHistoryBars:4999,supportingHistoryTarget:5000,supportingFinalEvents:400,supportingMagnitudeEvents:0,corroborated:false});
 assert.equal(missingPnl.supportingStatus,"DEGRADED_HISTORY","one-candle tolerance must not hide missing P/L evidence");
 
-console.log("Forensic runtime repair certified: canonical events retain Result/Profit fields and healthy 4,999 completed-candle support is not falsely degraded.");
+const audChf={instrument:"AUD_CHF",long:{units:"1800",averagePrice:"0.57528",unrealizedPL:"0.11"},short:{units:"0"},unrealizedPL:"0.11"};
+const livePrice={bid:.57506,ask:.57508,time:"2026-08-14T08:00:00.000Z",homeConversion:{positive:1.23,negative:1.24}};
+const liveMark=repair.livePositionMark(audChf,livePrice,"USD");
+assert.ok(liveMark);assert.equal(Number(liveMark.pips.toFixed(1)),-2.2);assert.ok(liveMark.quotePnl<0);assert.ok(liveMark.unrealizedPL<0,"a long below entry must never acquire a positive live-mark P/L through currency conversion");assert.equal(liveMark.homeConversionFactor,1.24,"negative quote P/L must use the negative-units home conversion factor");
+const sameQuote=repair.livePositionMark(audChf,{...livePrice,homeConversion:{}},"CHF");assert.ok(sameQuote.unrealizedPL<0);assert.equal(sameQuote.homeConversionFactor,1);
+const unavailableConversion=repair.livePositionMark(audChf,{...livePrice,homeConversion:{}},"USD");assert.equal(unavailableConversion.unrealizedPL,null,"cross-currency home P/L must not be fabricated without a conversion factor");
+assert.match(repair.VERSION,/1\.1\.0/);
+
+console.log("Forensic runtime repair certified: canonical event outcomes remain intact and open-position Pips, Change, and home-currency P/L share one live executable mark with sign-preserving OANDA conversion semantics.");
