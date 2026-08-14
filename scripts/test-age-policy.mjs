@@ -4,6 +4,8 @@ import {__executionTest} from "../src/engine-certified-execution.js";
 import {__nemotronTest} from "../src/engine-nemotron-base.js";
 
 const certified=fs.readFileSync("src/engine-certified-execution.js","utf8");
+const certifiedBase=fs.readFileSync("src/engine-certified-execution-base.js","utf8");
+const certifiedContract=`${certified}\n${certifiedBase}`;
 const nemotron=fs.readFileSync("src/engine-nemotron-base.js","utf8");
 const html=fs.readFileSync("public/index.html","utf8");
 
@@ -22,14 +24,15 @@ const sundayBefore=__executionTest.ageMarketWindow(new Date("2026-08-16T21:04:00
 const sundayOpen=__executionTest.ageMarketWindow(new Date("2026-08-16T21:05:00.000Z"));
 assert.equal(before.weekendLock,false);assert.equal(flatten.weekendLock,true);assert.equal(flatten.flattenWindow,true);assert.equal(lateFriday.weekendLock,true);assert.equal(lateFriday.flattenWindow,false);assert.equal(saturday.weekendLock,true);assert.equal(sundayBefore.weekendLock,true);assert.equal(sundayOpen.weekendLock,false);
 
-assert.match(certified,/AGE Friday weekend flatten · 3:57 PM Nashville/);
-assert.match(certified,/DEPLOYED_IN_QUALIFIED_POSITIVE_EXPECTATION_OR_WEEKEND_FLAT/);
-assert.match(certified,/AGE_MARKET_REENGAGEMENT/);
-assert.match(certified,/ageWeekendClose:"Friday 15:57 America\/Chicago"/);
-assert.match(certified,/AGE_EXPECTATION_MIGRATION/);
-assert.match(certified,/AGE_EXPECTATION_DECISION/);
-assert.match(certified,/AGE reallocation · GE delta/);
-assert.equal((certified.match(/\n  async tick\(\)\{/g)||[]).length,1,"AGE weekend policy must live in the one effective certified tick; shadowed duplicate ticks are forbidden");
+assert.match(certifiedContract,/AGE Friday weekend flatten · 3:57 PM Nashville/);
+assert.match(certifiedContract,/DEPLOYED_IN_QUALIFIED_POSITIVE_EXPECTATION_OR_WEEKEND_FLAT/);
+assert.match(certifiedContract,/AGE_MARKET_REENGAGEMENT/);
+assert.match(certifiedContract,/ageWeekendClose:"Friday 15:57 America\/Chicago"/);
+assert.match(certifiedContract,/AGE_EXPECTATION_MIGRATION/);
+assert.match(certifiedContract,/AGE_EXPECTATION_DECISION/);
+assert.match(certifiedContract,/AGE reallocation · GE delta/);
+assert.equal((certified.match(/\n  async tick\(\)\{/g)||[]).length,1,"AGE weekend policy must live in the one effective exact-account certified tick; shadowed duplicate ticks are forbidden in the active wrapper");
+assert.match(certified,/resolveExactAccountAuthority/);
 assert.match(nemotron,/AGE_CAPITAL_REALLOCATION_DISCRETION/);
 assert.match(nemotron,/AGE_SELECT_BEST_QUALIFIED_DEPLOYMENT/);
 assert.match(nemotron,/Qualified same-pair reversals do not inherit capital automatically/);
@@ -41,4 +44,4 @@ assert.match(html,/id="AgeAction"/);assert.match(html,/id="AgeExpectation"/);ass
 assert.equal(__nemotronTest.AI_POLICY,"AGE_CAPITAL_REALLOCATION_DISCRETION");
 assert.equal(__nemotronTest.AI_TASK_NAME,"AGE");
 assert.equal(__nemotronTest.AI_TASK,"ADMINISTRATING_GREAT_EXPECTATIONS");
-console.log("AGE v2 open-market engagement, Great Expectation reallocation, one effective tick, and Nashville Friday 15:57 weekend-flat window verified.");
+console.log("AGE v2 open-market engagement, Great Expectation reallocation, exact account authority, one effective tick, and Nashville Friday 15:57 weekend-flat window verified.");

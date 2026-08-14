@@ -20,14 +20,15 @@ assert.equal(url.pathname,"/v3/accounts/001-001-1111111-001/candles/latest");
 assert.equal(url.searchParams.get("candleSpecifications"),"EUR_USD:M5:M");
 assert.equal(url.searchParams.get("smooth"),"false");
 
-const execution=await readFile(new URL("../src/engine-certified-execution.js",import.meta.url),"utf8");
+const execution=await readFile(new URL("../src/engine-certified-execution.js",import.meta.url),"utf8"),executionBase=await readFile(new URL("../src/engine-certified-execution-base.js",import.meta.url),"utf8").catch(()=>""),executionContract=`${execution}\n${executionBase}`;
 assert.match(execution,/executionClockCandle\(path=>callOanda\(path,token\),accountId,config\.timeframe\)/,"Certified execution must consume the isolated account-scoped current-candle clock");
-assert.doesNotMatch(execution,/candles\("EUR_USD",token,config\.timeframe,2\)/,"Legacy two-candle history request must not remain the execution clock");
-assert.match(execution,/executionClockSource:state\.executionClockSource\|\|null/);
-assert.match(execution,/executionClockCandle:state\.executionClockCandle\|\|null/);
-assert.match(execution,/executionClockProbeAt:state\.executionClockProbeAt\|\|null/);
+assert.doesNotMatch(executionContract,/candles\("EUR_USD",token,config\.timeframe,2\)/,"Legacy two-candle history request must not remain the execution clock");
+assert.match(executionContract,/executionClockSource:state\.executionClockSource\|\|null/);
+assert.match(executionContract,/executionClockCandle:state\.executionClockCandle\|\|null/);
+assert.match(executionContract,/executionClockProbeAt:state\.executionClockProbeAt\|\|null/);
+assert.match(execution,/resolveExactAccountAuthority/,"Execution clock must run only after exact configured-account authority is established");
 
 const registered=await readFile(new URL("../src/horizon-platform-engine.js",import.meta.url),"utf8");
 assert.doesNotMatch(registered,/candles\/latest|EXECUTION_CLOCK_SOURCE/,"Checksum-registered Horizon analytical source must remain execution-clock agnostic");
 
-console.log("Authoritative execution clock verified: account-scoped OANDA latest completed EUR/USD candle, incomplete-candle rejection, runtime observability, and registered Horizon source isolation are wired.");
+console.log("Authoritative execution clock verified: exact account authority precedes account-scoped OANDA latest completed EUR/USD candle, incomplete-candle rejection, runtime observability, and registered Horizon source isolation are wired.");

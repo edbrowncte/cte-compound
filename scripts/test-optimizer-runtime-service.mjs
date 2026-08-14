@@ -26,10 +26,11 @@ const service=new OptimizerRuntimeService(engine);
 let status=await service.status();assert.equal(status.optimizerVersion,RUNTIME_OPTIMIZER_VERSION);assert.equal(status.optimizerCycleIndex,0,"optimizer generation change must reset the persisted cursor");assert.equal(status.optimizerLastError,null,"prior-generation optimizer errors must not survive generation reset");assert.equal(status.optimizerPersistenceHealthy,true);assert.equal(status.optimizerServiceVersion,OPTIMIZER_SERVICE_VERSION);
 status=await service.run();assert.equal(status.optimizerLastDataset,"EUR_CAD|M5");assert.equal(status.optimizerLastError,null);assert.equal(status.optimizerPersistenceHealthy,true);assert.ok(storage.writes.includes("optimizerRuntimeState"));
 
-const certified=await readFile(new URL("../src/engine-certified-execution.js",import.meta.url),"utf8");
+const certified=await readFile(new URL("../src/engine-certified-execution.js",import.meta.url),"utf8"),certifiedBase=await readFile(new URL("../src/engine-certified-execution-base.js",import.meta.url),"utf8"),certifiedContract=`${certified}\n${certifiedBase}`;
 const worker=await readFile(new URL("../src/worker-base.js",import.meta.url),"utf8");
 const tickBody=certified.slice(certified.indexOf("async tick()"));
-assert.doesNotMatch(tickBody,/this\.optimizeNext\(/,"The trading tick must not execute optimizer work.");
-assert.match(certified,/path==="\/optimizer\/tick"/);
+assert.doesNotMatch(tickBody,/this\.optimizeNext\(/,"The active exact-account trading tick must not execute optimizer work.");
+assert.match(certifiedContract,/path==="\/optimizer\/tick"/);
+assert.match(certified,/resolveExactAccountAuthority/);
 assert.ok(worker.indexOf('https://engine/tick')<worker.indexOf('https://engine/optimizer/tick'),"Trading must run before the independent optimizer budget.");
-console.log("Optimizer generation reset, active pair/timeframe backfill priority, independent runtime state, trading-first scheduling, and persistence recovery verified.");
+console.log("Optimizer generation reset, active pair/timeframe backfill priority, independent runtime state, exact account trading tick, trading-first scheduling, and persistence recovery verified.");

@@ -2,6 +2,8 @@ import {readFile} from "node:fs/promises";
 
 const worker=await readFile(new URL("../src/worker.js",import.meta.url),"utf8");
 const execution=await readFile(new URL("../src/engine-certified-execution.js",import.meta.url),"utf8");
+const executionBase=await readFile(new URL("../src/engine-certified-execution-base.js",import.meta.url),"utf8").catch(()=>"");
+const accountAuthority=await readFile(new URL("../src/account-authority.js",import.meta.url),"utf8").catch(()=>"");
 const indicatorOnly=await readFile(new URL("../src/engine-indicator-only.js",import.meta.url),"utf8").catch(()=>"");
 const indicatorOnlyUnits=await readFile(new URL("../src/engine-indicator-only-units.js",import.meta.url),"utf8").catch(()=>"");
 const indicatorOnlyDual=await readFile(new URL("../src/engine-indicator-only-dual.js",import.meta.url),"utf8").catch(()=>"");
@@ -9,6 +11,7 @@ const closeRetry=await readFile(new URL("../src/engine-close-retry.js",import.me
 const signalProvenance=await readFile(new URL("../src/engine-signal-provenance.js",import.meta.url),"utf8").catch(()=>"");
 const liveSignalPrice=await readFile(new URL("../src/engine-live-signal-price.js",import.meta.url),"utf8").catch(()=>"");
 const analytics=await readFile(new URL("../src/engine.js",import.meta.url),"utf8");
+const executionContract=`${execution}\n${executionBase}`;
 
 const directExport=/export \{ HtlEngine \} from "\.\/engine-certified-execution\.js"/.test(worker);
 const ioExport=/export \{ HtlEngine \} from "\.\/engine-indicator-only\.js"/.test(worker);
@@ -53,7 +56,16 @@ if(liveSignalPriceExport){
   if(!/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION/.test(liveSignalPrice))throw new Error("Live signal-price wrapper must declare executable-side OANDA quote authority");
   if(!/sourceCandleClose/.test(liveSignalPrice)||!/signalPriceSide/.test(liveSignalPrice))throw new Error("Live signal-price wrapper must retain source-candle close while identifying BID/ASK signal side");
   if(!/persistSignalRegistration/.test(liveSignalPrice)||!/SIGNAL_PROVENANCE_REGISTERED/.test(liveSignalPrice))throw new Error("Live signal price must remain inside durable signal-provenance registration before order submission");
+  if(!/resolveIndicatorOnlyAccount/.test(liveSignalPrice)||!/resolveExactAccountAuthority/.test(liveSignalPrice))throw new Error("Terminal IO execution must use exact configured-account authority");
 }
+
+const authorityWrapper=/engine-certified-execution-base\.js/.test(execution)&&/class HtlEngine extends CertifiedExecutionBase/.test(execution);
+if(authorityWrapper){
+  if(!/from "\.\/engine\.js"/.test(executionBase)||!/extends CertifiedAnalyticsEngine/.test(executionBase))throw new Error("Certified execution base must retain direct analytical inheritance");
+  if(!/resolveExactAccountAuthority/.test(execution)||!/EXACT_OANDA_ACCOUNT_AUTHORITY/.test(accountAuthority))throw new Error("Certified execution wrapper must enforce exact configured-account authority");
+  if(!/cachedAccountAuthority/.test(accountAuthority)||!/expiresAt/.test(accountAuthority))throw new Error("Configured account authority must be durably cacheable instead of rediscovered every tick");
+  if(!/ACCOUNT_IDENTITY_MISMATCH/.test(accountAuthority)||!/OANDA timeout at/.test(accountAuthority)||!/path/.test(accountAuthority))throw new Error("Account authority must preserve identity, route, and transport failure classes");
+}else if(/class HtlEngine extends/.test(execution)&&!/from "\.\/engine\.js"/.test(execution))throw new Error("Execution layer must extend the certified analytical engine entry point");
 
 const required=[
   [/extends CertifiedAnalyticsEngine/,"certified analytical inheritance"],
@@ -69,11 +81,9 @@ const required=[
   [/reconciliationCadence:"new-completed-candle-only"/,"truthful reconciliation cadence status"],
   [/deploymentCandidates=.*reversals.*newEntries/s,"reversal and alternative deployment competition"],
   [/const selected=await this\.choose\(deploymentCandidates\)/,"Nemotron bounded to III-qualified deployment candidates"],
-  [/Configured OANDA account/,"exact configured account enforcement"],
 ];
-for(const[pattern,label]of required)if(!pattern.test(execution))throw new Error(`Missing ${label}`);
-if(/class HtlEngine extends/.test(execution)&&!/from "\.\/engine\.js"/.test(execution))throw new Error("Execution layer must extend the certified analytical engine entry point");
+for(const[pattern,label]of required)if(!pattern.test(executionContract))throw new Error(`Missing ${label}`);
 if(!/SIX_INDEPENDENT_REGISTERED_HORIZON_STATE_MACHINES/.test(analytics))throw new Error("Certified six-strategy analytical contract is missing");
-if(/BLOCKED_PENDING_USER_DEPLOYMENT_APPROVAL/.test(execution))throw new Error("Private execution must not be deployment-blocked");
-const topology=liveSignalPriceExport?"live executable-side signal-price wrapper over durable signal provenance, execution-clock authority, bounded OANDA close retry, and dual exact-unit IO":signalProvenanceExport?"signal-provenance and execution-clock authority wrapper over bounded OANDA close retry and dual exact-unit IO":closeRetryExport?"bounded OANDA close retry wrapper over dual exact-unit IO":ioDualExport?"dual Indicator Only wrapper over exact-unit IO":ioUnitsExport?"Indicator Only units wrapper over exclusive IO":ioExport?"Indicator Only wrapper":"direct certified Worker";
+if(/BLOCKED_PENDING_USER_DEPLOYMENT_APPROVAL/.test(executionContract))throw new Error("Private execution must not be deployment-blocked");
+const topology=liveSignalPriceExport?"live executable-side signal-price wrapper over exact cached OANDA account authority, durable signal provenance, execution-clock authority, bounded OANDA close retry, and dual exact-unit IO":signalProvenanceExport?"signal-provenance and execution-clock authority wrapper over bounded OANDA close retry and dual exact-unit IO":closeRetryExport?"bounded OANDA close retry wrapper over dual exact-unit IO":ioDualExport?"dual Indicator Only wrapper over exact-unit IO":ioUnitsExport?"Indicator Only units wrapper over exclusive IO":ioExport?"Indicator Only wrapper":"direct certified Worker";
 console.log(`Certified analytical inheritance, AGE v2 Great Expectation reallocation, selected-reversal recovery, completed-candle boundaries, and ${topology} verified.`);
