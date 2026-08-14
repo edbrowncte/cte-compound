@@ -1,12 +1,12 @@
 (function installRuntimeIntegrity(global){
   "use strict";
 
-  const VERSION="CTE_RUNTIME_INTEGRITY@1.3.0",REGRESSION_WINDOW=50,EXECUTABLE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION",ENGINE_SIGNAL_SYNC_VERSION="ENGINE_EXECUTABLE_SIGNAL_REGISTRY_SYNC@1.1.0",ENGINE_SIGNAL_WATCHDOG_MS=30000,CHART_STREAMING_VERSION="OANDA_SELECTED_CHART_FORMING_CANDLE@1.0.0";
+  const VERSION="CTE_RUNTIME_INTEGRITY@1.3.1",REGRESSION_WINDOW=50,EXECUTABLE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION",ENGINE_SIGNAL_SYNC_VERSION="ENGINE_EXECUTABLE_SIGNAL_REGISTRY_SYNC@1.1.0",ENGINE_SIGNAL_WATCHDOG_MS=30000,CHART_STREAMING_VERSION="OANDA_SELECTED_CHART_FORMING_CANDLE@1.0.0";
   const TF_MS=Object.freeze({S5:5000,S30:30000,M1:60000,M5:300000,M15:900000,M30:1800000,H1:3600000,H2:7200000,H4:14400000,D:86400000,W:604800000});
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
   const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
   let engineSignalSyncInFlight=null,engineSignalWatchdog=null;
-  function normalCDF(x){const a1=.254829592,a2=-.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=.3275911,sign=x<0?-1:1,scaled=Math.abs(x)/Math.sqrt(2),t=1/(1+p*scaled),y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-scaled*scaled));return .5*(1+sign*y);}
+  function normalCDF(x){const a1=.254829592,a2=-.2844967363,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=.3275911,sign=x<0?-1:1,scaled=Math.abs(x)/Math.sqrt(2),t=1/(1+p*scaled),y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-scaled*scaled));return .5*(1+sign*y);}
   function regressionPFromR2(r2,n=REGRESSION_WINDOW){if(!Number.isFinite(r2)||r2<=0||n<=2)return 1;const bounded=clamp(r2,0,1),f=bounded>=1?Infinity:(bounded/(1-bounded))*(n-2),t=Math.sqrt(f),p=Number.isFinite(t)?clamp(2*(1-normalCDF(t)),0,1):0;return{fStat:f,tStat:t,pValue:p,n};}
   function repairEvaluationRows(rows=state.evaluationTableData||[]){let repaired=0,incomplete=0;for(const row of rows){if(!row)continue;row.integrityStatus="OK";const r2=Number(row.r2),p=Number(row.pValue),badHighFit=Number.isFinite(r2)&&r2>.05&&Number.isFinite(p)&&p>=.999999;if(badHighFit){const corrected=regressionPFromR2(r2);row.fStat=corrected.fStat;row.pValue=corrected.pValue;row.statIntegrityRepair={version:VERSION,reason:"R2_PVALUE_INCONSISTENCY",originalPValue:p,regressionWindow:corrected.n};row.integrityStatus="STAT_REPAIRED";repaired++;}const critical=[row.mas,row.im,row.r2,row.pValue];if(Number(row.signal)&&critical.some(value=>!Number.isFinite(Number(value)))){row.integrityStatus=row.integrityStatus==="STAT_REPAIRED"?"STAT_REPAIRED_WITH_INCOMPLETE_METRICS":"INCOMPLETE_METRICS";incomplete++;}}return{repaired,incomplete};}
   function activeIoTickets(){try{return global.CTEIndicatorOnlyUI?.currentTickets?.().filter(ticket=>ticket.enabled)||[];}catch{return[];}}
@@ -21,27 +21,35 @@
     return{pair,timeframe};
   }
   function directionValue(value){const text=String(value||"").toUpperCase();return text.startsWith("BUY")?1:text.startsWith("SELL")?-1:Math.sign(Number(value)||0);}
+  function latestIsoMs(value){const matches=String(value||"").match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g)||[],values=matches.map(item=>Date.parse(item)).filter(Number.isFinite);return values.length?Math.max(...values):null;}
+  function sourceSignalTime(row={}){const direct=row.signalTime||row.sourceCrossingTime||null;if(Number.isFinite(Date.parse(direct||"")))return direct;const parsed=latestIsoMs(row.sourceEventId||row.executionEventId||row.event);return parsed===null?null:new Date(parsed).toISOString();}
+  function signalChronologyKey(signal={}){return `${signal.pair||""}|${signal.timeframe||""}|${signal.indicator||""}|${signal.indicatorOnlyTicket??""}`;}
+  function monotonicExecutableSignals(signals=[]){
+    const ordered=[...(Array.isArray(signals)?signals:[])].sort((a,b)=>{const left=Date.parse(a.registeredAt||a.time||""),right=Date.parse(b.registeredAt||b.time||"");return(Number.isFinite(left)?left:0)-(Number.isFinite(right)?right:0);}),latestByKey=new Map(),kept=[],quarantined=[];
+    for(const signal of ordered){const source=Date.parse(signal.sourceSignalTime||""),key=signalChronologyKey(signal),prior=latestByKey.get(key);if(Number.isFinite(source)&&Number.isFinite(prior)&&source<=prior){quarantined.push(signal);continue;}if(Number.isFinite(source))latestByKey.set(key,source);kept.push(signal);}
+    return{kept,quarantined};
+  }
   function executableSignalFromRecord(row,source="LEDGER"){
     if(!row||!row.pair||!row.timeframe)return null;
     const basis=row.sourcePriceBasis||row.signalPriceBasis;if(basis!==EXECUTABLE_BASIS||!finite(row.signalPrice))return null;
     const direction=directionValue(row.direction);if(!direction)return null;
-    const id=String(row.executionEventId||row.event||row.ledgerId||`${row.pair}|${row.timeframe}|${row.signalQuoteTime||row.time}|${direction}`);
-    return{direction,price:Number(row.signalPrice),time:row.marketSignalTime||row.signalQuoteTime||row.registeredAt||row.time||null,marketSignalTime:row.marketSignalTime||row.signalQuoteTime||row.registeredAt||row.time||null,signalQuoteTime:row.signalQuoteTime||null,priceBasis:basis,sourcePriceBasis:basis,marketPrice:true,current:false,executionEventId:id,signalPriceSide:row.signalPriceSide||null,sourceCandleClose:finite(row.sourceCandleClose)?Number(row.sourceCandleClose):null,signalRegistrySource:source};
+    const id=String(row.executionEventId||row.event||row.ledgerId||`${row.pair}|${row.timeframe}|${row.signalQuoteTime||row.time}|${direction}`),sourceTime=sourceSignalTime(row);
+    return{pair:row.pair,timeframe:row.timeframe,indicator:row.indicator||row.strategy||null,indicatorOnlyTicket:row.indicatorOnlyTicket??null,direction,price:Number(row.signalPrice),time:row.marketSignalTime||row.signalQuoteTime||row.registeredAt||row.time||null,marketSignalTime:row.marketSignalTime||row.signalQuoteTime||row.registeredAt||row.time||null,signalQuoteTime:row.signalQuoteTime||null,registeredAt:row.registeredAt||row.time||row.signalQuoteTime||null,sourceSignalTime:sourceTime,priceBasis:basis,sourcePriceBasis:basis,marketPrice:true,current:false,executionEventId:id,signalPriceSide:row.signalPriceSide||null,sourceCandleClose:finite(row.sourceCandleClose)?Number(row.sourceCandleClose):null,signalRegistrySource:source};
   }
   function liveLedgerSignals(pair,timeframe){
     const rows=Array.isArray(state?.tradingLedger)?state.tradingLedger:[],seen=new Set(),signals=[];
     for(const row of rows){if(row?.type!=="SIGNAL_PROVENANCE_REGISTERED"||row?.pair!==pair||row?.timeframe!==timeframe)continue;const signal=executableSignalFromRecord(row,"LEDGER");if(!signal||seen.has(signal.executionEventId))continue;seen.add(signal.executionEventId);signals.push(signal);}
-    return signals.sort((a,b)=>Date.parse(a.time||0)-Date.parse(b.time||0));
+    return signals;
   }
   function liveEngineSignals(pair,timeframe){
     const rows=Array.isArray(state?.engineExecutableSignals)?state.engineExecutableSignals:[],seen=new Set(),signals=[];
     for(const row of rows){if(row?.pair!==pair||row?.timeframe!==timeframe)continue;const signal=executableSignalFromRecord(row,"ENGINE_REGISTRY");if(!signal||seen.has(signal.executionEventId))continue;seen.add(signal.executionEventId);signals.push(signal);}
-    return signals.sort((a,b)=>Date.parse(a.time||0)-Date.parse(b.time||0));
+    return signals;
   }
   function liveExecutableSignals(pair,timeframe){
     const seen=new Set(),signals=[];
     for(const signal of [...liveEngineSignals(pair,timeframe),...liveLedgerSignals(pair,timeframe)]){if(seen.has(signal.executionEventId))continue;seen.add(signal.executionEventId);signals.push(signal);}
-    return signals.sort((a,b)=>Date.parse(a.time||0)-Date.parse(b.time||0));
+    const chronology=monotonicExecutableSignals(signals);state.chartExecutableSignalQuarantine=chronology.quarantined;return chronology.kept.sort((a,b)=>Date.parse(a.time||0)-Date.parse(b.time||0));
   }
   function executableSignalSignature(rows=[]){return rows.map(row=>`${row.executionEventId||row.event||""}|${row.signalPrice??""}|${row.signalQuoteTime||row.marketSignalTime||""}`).join("\n");}
   async function refreshExecutableSignals(reason="MANUAL"){
@@ -52,7 +60,7 @@
         const response=await fetch("/api/engine/status",{headers:{Accept:"application/json"},credentials:"same-origin",cache:"no-store"}),payload=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(payload.error||payload.message||`HTTP ${response.status}`);
         const next=Array.isArray(payload.recentExecutableSignals)?payload.recentExecutableSignals:[],before=executableSignalSignature(Array.isArray(state.engineExecutableSignals)?state.engineExecutableSignals:[]),after=executableSignalSignature(next);
-        state.engineExecutableSignals=next;state.engineExecutableSignalsSyncedAt=new Date().toISOString();state.engineExecutableSignalsSyncReason=reason;state.engineExecutableSignalsError=null;state.engineExecutableSignalsVersion=ENGINE_SIGNAL_SYNC_VERSION;
+        state.engineExecutableSignals=next;state.engineExecutableSignalsSyncedAt=new Date().toISOString();state.engineExecutableSignalsSyncReason=reason;state.engineExecutableSignalsError=null;state.engineExecutableSignalsVersion=ENGINE_SIGNAL_SYNC_VERSION;state.engineQuarantinedExecutableSignalCount=Number(payload.quarantinedExecutableSignalCount)||0;
         if(before!==after&&typeof global.drawChart==="function")global.drawChart();
         return true;
       }catch(error){state.engineExecutableSignalsError=String(error?.message||error);state.engineExecutableSignalsErrorAt=new Date().toISOString();return false;}
@@ -97,6 +105,6 @@
   }
 
   function install(){installEvaluationGuard();installMentorGuard();installSignalChartAuthority();installStreamingChartAuthority();installExecutableSignalSync();if(Array.isArray(state?.evaluationTableData)&&state.evaluationTableData.length)repairEvaluationRows();}
-  global.CTERuntimeIntegrity=Object.freeze({VERSION,REGRESSION_WINDOW,EXECUTABLE_BASIS,ENGINE_SIGNAL_SYNC_VERSION,ENGINE_SIGNAL_WATCHDOG_MS,CHART_STREAMING_VERSION,TF_MS,regressionPFromR2,repairEvaluationRows,mentorAlignment,chartContext,executableSignalFromRecord,liveLedgerSignals,liveEngineSignals,liveExecutableSignals,refreshExecutableSignals,installPositionSignalHook,installLedgerSignalHook,installSignalChartAuthority,streamingPrice,streamingBucketStart,streamingChartCandles,installStreamingChartAuthority,installExecutableSignalSync,install});
+  global.CTERuntimeIntegrity=Object.freeze({VERSION,REGRESSION_WINDOW,EXECUTABLE_BASIS,ENGINE_SIGNAL_SYNC_VERSION,ENGINE_SIGNAL_WATCHDOG_MS,CHART_STREAMING_VERSION,TF_MS,regressionPFromR2,repairEvaluationRows,mentorAlignment,chartContext,directionValue,latestIsoMs,sourceSignalTime,signalChronologyKey,monotonicExecutableSignals,executableSignalFromRecord,liveLedgerSignals,liveEngineSignals,liveExecutableSignals,refreshExecutableSignals,installPositionSignalHook,installLedgerSignalHook,installSignalChartAuthority,streamingPrice,streamingBucketStart,streamingChartCandles,installStreamingChartAuthority,installExecutableSignalSync,install});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);
