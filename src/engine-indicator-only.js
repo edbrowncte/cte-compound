@@ -5,8 +5,9 @@ import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance
 import { credentials } from "./engine-base.js";
 
 const API="https://api-fxtrade.oanda.com";
-const INDICATOR_ONLY_VERSION="INDICATOR_ONLY@1.0.0";
+const INDICATOR_ONLY_VERSION="INDICATOR_ONLY@1.1.0";
 const INDICATORS=new Set(["ASSET","DARE_N","DARE","COMBO","NAI","APEX"]);
+const INDICATOR_ONLY_MAX_LENGTH=500;
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
 
 function normalizeIndicatorOnly(value={}){
@@ -15,7 +16,7 @@ function normalizeIndicatorOnly(value={}){
     pair:PAIRS.includes(String(value?.pair||""))?String(value.pair):"EUR_USD",
     timeframe:TIMEFRAMES.includes(String(value?.timeframe||""))?String(value.timeframe):"M1",
     indicator:INDICATORS.has(String(value?.indicator||""))?String(value.indicator):"ASSET",
-    length:Math.max(3,Math.min(200,Math.trunc(Number(value?.length))||10)),
+    length:Math.max(3,Math.min(INDICATOR_ONLY_MAX_LENGTH,Math.trunc(Number(value?.length))||10)),
     filter:Math.max(0,Math.min(10,Number(value?.filter)||0)),
   };
 }
@@ -84,7 +85,7 @@ function restoredTradingMode(runtime,state){
   return pairs.length===1?"MANUAL_1_PAIR":pairs.length?"MANUAL_MULTI":"ALL_PAIRS";
 }
 
-export const __indicatorOnlyTest=Object.freeze({INDICATOR_ONLY_VERSION,normalizeIndicatorOnly,indicatorOnlyFingerprint,indicatorOnlyCadenceMs,indicatorOnlySettings,positionDirection});
+export const __indicatorOnlyTest=Object.freeze({INDICATOR_ONLY_VERSION,INDICATOR_ONLY_MAX_LENGTH,normalizeIndicatorOnly,indicatorOnlyFingerprint,indicatorOnlyCadenceMs,indicatorOnlySettings,positionDirection});
 
 export class HtlEngine extends CertifiedHtlEngine{
   async fetch(request){
@@ -176,7 +177,7 @@ export class HtlEngine extends CertifiedHtlEngine{
   async tickIndicatorOnly(state,control){
     const{token,accountId}=await this.resolveIndicatorOnlyAccount(state);
     try{await this.syncTransactions(state,token,accountId);}catch(error){state.transactionSyncError=String(error?.message||error);}
-    const count=Math.max(650,Math.min(1200,control.length*3+100)),data=await candles(control.pair,token,control.timeframe,count),lastCandle=data.at(-1)?.time;
+    const count=Math.max(650,Math.min(5000,control.length*3+100)),data=await candles(control.pair,token,control.timeframe,count),lastCandle=data.at(-1)?.time;
     state.lastScanAt=new Date().toISOString();
     if(!lastCandle){state.lastNoOrderReason=`Indicator Only · no completed ${control.timeframe} candle for ${control.pair}`;return;}
 
