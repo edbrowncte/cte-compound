@@ -7,6 +7,8 @@ const deploy=await readFile(new URL("./deploy-current-main.mjs",import.meta.url)
 const pkg=JSON.parse(await readFile(new URL("../package.json",import.meta.url),"utf8"));
 const wrangler=await readFile(new URL("../wrangler.toml",import.meta.url),"utf8");
 const workerSource=await readFile(new URL("../src/worker-base.js",import.meta.url),"utf8");
+const exactWorkerSource=await readFile(new URL("../src/worker-exact-account.js",import.meta.url),"utf8");
+const accountAuthoritySource=await readFile(new URL("../src/account-authority.js",import.meta.url),"utf8");
 
 assert.equal(pkg.scripts.deploy,"node scripts/deploy-current-main.mjs");
 assert.match(workflow,/github\.ref == 'refs\/heads\/main'/);
@@ -16,11 +18,16 @@ assert.match(workflow,/npm ci/);
 assert.match(workflow,/CTE_PRODUCTION_DEPLOY_AUTHORITY: GITHUB_MAIN_ONLY/);
 assert.doesNotMatch(workflow,/wrangler-action/);
 for(const token of ["GITHUB_ACTIONS","refs/heads/main","GITHUB_SHA","git","rev-parse","status","--porcelain","CTE_RELEASE_SHA","CTE_RELEASE_CONTRACT"]){assert.ok(deploy.includes(token),`Deployment authority is missing ${token}`);}
+assert.match(wrangler,/main = "src\/worker-exact-account\.js"/);
 assert.match(wrangler,/CTE_RELEASE_CONTRACT = "CTE_COMPOUND_CURRENT_RELEASE@2\.0\.0"/);
 assert.match(wrangler,/CTE_RELEASE_ENFORCEMENT = "ENFORCE_CURRENT_RELEASE"/);
 assert.match(workerSource,/RELEASE_CONTRACT="CTE_COMPOUND_CURRENT_RELEASE@2\.0\.0"/);
 assert.match(workerSource,/LEGACY_RELEASE_REJECTED/);
 assert.match(workerSource,/releaseAuthorized\(env\)/);
+assert.match(exactWorkerSource,/resolveExactAccountAuthority/);
+assert.match(exactWorkerSource,/resolved\.accountId!==configuredAccountId/);
+assert.match(exactWorkerSource,/startsWith\("\/api\/oanda\/"\)/);
+assert.match(accountAuthoritySource,/accounts\.find\(item=>String\(item\?\.id\|\|""\)===configured\)/);
 const assets={fetch:async()=>new Response("current")},request=new Request("https://cte-compound.thetestamony.workers.dev/");
 let response=await worker.fetch(request,{ASSETS:assets,CTE_RELEASE_ENFORCEMENT:"ENFORCE_CURRENT_RELEASE",CTE_RELEASE_CONTRACT:"CTE_COMPOUND_CURRENT_RELEASE@2.0.0"});
 assert.equal(response.status,503);assert.equal((await response.json()).code,"LEGACY_RELEASE_REJECTED");
@@ -30,4 +37,5 @@ response=await worker.fetch(request,{ASSETS:assets,CTE_RELEASE_ENFORCEMENT:"ENFO
 assert.equal(response.status,200);assert.equal(await response.text(),"current");
 response=await worker.fetch(request,{ASSETS:assets,CTE_RELEASE_ENFORCEMENT:"ENFORCE_CURRENT_RELEASE",CTE_RELEASE_CONTRACT:"CTE_COMPOUND_CAPITALIZATION_CHARTS@1.0.0",CF_VERSION_METADATA:{id:"21e019cb-fd70-48b0-87f0-a4d4a3285bab"}});
 assert.equal(response.status,503);assert.equal((await response.json()).code,"LEGACY_RELEASE_REJECTED");
-console.log("Production deployment is restricted to the verified current main SHA and the Worker fails closed without the current release contract.");
+await import("./test-full-account-id-worker-gate.mjs");
+console.log("Production deployment is restricted to verified current main, fails closed against legacy releases, and requires exact full-string OANDA account identity at the Worker boundary.");
