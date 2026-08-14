@@ -1,7 +1,7 @@
 (function installRuntimeIntegrity(global){
   "use strict";
 
-  const VERSION="CTE_RUNTIME_INTEGRITY@1.1.0",REGRESSION_WINDOW=50,EXECUTABLE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION";
+  const VERSION="CTE_RUNTIME_INTEGRITY@1.1.1",REGRESSION_WINDOW=50,EXECUTABLE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION";
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
   const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
   function normalCDF(x){const a1=.254829592,a2=-.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=.3275911,sign=x<0?-1:1,scaled=Math.abs(x)/Math.sqrt(2),t=1/(1+p*scaled),y=1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-scaled*scaled));return .5*(1+sign*y);}
@@ -30,20 +30,15 @@
     }
     return signals.sort((a,b)=>Date.parse(a.time||0)-Date.parse(b.time||0));
   }
-  function analyticalCrossSignals(signals=[],candles=[]){
-    const normalized=(Array.isArray(signals)?signals:[]).map(signal=>({...signal,kind:signal?.kind||"INDICATOR_CROSS",marketPrice:false,priceBasis:null}));
-    if(!normalized.length||!candles.length)return normalized;
-    const lastIndex=candles.length-1,last=normalized.at(-1),prior=normalized.at(-2);
-    if(last?.current&&Number(last.index)===lastIndex&&prior&&prior.direction===last.direction&&!prior.current)normalized.pop();
-    return normalized;
-  }
   function installSignalChartAuthority(){
     const chart=global.CTEUnifiedChart;if(!chart?.render||chart.__cteExecutableSignalAuthority)return false;
-    const render=chart.render.bind(chart),wrapped=Object.freeze({...chart,__cteExecutableSignalAuthority:true,render:options=>{const context=chartContext(options?.canvas),crosses=analyticalCrossSignals(options?.signals,options?.candles),live=context.pair&&context.timeframe?liveLedgerSignals(context.pair,context.timeframe):[];return render({...options,signals:[...crosses,...live]});}});
-    global.CTEUnifiedChart=wrapped;return true;
+    const render=chart.render.bind(chart),wrapped=Object.freeze({...chart,__cteExecutableSignalAuthority:true,render:options=>{const context=chartContext(options?.canvas),live=context.pair&&context.timeframe?liveLedgerSignals(context.pair,context.timeframe):[];return render({...options,signals:live});}});
+    global.CTEUnifiedChart=wrapped;
+    queueMicrotask(()=>{try{if(typeof global.drawChart==="function")global.drawChart();}catch(error){console.error("Executable signal chart rerender failed:",error);}});
+    return true;
   }
 
   function install(){installEvaluationGuard();installMentorGuard();installSignalChartAuthority();if(Array.isArray(state?.evaluationTableData)&&state.evaluationTableData.length)repairEvaluationRows();}
-  global.CTERuntimeIntegrity=Object.freeze({VERSION,REGRESSION_WINDOW,EXECUTABLE_BASIS,regressionPFromR2,repairEvaluationRows,mentorAlignment,chartContext,liveLedgerSignals,analyticalCrossSignals,installSignalChartAuthority,install});
+  global.CTERuntimeIntegrity=Object.freeze({VERSION,REGRESSION_WINDOW,EXECUTABLE_BASIS,regressionPFromR2,repairEvaluationRows,mentorAlignment,chartContext,liveLedgerSignals,installSignalChartAuthority,install});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);
