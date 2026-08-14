@@ -14,14 +14,19 @@ globalThis.fetch=async url=>{
 try{
   assert.equal(__workerExactAccountTest.accountScopedPath("/api/oanda/connect"),true);
   assert.equal(__workerExactAccountTest.accountScopedPath("/api/oanda/candles"),true);
-  assert.equal(__workerExactAccountTest.accountScopedPath("/api/platform/diagnostic"),false);
+  assert.equal(__workerExactAccountTest.diagnosticPath("/api/platform/diagnostic"),true);
 
   calls=[];
+  let mismatch;
   await assert.rejects(()=>__workerExactAccountTest.verifyFullAccountIdentity(env(typo),{}),error=>{
+    mismatch=error;
     assert.equal(error.code,"ACCOUNT_IDENTITY_MISMATCH");
     assert.equal(error.stage,"ACCOUNT_IDENTITY");
     return true;
   });
+  const snapshot=__workerExactAccountTest.authoritySnapshot(mismatch);
+  assert.equal(snapshot.exactAccountRequired,true);
+  assert.equal(snapshot.code,"ACCOUNT_IDENTITY_MISMATCH");
   assert.deepEqual(calls.filter(value=>value.endsWith("/v3/accounts")).length,1);
   assert.equal(calls.some(value=>value.includes(typo)&&value.endsWith("/summary")),false,"A suffix match must never be substituted for a mismatched full configured account ID.");
 
@@ -30,5 +35,5 @@ try{
   assert.equal(resolved.accountId,actual);
   assert.ok(calls.some(value=>value.endsWith("/v3/accounts")));
   assert.ok(calls.some(value=>value.endsWith(`/v3/accounts/${actual}/summary`)),"The exact configured full account ID must drive the summary request.");
-  console.log("Worker boundary requires full OANDA account-string equality; -001 suffix fallback is impossible.");
+  console.log("Worker boundary and server diagnostic require full OANDA account-string equality; -001 suffix fallback is impossible.");
 }finally{globalThis.fetch=originalFetch;}
