@@ -63,8 +63,9 @@ assert.equal(io.complete, true);
 
 const buyQuote=__liveSignalPriceTest.executableSignalQuote({time:"2026-08-14T04:00:00.000Z",closeoutBid:"1.16780",closeoutAsk:"1.16792",bids:[{price:"1.16781"}],asks:[{price:"1.16791"}]},1);
 assert.equal(buyQuote.price,1.16791);assert.equal(buyQuote.side,"ASK");assert.equal(buyQuote.time,"2026-08-14T04:00:00.000Z");
-const sellQuote=__liveSignalPriceTest.executableSignalQuote({time:"2026-08-14T04:00:01.000Z",closeoutBid:"1.16779",closeoutAsk:"1.16793"},-1);
-assert.equal(sellQuote.price,1.16779);assert.equal(sellQuote.side,"BID");assert.match(__liveSignalPriceTest.PRICE_BASIS,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE/);assert.match(LIVE_SIGNAL_PRICE_VERSION,/LIVE_EXECUTABLE_SIGNAL_PRICE/);assert.match(AUTOMATIC_SIGNAL_EXECUTION_VERSION,/IMMEDIATE_ONE_ATTEMPT/);
+const sellQuote=__liveSignalPriceTest.executableSignalQuote({time:"2026-08-14T04:00:01.000Z",closeoutBid:"1.16779",closeoutAsk:"1.16793",bids:[{price:"1.16778"}],asks:[{price:"1.16794"}]},-1);
+assert.equal(sellQuote.price,1.16778);assert.equal(sellQuote.side,"BID");assert.match(__liveSignalPriceTest.PRICE_BASIS,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE/);assert.match(LIVE_SIGNAL_PRICE_VERSION,/2\.1\.1/);assert.match(AUTOMATIC_SIGNAL_EXECUTION_VERSION,/IMMEDIATE_ONE_ATTEMPT/);
+assert.equal(__liveSignalPriceTest.executableSignalQuote({closeoutAsk:"1.16792"},1),null);assert.equal(__liveSignalPriceTest.executableSignalQuote({closeoutBid:"1.16779"},-1),null);assert.equal(__liveSignalPriceTest.executableSignalQuote({tradeable:false,asks:[{price:"1.16791"}]},1),null);
 
 const state = {};
 const first = registerSignalProvenance(state, normal, "2026-08-14T03:56:00.000Z");
@@ -108,6 +109,6 @@ assert.match(source, /fillPriceBasis: "OANDA_ORDER_FILL_PRICE_SEPARATE"/);
 assert.match(source, /executionClockParentProbeObserved/);
 assert.match(source, /executionClockEarlyProbeStatus/);
 const liveSource=await readFile(new URL("../src/engine-live-signal-price.js",import.meta.url),"utf8");
-assert.match(liveSource,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION/);assert.match(liveSource,/sourceCandleClose/);assert.match(liveSource,/signalPriceSide/);assert.match(liveSource,/SIGNAL_PROVENANCE_REGISTERED/);assert.match(liveSource,/IMMEDIATE_ONE_ATTEMPT_SIGNAL_EXECUTION/);
+assert.match(liveSource,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION/);assert.match(liveSource,/sourceCandleClose/);assert.match(liveSource,/signalPriceSide/);assert.match(liveSource,/SIGNAL_PROVENANCE_REGISTERED/);assert.match(liveSource,/IMMEDIATE_ONE_ATTEMPT_SIGNAL_EXECUTION/);assert.doesNotMatch(liveSource,/price\.asks\?\.\[0\]\?\.price\?\?price\.closeoutAsk|price\.bids\?\.\[0\]\?\.price\?\?price\.closeoutBid/);
 
-console.log("Signal provenance verified: canonical crossing context stays auditable while the automatic execution boundary captures the live OANDA ask for BUY or bid for SELL exactly once, independently from the later fill price.");
+console.log("Signal provenance verified: canonical crossing context stays auditable while the automatic execution boundary captures a tradeable OANDA ask for BUY or bid for SELL exactly once, independently from the later fill price.");
