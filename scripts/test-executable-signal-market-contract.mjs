@@ -4,7 +4,10 @@ import { __liveSignalPriceTest, LIVE_SIGNAL_PRICE_VERSION, AUTOMATIC_SIGNAL_EXEC
 
 const buy=__liveSignalPriceTest.executableSignalQuote({time:"2026-08-14T12:05:02.000Z",closeoutBid:"0.8497",closeoutAsk:"0.8502",bids:[{price:"0.8498"}],asks:[{price:"0.8500"}]},1);
 const sell=__liveSignalPriceTest.executableSignalQuote({time:"2026-08-14T12:05:03.000Z",closeoutBid:"0.8495",closeoutAsk:"0.8503",bids:[{price:"0.8497"}],asks:[{price:"0.8501"}]},-1);
-assert.equal(buy.price,0.85);assert.equal(buy.side,"ASK");assert.equal(sell.price,0.8497);assert.equal(sell.side,"BID");assert.match(LIVE_SIGNAL_PRICE_VERSION,/2\.1\.0/);assert.match(AUTOMATIC_SIGNAL_EXECUTION_VERSION,/IMMEDIATE_ONE_ATTEMPT/);
+assert.equal(buy.price,0.85);assert.equal(buy.side,"ASK");assert.equal(sell.price,0.8497);assert.equal(sell.side,"BID");assert.match(LIVE_SIGNAL_PRICE_VERSION,/2\.1\.1/);assert.match(AUTOMATIC_SIGNAL_EXECUTION_VERSION,/IMMEDIATE_ONE_ATTEMPT/);
+assert.equal(__liveSignalPriceTest.executableSignalQuote({closeoutAsk:"0.8502"},1),null,"A closeout ask is not an executable opening ASK signal price.");
+assert.equal(__liveSignalPriceTest.executableSignalQuote({closeoutBid:"0.8495"},-1),null,"A closeout bid is not an executable opening BID signal price.");
+assert.equal(__liveSignalPriceTest.executableSignalQuote({tradeable:false,asks:[{price:"0.8500"}]},1),null,"A non-tradeable price cannot authorize an automatic signal execution.");
 
 const state={},candidate={pair:"AUD_CHF",event:{id:"event-1",direction:1,startTime:"2026-08-14T12:00:00.000Z"}};
 const first=__liveSignalPriceTest.beginSignalAttempt(state,candidate,"AUTOMATIC");assert.ok(first);assert.equal(first.status,"ATTEMPTING");assert.equal(__liveSignalPriceTest.priorSignalAttempt(state,"event-1"),first);
@@ -20,8 +23,16 @@ assert.doesNotMatch(liveSource,/executionEventId=.*lastCandle/);
 assert.match(liveSource,/runtime\.lastEventId=event\.id/);
 assert.match(liveSource,/no pre-engagement order submitted/);
 assert.match(liveSource,/ioMarketScanCadenceMs/);
-assert.ok(liveSource.includes("price.asks?.[0]?.price??price.closeoutAsk"),"BUY signal price must prefer the live ask bucket, not closeoutAsk.");
-assert.ok(liveSource.includes("price.bids?.[0]?.price??price.closeoutBid"),"SELL signal price must prefer the live bid bucket, not closeoutBid.");
+assert.ok(liveSource.includes("price.asks?.[0]?.price"),"BUY signal price must require the live ask bucket.");
+assert.ok(liveSource.includes("price.bids?.[0]?.price"),"SELL signal price must require the live bid bucket.");
+assert.doesNotMatch(liveSource,/price\.asks\?\.\[0\]\?\.price\?\?price\.closeoutAsk|price\.bids\?\.\[0\]\?\.price\?\?price\.closeoutBid/);
+assert.match(liveSource,/price\?\.tradeable===false/);
+
+const dual=await readFile(new URL("../src/engine-indicator-only-dual.js",import.meta.url),"utf8");
+assert.doesNotMatch(dual,/STALE_SIGNAL|INDICATOR_ONLY_STALE_SIGNAL/);
+assert.match(dual,/no pre-engagement order submitted/);
+assert.match(dual,/priorEventId===event\.id/);
+assert.doesNotMatch(dual,/executionEventId=.*lastCandle/);
 
 const verifier=await readFile(new URL("../src/horizon-candidate-signal-verifier.js",import.meta.url),"utf8");
 assert.match(verifier,/crossing\.index!==candles\.length-1/);
@@ -44,4 +55,4 @@ assert.match(integrity,/signals:live/);
 assert.doesNotMatch(integrity,/analyticalCrossSignals/);
 assert.match(integrity,/__cteExecutableSignalAuthority/);
 
-console.log("Executable-signal contract verified: a selected automatic signal gets one immediate execution attempt, BUY/SELL price is the contemporaneous OANDA ASK/BID, replay is prohibited, and chart arrows exist only for captured executable signal prices.");
+console.log("Executable-signal contract verified: a selected automatic signal gets one immediate execution attempt, BUY/SELL price requires the live tradeable OANDA ASK/BID bucket, replay is prohibited, and chart arrows exist only for captured executable signal prices.");
