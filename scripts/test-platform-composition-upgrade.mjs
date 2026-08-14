@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {RUNTIME_OPTIMIZER_VERSION,RUNTIME_OPTIMIZER_HISTORY_BARS,currentRuntimeOptimizer} from "../src/optimized-optimizer.js";
+import {CONFIGURATION_OPTIMIZER_OBJECTIVE_VERSION} from "../src/configuration-optimizer-quality.js";
 import {__executionTest} from "../src/engine-certified-execution.js";
 
 const html=fs.readFileSync("public/index.html","utf8"),mentor=fs.readFileSync("public/market-mentor.js","utf8");
@@ -16,7 +17,8 @@ assert.match(html,/evaluationSelectedStrategy/);
 assert.match(html,/optimizerHistoryBars=Number\(payload\.optimizerHistoryBars\)\|\|5000/);
 assert.match(html,/-bar target/);
 assert.match(mentor,/modelCompositionBody/);
-assert.equal(RUNTIME_OPTIMIZER_VERSION,7);
+assert.equal(RUNTIME_OPTIMIZER_VERSION,8);
+assert.equal(CONFIGURATION_OPTIMIZER_OBJECTIVE_VERSION,"EVENT_EQUITY_FIT_QUALITY@1.0.0");
 assert.equal(RUNTIME_OPTIMIZER_HISTORY_BARS,5000);
 assert.equal(typeof currentRuntimeOptimizer,"function");
 const context=__executionTest.sanitizeModelContext({type:"MODEL_CONTEXT",timeframe:"H1",account:{nav:12345,marginAvailable:10000},slots:[{pair:"EUR_USD",direction:"BUY",strength:.8,ratio:Infinity},{pair:"NOT_A_PAIR",strength:1}],forecasts:[{key:"A",pair:"EUR_USD",direction:"BUY",confidence:.7}],openPositions:[{pair:"USD_JPY",direction:"SELL",units:1000,unrealizedPL:-3}]});
@@ -26,4 +28,4 @@ assert.equal(context.slots[0].pair,"EUR_USD");
 assert.equal(context.slots[0].ratio,null);
 assert.equal(context.forecasts.length,1);
 assert.equal(context.openPositions.length,1);
-console.log("Platform composition, persistent chart indicators, event outcome ledger, runtime 5,000-bar optimizer and capitalization-model context verified.");
+console.log("Platform composition, persistent chart indicators, event outcome ledger, runtime 5,000-bar optimizer v8 fit-quality objective and capitalization-model context verified.");

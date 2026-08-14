@@ -55,10 +55,13 @@ assert.equal(captured.signals.at(-1).current,true);
 assert.equal(captured.signals.at(-1).index,2,"ACTIVE must stay on the true transition rather than fabricate a latest-candle BUY marker");
 assert.match(worker,/chart-ioi-iom\.js[^]*directional-ownership\.js[^]*ioi-iom-performance\.js/);
 assert.match(optimizer,/applyDirectionalOwnershipPerformance/);
-assert.match(optimizer,/const finalResult=evaluateRegisteredPerformance\(candles,pair,settings\),directionalResult=applyDirectionalOwnershipPerformance\(finalResult,pair\),config=\{\}/,"ownership-normalized performance must be derived only after the existing six-indicator configuration optimizer has selected settings");
-assert.match(optimizer,/entryFor\(strategy,settings,finalResult\.strategies\[strategy\]\.stats\)/,"existing six-indicator configuration metrics must remain based on the original registered result");
+const settingsPosition=optimizer.indexOf("const settings=normalizeStrategySettings(");
+const finalResultPosition=optimizer.indexOf("const finalResult=evaluateRegisteredPerformance(normalizedCandles,pair,settings)");
+const ownershipPosition=optimizer.indexOf("directionalResult=applyDirectionalOwnershipPerformance(finalResult,pair)");
+assert.ok(settingsPosition>=0&&finalResultPosition>settingsPosition&&ownershipPosition>finalResultPosition,"ownership-normalized performance must be derived only after optimizer v8 has selected its final coherent six-indicator settings");
+assert.match(optimizer,/const item=finalResult\.strategies\[strategy\],quality=candidateFitQuality\(item\.trades,item\.stats,normalizedCandles\.length\)/,"final configuration metrics must be recomputed from the selected registered result before directional ownership presentation is applied");
 assert.match(optimizer,/registeredExportRows\(directionalResult,pair,timeframe\)/,"Macro performance rows must use directional ownership results");
 assert.match(optimizer,/directionalOwnershipVersion:DIRECTIONAL_OWNERSHIP_VERSION/);
 
 for(const label of ["HTL Asset","DARE(N)","DARE","COMBO","NAI","APEX","IOI","IOM"])assert.ok(label.length>0);
-console.log("Universal indicator directional ownership certification passed for HTL Asset, DARE(N), DARE, COMBO, NAI, APEX, IOI, and IOM: one true transition marker carries ACTIVE ownership, repeated same-direction markers are suppressed, and Macro performance remains opposite-signal owned.");
+console.log("Universal indicator directional ownership certification passed for HTL Asset, DARE(N), DARE, COMBO, NAI, APEX, IOI, and IOM: one true transition marker carries ACTIVE ownership, repeated same-direction markers are suppressed, optimizer v8 selects coherent settings before ownership normalization, and Macro performance remains opposite-signal owned.");
