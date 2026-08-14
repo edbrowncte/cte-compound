@@ -58,8 +58,7 @@ function normalizeOandaCandles(payload) {
   })).filter(candle=>[candle.open,candle.high,candle.low,candle.close].every(Number.isFinite));
 }
 export async function candles(pair, apiToken, timeframe, count=REGISTERED_HISTORY_BARS) {
-  const cappedCount=Math.min(MAX_COMPUTE_BARS,count),query=new URLSearchParams({price:"M",granularity:timeframe,count:String(cappedCount),smooth:"false"});
-  if(cappedCount<=2)query.set("to",new Date().toISOString());
+  const query=new URLSearchParams({price:"M",granularity:timeframe,count:String(Math.min(MAX_COMPUTE_BARS,count)),smooth:"false"});
   return normalizeOandaCandles(await callOanda(`/v3/instruments/${pair}/candles?${query}`,apiToken));
 }
 export async function candlesForRange(pair, apiToken, timeframe, startDate, endDate) {
