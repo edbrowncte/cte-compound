@@ -8,6 +8,7 @@ import {
   executionClockProbeDue,
   __signalProvenanceTest,
 } from "../src/engine-signal-provenance.js";
+import { LIVE_SIGNAL_PRICE_VERSION, __liveSignalPriceTest } from "../src/engine-live-signal-price.js";
 import {
   STRATEGY_ENGINE_VERSION,
   normalizeStrategySettings,
@@ -60,6 +61,11 @@ assert.equal(io.signalPrice, normal.signalPrice);
 assert.equal(io.signalTime, normal.signalTime);
 assert.equal(io.complete, true);
 
+const buyQuote=__liveSignalPriceTest.executableSignalQuote({time:"2026-08-14T04:00:00.000Z",closeoutBid:"1.16780",closeoutAsk:"1.16792",bids:[{price:"1.16781"}],asks:[{price:"1.16791"}]},1);
+assert.equal(buyQuote.price,1.16792);assert.equal(buyQuote.side,"ASK");assert.equal(buyQuote.time,"2026-08-14T04:00:00.000Z");
+const sellQuote=__liveSignalPriceTest.executableSignalQuote({time:"2026-08-14T04:00:01.000Z",closeoutBid:"1.16779",closeoutAsk:"1.16793"},-1);
+assert.equal(sellQuote.price,1.16779);assert.equal(sellQuote.side,"BID");assert.match(__liveSignalPriceTest.PRICE_BASIS,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE/);assert.match(LIVE_SIGNAL_PRICE_VERSION,/LIVE_EXECUTABLE_SIGNAL_PRICE/);
+
 const state = {};
 const first = registerSignalProvenance(state, normal, "2026-08-14T03:56:00.000Z");
 assert.equal(first.status, "REGISTERED");
@@ -94,12 +100,14 @@ assert.equal(executionClockProbeDue({
 
 assert.equal(__signalProvenanceTest.EXECUTION_CLOCK_AUTHORITY_VERSION, EXECUTION_CLOCK_AUTHORITY_VERSION);
 const worker = await readFile(new URL("../src/worker.js", import.meta.url), "utf8");
-assert.match(worker, /export \{ HtlEngine \} from "\.\/engine-signal-provenance\.js";/, "Cloudflare Durable Object export must use the signal-provenance/clock-authority wrapper");
+assert.match(worker, /export \{ HtlEngine \} from "\.\/engine-live-signal-price\.js";/, "Cloudflare Durable Object export must use the live executable signal-price wrapper");
 const source = await readFile(new URL("../src/engine-signal-provenance.js", import.meta.url), "utf8");
 assert.match(source, /SIGNAL_PROVENANCE_REGISTERED/);
 assert.match(source, /sourcePriceBasis: "COMPLETED_SOURCE_CANDLE_CLOSE"/);
 assert.match(source, /fillPriceBasis: "OANDA_ORDER_FILL_PRICE_SEPARATE"/);
 assert.match(source, /executionClockParentProbeObserved/);
 assert.match(source, /executionClockEarlyProbeStatus/);
+const liveSource=await readFile(new URL("../src/engine-live-signal-price.js",import.meta.url),"utf8");
+assert.match(liveSource,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION/);assert.match(liveSource,/sourceCandleClose/);assert.match(liveSource,/signalPriceSide/);assert.match(liveSource,/SIGNAL_PROVENANCE_REGISTERED/);
 
-console.log("Signal provenance verified: canonical source event identity, completed-candle signal price/time, separate execution identity/fill basis, durable de-duplication, and early execution-clock authority telemetry are wired.");
+console.log("Signal provenance verified: canonical event identity and completed-candle source close remain auditable while the execution boundary registers a live executable-side bid/ask signal price independently from the later OANDA fill price.");
