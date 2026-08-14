@@ -59,6 +59,10 @@
     })();
     return engineSignalSyncInFlight;
   }
+  function installPositionSignalHook(){
+    const prior=global.refreshOpenPositions;if(typeof prior!=="function"||prior.__cteExecutableSignalSync)return false;
+    const wrapped=async function(...args){const result=await prior.apply(this,args);void refreshExecutableSignals("POSITION_TRUTH_REFRESH");return result;};Object.defineProperty(wrapped,"__cteExecutableSignalSync",{value:true});global.refreshOpenPositions=wrapped;try{refreshOpenPositions=wrapped;}catch{}return true;
+  }
   function installSignalChartAuthority(){
     const chart=global.CTEUnifiedChart;if(!chart?.render||chart.__cteExecutableSignalAuthority)return false;
     const render=chart.render.bind(chart),wrapped=Object.freeze({...chart,__cteExecutableSignalAuthority:true,render:options=>{const context=chartContext(options?.canvas),live=context.pair&&context.timeframe?liveExecutableSignals(context.pair,context.timeframe):[];return render({...options,signals:live});}});
@@ -67,12 +71,12 @@
     return true;
   }
   function installExecutableSignalSync(){
-    void refreshExecutableSignals("BOOTSTRAP");
+    void refreshExecutableSignals("BOOTSTRAP");installPositionSignalHook();if(typeof setTimeout==="function")setTimeout(installPositionSignalHook,0);
     if(typeof document!=="undefined"&&!engineSignalWatchdog)engineSignalWatchdog=setInterval(()=>{if(!document.hidden)void refreshExecutableSignals("WATCHDOG");},ENGINE_SIGNAL_WATCHDOG_MS);
     return true;
   }
 
   function install(){installEvaluationGuard();installMentorGuard();installSignalChartAuthority();installExecutableSignalSync();if(Array.isArray(state?.evaluationTableData)&&state.evaluationTableData.length)repairEvaluationRows();}
-  global.CTERuntimeIntegrity=Object.freeze({VERSION,REGRESSION_WINDOW,EXECUTABLE_BASIS,ENGINE_SIGNAL_SYNC_VERSION,ENGINE_SIGNAL_WATCHDOG_MS,regressionPFromR2,repairEvaluationRows,mentorAlignment,chartContext,executableSignalFromRecord,liveLedgerSignals,liveEngineSignals,liveExecutableSignals,refreshExecutableSignals,installSignalChartAuthority,installExecutableSignalSync,install});
+  global.CTERuntimeIntegrity=Object.freeze({VERSION,REGRESSION_WINDOW,EXECUTABLE_BASIS,ENGINE_SIGNAL_SYNC_VERSION,ENGINE_SIGNAL_WATCHDOG_MS,regressionPFromR2,repairEvaluationRows,mentorAlignment,chartContext,executableSignalFromRecord,liveLedgerSignals,liveEngineSignals,liveExecutableSignals,refreshExecutableSignals,installPositionSignalHook,installSignalChartAuthority,installExecutableSignalSync,install});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);
