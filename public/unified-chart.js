@@ -1,7 +1,7 @@
 (function installUnifiedChart(global){
   "use strict";
 
-  const VERSION="CTE_UNIFIED_EVALUATION_CHART@1.2.0";
+  const VERSION="CTE_UNIFIED_EVALUATION_CHART@1.2.1";
   const MAX_VISIBLE_BARS=5000;
   const EXECUTABLE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION";
   const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
@@ -20,16 +20,16 @@
   }
 
   function nearestSignalIndex(signal,candles){
-    const supplied=Math.trunc(Number(signal?.index));
-    if(Number.isInteger(supplied)&&supplied>=0&&supplied<candles.length&&!signal?.marketPrice)return supplied;
     const target=Date.parse(signal?.marketSignalTime||signal?.signalQuoteTime||signal?.time||"");
-    if(!Number.isFinite(target))return Number.isInteger(supplied)?supplied:-1;
-    let best=-1,bestDistance=Infinity;
-    for(let index=0;index<candles.length;index++){
-      const time=Date.parse(candles[index]?.time||"");if(!Number.isFinite(time))continue;
-      const distance=Math.abs(time-target);if(distance<bestDistance){best=index;bestDistance=distance;}
+    if(Number.isFinite(target)){
+      let best=-1,bestDistance=Infinity;
+      for(let index=0;index<candles.length;index++){
+        const time=Date.parse(candles[index]?.time||"");if(!Number.isFinite(time))continue;
+        const distance=Math.abs(time-target);if(distance<bestDistance){best=index;bestDistance=distance;}
+      }
+      if(best>=0)return best;
     }
-    return best;
+    const supplied=Math.trunc(Number(signal?.index));return Number.isInteger(supplied)?supplied:-1;
   }
 
   function isExecutableSignal(signal){return Boolean(signal?.marketPrice||signal?.priceBasis===EXECUTABLE_BASIS||signal?.sourcePriceBasis===EXECUTABLE_BASIS);}
@@ -38,26 +38,14 @@
     if(!Array.isArray(signals)||!signals.length)return;
     ctx.save();ctx.font="bold 8px ui-monospace,monospace";ctx.textAlign="center";ctx.textBaseline="middle";
     for(const signal of signals){
-      const absolute=nearestSignalIndex(signal,candles),direction=Math.sign(Number(signal?.direction)||0);
-      if(!direction||absolute<start||absolute>=end)continue;
-      const candle=candles[absolute];if(!candle)continue;
-      const executable=isExecutableSignal(signal)&&finite(signal?.price),x=indexToX(absolute-start),size=5;
-      let markerY,label;
-      if(executable){
-        const exactPrice=Number(signal.price);markerY=clamp(priceToY(exactPrice),pricePlot.y+6,pricePlot.y+pricePlot.h-6);
-        const shown=typeof formatPrice==="function"?formatPrice(exactPrice):String(exactPrice);
-        label=`${direction>0?"BUY":"SELL"} @ ${shown}`;
-      }else{
-        const anchor=direction>0?Number(candle.low):Number(candle.high);if(!finite(anchor))continue;
-        const candleY=priceToY(anchor);markerY=clamp(candleY+(direction>0?11:-11),pricePlot.y+9,pricePlot.y+pricePlot.h-9);
-        label=`CROSS ${direction>0?"BUY":"SELL"}${signal.current?" STATE":""}`;
-      }
+      const direction=Math.sign(Number(signal?.direction)||0);if(!direction||!isExecutableSignal(signal)||!finite(signal?.price))continue;
+      const absolute=nearestSignalIndex(signal,candles);if(absolute<start||absolute>=end)continue;
+      const x=indexToX(absolute-start),exactPrice=Number(signal.price),markerY=clamp(priceToY(exactPrice),pricePlot.y+6,pricePlot.y+pricePlot.h-6),size=5,shown=typeof formatPrice==="function"?formatPrice(exactPrice):String(exactPrice),label=`${direction>0?"BUY":"SELL"} @ ${shown}`;
       ctx.beginPath();
       if(direction>0){ctx.moveTo(x,markerY);ctx.lineTo(x-size,markerY+size*2);ctx.lineTo(x+size,markerY+size*2);}
       else{ctx.moveTo(x,markerY);ctx.lineTo(x-size,markerY-size*2);ctx.lineTo(x+size,markerY-size*2);}
       ctx.closePath();ctx.fillStyle=direction>0?"#48c78e":"#ef6b73";ctx.fill();
-      const labelY=clamp(markerY+(direction>0?15:-15),pricePlot.y+7,pricePlot.y+pricePlot.h-7);
-      ctx.fillText(label,x,labelY);
+      const labelY=clamp(markerY+(direction>0?15:-15),pricePlot.y+7,pricePlot.y+pricePlot.h-7);ctx.fillText(label,x,labelY);
     }
     ctx.restore();
   }
