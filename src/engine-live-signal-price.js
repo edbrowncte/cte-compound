@@ -16,7 +16,7 @@ import {
 } from "./account-authority.js";
 
 const API="https://api-fxtrade.oanda.com";
-export const LIVE_SIGNAL_PRICE_VERSION="LIVE_EXECUTABLE_SIGNAL_PRICE@2.1.0";
+export const LIVE_SIGNAL_PRICE_VERSION="LIVE_EXECUTABLE_SIGNAL_PRICE@2.1.1";
 export const AUTOMATIC_SIGNAL_EXECUTION_VERSION="IMMEDIATE_ONE_ATTEMPT_SIGNAL_EXECUTION@1.0.0";
 const PRICE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION";
 const IO_MARKET_SCAN_MAX_MS=60_000;
@@ -47,8 +47,9 @@ async function callPricing(token,accountId,pair){
 }
 
 export function executableSignalQuote(price={},direction=0){
+  if(price?.tradeable===false)return null;
   const side=Math.sign(Number(direction));
-  const value=side>0?finiteNumber(price.asks?.[0]?.price??price.closeoutAsk):side<0?finiteNumber(price.bids?.[0]?.price??price.closeoutBid):null;
+  const value=side>0?finiteNumber(price.asks?.[0]?.price):side<0?finiteNumber(price.bids?.[0]?.price):null;
   return value===null?null:{price:value,time:price.time||new Date().toISOString(),side:side>0?"ASK":"BID",basis:PRICE_BASIS};
 }
 
@@ -61,7 +62,7 @@ async function enrichCandidateSignalPrice(candidate,token,accountId){
   const sourceCandleClose=finiteNumber(event.openPrice),sourceCrossingTime=event.startTime||event.crossingTime||null;
   try{
     const raw=await callPricing(token,accountId,pair),quote=executableSignalQuote(raw,direction);
-    if(!quote)throw quoteUnavailable(`Executable ${direction>0?"ASK":"BID"} signal quote is unavailable for ${pair}.`);
+    if(!quote)throw quoteUnavailable(`Executable tradeable ${direction>0?"ASK":"BID"} signal quote is unavailable for ${pair}.`);
     return{...candidate,event:{...event,sourceCandleClose,sourceCrossingTime,openPrice:quote.price,signalPrice:quote.price,signalQuoteTime:quote.time,marketSignalTime:quote.time,signalPriceSide:quote.side,signalPriceBasis:quote.basis}};
   }catch(error){
     if(error?.code==="LIVE_SIGNAL_QUOTE_UNAVAILABLE")throw error;
