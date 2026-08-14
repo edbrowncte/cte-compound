@@ -19,7 +19,7 @@ assert.doesNotMatch(liveSource,/COMPLETED_SOURCE_CANDLE_CLOSE_FALLBACK/);
 assert.match(liveSource,/LIVE_SIGNAL_QUOTE_UNAVAILABLE/);
 assert.match(liveSource,/INDICATOR_ONLY_EXECUTION_WINDOW_MISSED/);
 assert.match(liveSource,/signal remains recorded/);
-assert.match(liveSource,/const executionEventId=`IO\$\{ticket\.slot\}:\$\{runtime\.engagedAt\|\|"session"\}:\$\{event\.id\}`/);
+assert.ok(liveSource.includes('const executionEventId=`IO${ticket.slot}:${runtime.engagedAt||"session"}:${event.id}`'),"Indicator Only execution identity must be stable for one signal and must not depend on whichever candle happens to be latest later.");
 assert.doesNotMatch(liveSource,/executionEventId=.*lastCandle/);
 assert.match(liveSource,/ioMarketScanCadenceMs/);
 
@@ -31,9 +31,9 @@ assert.match(verifier,/signal remains recorded/);
 
 const chart=await readFile(new URL("../public/unified-chart.js",import.meta.url),"utf8");
 assert.match(chart,/LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION/);
-assert.match(chart,/BUY\"\:\"SELL\"} @/);
-assert.match(chart,/CROSS \$\{direction>0\?"BUY":"SELL"\}/);
-assert.match(chart,/markerY=clamp\(priceToY\(exactPrice\)/,"Executable arrow tip must use the exact captured bid\/ask price rather than candle high\/low.");
+assert.ok(chart.includes('label=`${direction>0?"BUY":"SELL"} @ ${shown}`;'),"Executable markers must identify the side and captured market price.");
+assert.ok(chart.includes('label=`CROSS ${direction>0?"BUY":"SELL"}${signal.current?" STATE":""}`;'),"Unpriced analytical crossings must be labelled CROSS rather than masquerading as executable BUY/SELL prices.");
+assert.ok(chart.includes("markerY=clamp(priceToY(exactPrice)"),"Executable arrow tip must use the exact captured bid/ask price rather than candle high/low.");
 assert.match(chart,/signalPrices=.*isExecutableSignal/,"Executable signal prices must participate in the chart price scale.");
 
 const integrity=await readFile(new URL("../public/runtime-integrity.js",import.meta.url),"utf8");
