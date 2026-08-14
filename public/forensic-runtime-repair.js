@@ -139,6 +139,7 @@
   }
   function positionStreamStatus(){
     if(typeof state==="undefined")return"Account stream unavailable";
+    if(typeof accountReady==="function"&&!accountReady())return"Not connected";
     if(state.positionTransactionStreamConnected&&state.positionStreamController)return"Account + pricing streams live";
     if(state.positionTransactionStreamConnected)return"Account transaction stream live";
     return"Account stream reconnecting";
@@ -166,7 +167,7 @@
     try{
       const response=await fetch("/api/oanda/transactions/stream",{method:"GET",headers:{Accept:"application/octet-stream"},credentials:"same-origin",cache:"no-store",signal:controller.signal});
       if(!response.ok){const payload=await response.json().catch(()=>({}));throw new Error(payload.error||payload.code||`HTTP ${response.status}`);}
-      state.positionTransactionStreamConnected=true;state.positionTransactionConnectedAt=new Date().toISOString();publishPositionStreamStatus();
+      state.positionTransactionStreamConnected=true;state.positionTransactionStreamError=null;state.positionTransactionConnectedAt=new Date().toISOString();publishPositionStreamStatus();
       queuePositionTruthRefresh({type:"STREAM_CONNECTED",time:state.positionTransactionConnectedAt});
       const reader=response.body?.getReader?.();if(!reader)throw new Error("Transaction stream response body is unavailable.");
       const decoder=new TextDecoder();let buffer="";
@@ -203,8 +204,8 @@
         let passes=0,currentReason=reason;
         do{
           state.positionRefreshQueued=false;state.positionRefreshQueuedReason=null;state.positionRefreshSource=currentReason;await prior();state.positionSnapshotAt=new Date().toISOString();state.positionSnapshotSource=currentReason;passes++;currentReason="QUEUED_TRANSACTION_RECONCILIATION";
-        }while(state.positionRefreshQueued&&passes<4&&(!accountReady||accountReady()));
-        if(state.positionRefreshQueued){clearTimeout(state.positionTransactionRefreshTimer);state.positionTransactionRefreshTimer=setTimeout(()=>{state.positionTransactionRefreshTimer=null;if(typeof refreshOpenPositions==="function")void refreshOpenPositions("QUEUED_TRANSACTION_RECONCILIATION");},25);}
+        }while(state.positionRefreshQueued&&passes<4&&(typeof accountReady!=="function"||accountReady()));
+        if(state.positionRefreshQueued){clearTimeout(state.positionTransactionRefreshTimer);state.positionTransactionRefreshTimer=setTimeout(()=>{state.positionTransactionRefreshTimer=null;if(typeof refreshOpenPositions==="function"&&(typeof accountReady!=="function"||accountReady()))void refreshOpenPositions("QUEUED_TRANSACTION_RECONCILIATION");},25);}
         publishPositionStreamStatus();
       };
       Object.defineProperty(wrapped,"cteStreamingTruthWrapper",{value:true});try{refreshOpenPositions=wrapped;root.refreshOpenPositions=wrapped;}catch{}
