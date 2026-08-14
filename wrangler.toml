@@ -1,5 +1,5 @@
 name = "cte-compound"
-main = "src/worker.js"
+main = "src/worker-exact-account.js"
 compatibility_date = "2026-07-31"
 compatibility_flags = [ "nodejs_compat" ]
 keep_vars = true
