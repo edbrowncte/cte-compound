@@ -5,6 +5,7 @@ import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance
 import { credentials } from "./engine-base.js";
 import { AGE_EXPECTATION_VERSION, AGE_REALLOCATION_MIN_INDEX, AGE_REALLOCATION_DELTA_INDEX, annotateAgeCandidate, continuationExpectation, reallocationDecision } from "./age-expectation.js";
 import { OptimizerRuntimeService } from "./optimizer-runtime-service.js";
+import { EXECUTION_CLOCK_SOURCE, executionClockCandle } from "./execution-candle-clock.js";
 import {
   optimizedOptimizeNext,
   optimizedComputeConfiguration,
@@ -153,6 +154,8 @@ function compactCandidate(candidate){
 
 export const __executionTest=Object.freeze({
   EXECUTION_POLICY_VERSION,
+  EXECUTION_CLOCK_SOURCE,
+  executionClockCandle,
   AGE_POLICY_VERSION,
   AGE_TIME_ZONE,
   AGE_EXPECTATION_VERSION,
@@ -303,6 +306,9 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       armed:true,
       executionCertification:"ARMED_PRIVATE_USER",
       executionPolicy:EXECUTION_POLICY_VERSION,
+      executionClockSource:state.executionClockSource||null,
+      executionClockCandle:state.executionClockCandle||null,
+      executionClockProbeAt:state.executionClockProbeAt||null,
       pendingReversals:Object.keys(state.pendingReversals||{}).length,
       reversalPolicy:"AGE_REVERSAL_AND_ALTERNATIVE_EXPECTATIONS_COMPETE",
       reconciliationCadence:"new-completed-candle-only",
@@ -566,6 +572,11 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
       try{await this.syncTransactions(state,token,accountId);}catch(error){state.transactionSyncError=String(error?.message||error);}
       await this.processPendingReversals(state,token,accountId);
 
+      const lastCandle=await executionClockCandle(path=>callOanda(path,token),accountId,config.timeframe);
+      state.executionClockSource=EXECUTION_CLOCK_SOURCE;
+      state.executionClockCandle=lastCandle;
+      state.executionClockProbeAt=new Date().toISOString();
+
       const optimizer=await loadRuntimeOptimizer(this.ctx.storage);
 
       const rotationIndex=Number(state.mtfRotation||0)%TIMEFRAMES.length;
@@ -578,10 +589,6 @@ export class HtlEngine extends CertifiedAnalyticsEngine{
         updated:new Date().toISOString(),
       };
       state.mtfRotation=(rotationIndex+1)%TIMEFRAMES.length;
-
-      const probe=await candles("EUR_USD",token,config.timeframe,2);
-      const lastCandle=probe.at(-1)?.time;
-      if(!lastCandle)return;
 
       if(lastCandle===state.lastCandle&&state.initialized){
         if(!state.requirements){
