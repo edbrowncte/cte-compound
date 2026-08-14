@@ -23,7 +23,7 @@ export const CONFIGURATION_OPTIMIZER_FILTER_GRID=Object.freeze({
   DARE:Object.freeze([0]),
   COMBO:Object.freeze([0]),
   NAI:Object.freeze([0,.05,.1,.2,.3,.5,.75,1,1.5,2]),
-  APEX:Object.freeze([0,.05,.1,.2,.3,.5,1,2,3,5,7]),
+  APEX:Object.freeze([0,1,2,3,5,7]),
 });
 
 const finite=value=>Number.isFinite(Number(value))?Number(value):0;
