@@ -1,14 +1,15 @@
 (function installAnalyticalTableSorting(global){
   "use strict";
 
-  const VERSION="CTE_ANALYTICAL_TABLE_SORTING@1.0.0";
+  const VERSION="CTE_ANALYTICAL_TABLE_SORTING@1.1.0";
   const RATE_COLUMNS=Object.freeze([
     ["Rank","number"],["Pair","text"],["Timeframe","text"],["Signal","text"],["Pips/Hr","number"],["|Pips/Hr|","number"],["Median |Event P/L|","number"],["FINAL events","number"],["P/L n","number"],["History","number"],["HTL length","number"],["Support","text"],["Regime","text"]
   ]);
   const EVENT_LEDGER_COLUMNS=Object.freeze([
     ["Event","event"],["Timeframe","text"],["Status","text"],["Result","text"],["Event P/L (pips)","number"],["Start","date"],["Bars","number"],["High","number"],["Low","number"],["Spread μ","number"],["Spread σ²","number"],["Slope","number"],["Area","number"],["Source crosses","number"]
   ]);
-  let rateSort=null,eventLedgerSort=null,rateQueued=false,ledgerQueued=false;
+  const NON_FILTER_STRATEGIES=new Set(["HTL ASSET","ASSET","DARE","COMBO","COMBO / CSF","CSF"]);
+  let rateSort=null,eventLedgerSort=null,rateQueued=false,ledgerQueued=false,optimizerQueued=false;
 
   function parseValue(value,type="text"){
     const text=String(value??"").trim();
@@ -159,14 +160,26 @@
     return true;
   }
 
+  function configureOptimizerFilterSemantics(){
+    if(typeof document==="undefined")return false;
+    const body=document.getElementById("optimizerRegistryBody");if(!body)return false;
+    for(const row of body.rows){if(row.cells.length<5||row.cells[0]?.hasAttribute("colspan"))continue;const strategy=String(row.cells[2]?.textContent||"").trim().toUpperCase(),cell=row.cells[4];if(NON_FILTER_STRATEGIES.has(strategy)){cell.textContent="—";cell.dataset.filterApplicable="false";cell.title="Not applicable: this registered strategy has no independent filter parameter; optimizer selection is length-driven or derived.";}else{cell.dataset.filterApplicable="true";}}
+    if(body.dataset.cteOptimizerFilterObserved!=="true"&&typeof MutationObserver!=="undefined"){
+      body.dataset.cteOptimizerFilterObserved="true";
+      new MutationObserver(()=>{if(optimizerQueued)return;optimizerQueued=true;queueMicrotask(()=>{optimizerQueued=false;configureOptimizerFilterSemantics();});}).observe(body,{childList:true});
+    }
+    return true;
+  }
+
   function install(){
     if(typeof document==="undefined")return false;
     configureRateTable();
     configureEventLedger();
+    configureOptimizerFilterSemantics();
     return true;
   }
 
-  global.CTEAnalyticalTableSorting=Object.freeze({VERSION,RATE_COLUMNS,EVENT_LEDGER_COLUMNS,parseValue,compareValues,configureRateTable,configureEventLedger,install});
+  global.CTEAnalyticalTableSorting=Object.freeze({VERSION,RATE_COLUMNS,EVENT_LEDGER_COLUMNS,NON_FILTER_STRATEGIES,parseValue,compareValues,configureRateTable,configureEventLedger,configureOptimizerFilterSemantics,install});
   if(typeof document!=="undefined"){
     if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});
     else queueMicrotask(install);
