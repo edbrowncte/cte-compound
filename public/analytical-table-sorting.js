@@ -1,7 +1,7 @@
 (function installAnalyticalTableSorting(global){
   "use strict";
 
-  const VERSION="CTE_ANALYTICAL_TABLE_SORTING@1.1.0";
+  const VERSION="CTE_ANALYTICAL_TABLE_SORTING@1.0.0";
   const RATE_COLUMNS=Object.freeze([
     ["Rank","number"],["Pair","text"],["Timeframe","text"],["Signal","text"],["Pips/Hr","number"],["|Pips/Hr|","number"],["Median |Event P/L|","number"],["FINAL events","number"],["P/L n","number"],["History","number"],["HTL length","number"],["Support","text"],["Regime","text"]
   ]);
