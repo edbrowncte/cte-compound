@@ -1,8 +1,9 @@
 (function installUnifiedChart(global){
   "use strict";
 
-  const VERSION="CTE_UNIFIED_EVALUATION_CHART@1.1.0";
+  const VERSION="CTE_UNIFIED_EVALUATION_CHART@1.2.0";
   const MAX_VISIBLE_BARS=5000;
+  const EXECUTABLE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION";
   const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
@@ -18,21 +19,45 @@
     ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();
   }
 
-  function drawSignals(ctx,signals,candles,start,end,indexToX,priceToY,pricePlot){
+  function nearestSignalIndex(signal,candles){
+    const supplied=Math.trunc(Number(signal?.index));
+    if(Number.isInteger(supplied)&&supplied>=0&&supplied<candles.length&&!signal?.marketPrice)return supplied;
+    const target=Date.parse(signal?.marketSignalTime||signal?.signalQuoteTime||signal?.time||"");
+    if(!Number.isFinite(target))return Number.isInteger(supplied)?supplied:-1;
+    let best=-1,bestDistance=Infinity;
+    for(let index=0;index<candles.length;index++){
+      const time=Date.parse(candles[index]?.time||"");if(!Number.isFinite(time))continue;
+      const distance=Math.abs(time-target);if(distance<bestDistance){best=index;bestDistance=distance;}
+    }
+    return best;
+  }
+
+  function isExecutableSignal(signal){return Boolean(signal?.marketPrice||signal?.priceBasis===EXECUTABLE_BASIS||signal?.sourcePriceBasis===EXECUTABLE_BASIS);}
+
+  function drawSignals(ctx,signals,candles,start,end,indexToX,priceToY,pricePlot,formatPrice){
     if(!Array.isArray(signals)||!signals.length)return;
     ctx.save();ctx.font="bold 8px ui-monospace,monospace";ctx.textAlign="center";ctx.textBaseline="middle";
     for(const signal of signals){
-      const absolute=Math.trunc(Number(signal?.index)),direction=Math.sign(Number(signal?.direction)||0);
+      const absolute=nearestSignalIndex(signal,candles),direction=Math.sign(Number(signal?.direction)||0);
       if(!direction||absolute<start||absolute>=end)continue;
       const candle=candles[absolute];if(!candle)continue;
-      const x=indexToX(absolute-start),anchor=direction>0?Number(candle.low):Number(candle.high);if(!finite(anchor))continue;
-      const candleY=priceToY(anchor),markerY=clamp(candleY+(direction>0?11:-11),pricePlot.y+9,pricePlot.y+pricePlot.h-9),size=5;
+      const executable=isExecutableSignal(signal)&&finite(signal?.price),x=indexToX(absolute-start),size=5;
+      let markerY,label;
+      if(executable){
+        const exactPrice=Number(signal.price);markerY=clamp(priceToY(exactPrice),pricePlot.y+6,pricePlot.y+pricePlot.h-6);
+        const shown=typeof formatPrice==="function"?formatPrice(exactPrice):String(exactPrice);
+        label=`${direction>0?"BUY":"SELL"} @ ${shown}`;
+      }else{
+        const anchor=direction>0?Number(candle.low):Number(candle.high);if(!finite(anchor))continue;
+        const candleY=priceToY(anchor);markerY=clamp(candleY+(direction>0?11:-11),pricePlot.y+9,pricePlot.y+pricePlot.h-9);
+        label=`CROSS ${direction>0?"BUY":"SELL"}${signal.current?" STATE":""}`;
+      }
       ctx.beginPath();
-      if(direction>0){ctx.moveTo(x,markerY-size);ctx.lineTo(x-size,markerY+size);ctx.lineTo(x+size,markerY+size);}
-      else{ctx.moveTo(x,markerY+size);ctx.lineTo(x-size,markerY-size);ctx.lineTo(x+size,markerY-size);}
+      if(direction>0){ctx.moveTo(x,markerY);ctx.lineTo(x-size,markerY+size*2);ctx.lineTo(x+size,markerY+size*2);}
+      else{ctx.moveTo(x,markerY);ctx.lineTo(x-size,markerY-size*2);ctx.lineTo(x+size,markerY-size*2);}
       ctx.closePath();ctx.fillStyle=direction>0?"#48c78e":"#ef6b73";ctx.fill();
-      const labelY=clamp(markerY+(direction>0?12:-12),pricePlot.y+7,pricePlot.y+pricePlot.h-7);
-      ctx.fillText(`${direction>0?"BUY":"SELL"}${signal.current?" ACTIVE":""}`,x,labelY);
+      const labelY=clamp(markerY+(direction>0?15:-15),pricePlot.y+7,pricePlot.y+pricePlot.h-7);
+      ctx.fillText(label,x,labelY);
     }
     ctx.restore();
   }
@@ -51,8 +76,8 @@
 
     const indicatorSet=options.indicatorSet||{price:[],z:[],osc:[]},indicators=options.indicators||{},hasOscillator=Boolean(indicatorSet.osc?.length),leftIndent=Math.max(0,Number(options.leftIndent)||0),rightIndent=Math.max(0,Number(options.rightIndent)||0),rightAxisWidth=60+rightIndent,margin={top:20,right:rightAxisWidth,bottom:28,left:40+leftIndent},plot={x:margin.left,y:margin.top,w:Math.max(80,width-margin.left-margin.right),h:Math.max(80,height-margin.top-margin.bottom)},pricePlot=hasOscillator?{...plot,h:plot.h*.72}:plot,oscPlot=hasOscillator?{x:plot.x,y:plot.y+plot.h*.78,w:plot.w,h:plot.h*.22}:null,gridEndX=width-60;
     const candleLow=Math.min(...visibleCandles.map(c=>Number(c.low))),candleHigh=Math.max(...visibleCandles.map(c=>Number(c.high))),candleSpan=Math.max(candleHigh-candleLow,Math.abs(candleHigh)*1e-6),plausiblePrice=value=>finite(value)&&Number(value)>=Math.max(Number.EPSILON,candleLow-candleSpan*2)&&Number(value)<=candleHigh+candleSpan*2;
-    const priceValues=(indicatorSet.price||[]).flatMap(([key])=>(indicators[key]||[]).slice(visibleStart,visibleEnd).filter(plausiblePrice).map(Number)),live=finite(options.livePrice)?Number(options.livePrice):NaN;
-    let low=Math.min(candleLow,...priceValues,...(finite(live)?[live]:[])),high=Math.max(candleHigh,...priceValues,...(finite(live)?[live]:[]));
+    const priceValues=(indicatorSet.price||[]).flatMap(([key])=>(indicators[key]||[]).slice(visibleStart,visibleEnd).filter(plausiblePrice).map(Number)),live=finite(options.livePrice)?Number(options.livePrice):NaN,signalPrices=(Array.isArray(options.signals)?options.signals:[]).filter(signal=>isExecutableSignal(signal)&&finite(signal?.price)).map(signal=>Number(signal.price));
+    let low=Math.min(candleLow,...priceValues,...signalPrices,...(finite(live)?[live]:[])),high=Math.max(candleHigh,...priceValues,...signalPrices,...(finite(live)?[live]:[]));
     if(!finite(low)||!finite(high)){low=0;high=1;}const pad=(high-low)*.1||Math.max(Math.abs(high)*1e-6,.00001);low-=pad;high+=pad;
     const priceToY=price=>pricePlot.y+(high-price)/(high-low)*pricePlot.h,barWidth=pricePlot.w/Math.max(1,visibleCandles.length),indexToX=index=>pricePlot.x+(index+.5)*barWidth;
 
@@ -68,7 +93,7 @@
     visibleCandles.forEach((c,index)=>{const x=indexToX(index),rising=Number(c.close)>=Number(c.open),stroke=rising?"#48c78e":"#ef6b73";ctx.strokeStyle=stroke;ctx.fillStyle=stroke;ctx.beginPath();ctx.moveTo(x,priceToY(Number(c.high)));ctx.lineTo(x,priceToY(Number(c.low)));ctx.stroke();const bodyTop=priceToY(Math.max(Number(c.open),Number(c.close))),bodyBottom=priceToY(Math.min(Number(c.open),Number(c.close))),bodyWidth=Math.max(1,Math.min(11,barWidth*.6));ctx.fillRect(x-bodyWidth/2,bodyTop,bodyWidth,Math.max(1,bodyBottom-bodyTop));});
 
     for(const [key,,color] of indicatorSet.price||[])drawSeries(ctx,(indicators[key]||[]).map(value=>plausiblePrice(value)?value:null),visibleStart,visibleEnd,indexToX,priceToY,color,1.8);
-    drawSignals(ctx,options.signals,candles,visibleStart,visibleEnd,indexToX,priceToY,pricePlot);
+    drawSignals(ctx,options.signals,candles,visibleStart,visibleEnd,indexToX,priceToY,pricePlot,options.formatPrice);
 
     const zDefinitions=indicatorSet.z||[],zValues=zDefinitions.flatMap(([key])=>(indicators[key]||[]).slice(visibleStart,visibleEnd).filter(finite).map(Number));
     if(zValues.length){const zMax=Math.max(1,...zValues.map(value=>Math.abs(value)))*1.08,zToY=value=>pricePlot.y+(zMax-value)/(zMax*2)*pricePlot.h;ctx.font="9px ui-monospace,monospace";ctx.textAlign="right";for(let i=0;i<=4;i++){const value=zMax-i*zMax/2,y=zToY(value);ctx.strokeStyle=value===0?"#415267":"#1c2632";ctx.setLineDash(value===0?[4,4]:[]);ctx.beginPath();ctx.moveTo(pricePlot.x,y+.5);ctx.lineTo(gridEndX,y+.5);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#68aee8";ctx.fillText(value.toFixed(2),pricePlot.x-7,y);}ctx.textAlign="left";for(const [key,,color] of zDefinitions)drawSeries(ctx,indicators[key],visibleStart,visibleEnd,indexToX,zToY,color,1.8);}
@@ -83,5 +108,5 @@
     return{visibleStart,visibleEnd,visibleCandles,latestIndex:candles.length-1,pricePlot,plot,indexToX,priceToY};
   }
 
-  global.CTEUnifiedChart=Object.freeze({VERSION,MAX_VISIBLE_BARS,render});
+  global.CTEUnifiedChart=Object.freeze({VERSION,MAX_VISIBLE_BARS,EXECUTABLE_BASIS,render});
 })(globalThis);
