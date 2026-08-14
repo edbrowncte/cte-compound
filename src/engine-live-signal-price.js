@@ -12,7 +12,7 @@ import {
 } from "./account-authority.js";
 
 const API="https://api-fxtrade.oanda.com";
-export const LIVE_SIGNAL_PRICE_VERSION="LIVE_EXECUTABLE_SIGNAL_PRICE@1.0.0";
+export const LIVE_SIGNAL_PRICE_VERSION="LIVE_EXECUTABLE_SIGNAL_PRICE@2.0.0";
 const PRICE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION";
 
 function finiteNumber(value){const number=Number(value);return Number.isFinite(number)?number:null;}
@@ -24,26 +24,29 @@ async function callPricing(token,accountId,pair){
     const payload=await response.json().catch(()=>({}));
     if(!response.ok)throw Object.assign(new Error(payload.errorMessage||payload.errorCode||`OANDA HTTP ${response.status}`),{status:response.status,payload});
     return payload.prices?.[0]||null;
-  }catch(error){if(controller.signal.aborted)throw Object.assign(new Error("OANDA live signal quote timed out"),{status:504});throw error;}
+  }catch(error){if(controller.signal.aborted)throw Object.assign(new Error("OANDA live signal quote timed out"),{status:504,code:"LIVE_SIGNAL_QUOTE_TIMEOUT"});throw error;}
   finally{clearTimeout(timeout);}
 }
 
 export function executableSignalQuote(price={},direction=0){
   const side=Math.sign(Number(direction));
   const value=side>0?finiteNumber(price.closeoutAsk??price.asks?.[0]?.price):side<0?finiteNumber(price.closeoutBid??price.bids?.[0]?.price):null;
-  return value===null?null:{price:value,time:price.time||null,side:side>0?"ASK":"BID",basis:PRICE_BASIS};
+  return value===null?null:{price:value,time:price.time||new Date().toISOString(),side:side>0?"ASK":"BID",basis:PRICE_BASIS};
 }
+
+function quoteUnavailable(message,cause=null){return Object.assign(new Error(message),{status:Number(cause?.status)||503,code:"LIVE_SIGNAL_QUOTE_UNAVAILABLE",stage:"SIGNAL_PRICE_AUTHORITY",cause});}
 
 async function enrichCandidateSignalPrice(candidate,token,accountId){
   const pair=candidate?.pair,event=candidate?.event,direction=Number(event?.direction||0);
-  if(!pair||!event||!direction)return candidate;
-  const sourceCandleClose=finiteNumber(event.openPrice);
+  if(!pair||!event||!direction)throw quoteUnavailable("Executable signal quote cannot be registered without pair, event, and direction.");
+  const sourceCandleClose=finiteNumber(event.openPrice),sourceCrossingTime=event.startTime||event.crossingTime||null;
   try{
     const raw=await callPricing(token,accountId,pair),quote=executableSignalQuote(raw,direction);
-    if(!quote)return{...candidate,event:{...event,sourceCandleClose,signalPriceBasis:"COMPLETED_SOURCE_CANDLE_CLOSE_FALLBACK",signalQuoteError:"EXECUTABLE_SIDE_QUOTE_UNAVAILABLE"}};
-    return{...candidate,event:{...event,sourceCandleClose,openPrice:quote.price,signalPrice:quote.price,signalQuoteTime:quote.time,signalPriceSide:quote.side,signalPriceBasis:quote.basis}};
+    if(!quote)throw quoteUnavailable(`Executable ${direction>0?"ASK":"BID"} signal quote is unavailable for ${pair}.`);
+    return{...candidate,event:{...event,sourceCandleClose,sourceCrossingTime,openPrice:quote.price,signalPrice:quote.price,signalQuoteTime:quote.time,marketSignalTime:quote.time,signalPriceSide:quote.side,signalPriceBasis:quote.basis}};
   }catch(error){
-    return{...candidate,event:{...event,sourceCandleClose,signalPriceBasis:"COMPLETED_SOURCE_CANDLE_CLOSE_FALLBACK",signalQuoteError:String(error?.message||error)}};
+    if(error?.code==="LIVE_SIGNAL_QUOTE_UNAVAILABLE")throw error;
+    throw quoteUnavailable(`Executable ${direction>0?"ASK":"BID"} signal quote could not be captured for ${pair}: ${String(error?.message||error)}`,error);
   }
 }
 
@@ -72,20 +75,20 @@ export class HtlEngine extends SignalProvenanceEngine{
 
   decisionContext(candidate,config){
     const context=super.decisionContext(candidate,config),event=candidate?.event||{};
-    return{...context,signalPrice:finiteNumber(event.signalPrice??event.openPrice),sourceCandleClose:finiteNumber(event.sourceCandleClose),sourcePriceBasis:event.signalPriceBasis||context.sourcePriceBasis,signalQuoteTime:event.signalQuoteTime||null,signalPriceSide:event.signalPriceSide||null,liveSignalPriceVersion:LIVE_SIGNAL_PRICE_VERSION};
+    return{...context,signalPrice:finiteNumber(event.signalPrice),sourceCandleClose:finiteNumber(event.sourceCandleClose??event.openPrice),sourceCrossingTime:event.sourceCrossingTime||event.startTime||event.crossingTime||context.signalTime||null,sourcePriceBasis:event.signalPriceBasis||context.sourcePriceBasis,signalQuoteTime:event.signalQuoteTime||null,marketSignalTime:event.marketSignalTime||event.signalQuoteTime||null,signalPriceSide:event.signalPriceSide||null,liveSignalPriceVersion:LIVE_SIGNAL_PRICE_VERSION};
   }
 
   async persistSignalRegistration(candidate,config,state){
-    const base=buildSignalProvenance(candidate,config),event=candidate?.event||{},record=registerSignalProvenance(state,{...base,signalPrice:finiteNumber(event.signalPrice??event.openPrice),sourceCandleClose:finiteNumber(event.sourceCandleClose),sourcePriceBasis:event.signalPriceBasis||base.sourcePriceBasis,signalQuoteTime:event.signalQuoteTime||null,signalPriceSide:event.signalPriceSide||null,signalQuoteError:event.signalQuoteError||null,liveSignalPriceVersion:LIVE_SIGNAL_PRICE_VERSION});
+    const base=buildSignalProvenance(candidate,config),event=candidate?.event||{},signalPrice=finiteNumber(event.signalPrice),signalQuoteTime=event.signalQuoteTime||null,complete=Boolean(base.pair&&base.timeframe&&base.indicator&&base.direction&&base.signalTime&&signalPrice!==null&&signalQuoteTime&&base.sourceEventId&&base.executionEventId),record=registerSignalProvenance(state,{...base,signalPrice,sourceCandleClose:finiteNumber(event.sourceCandleClose??base.signalPrice),sourceCrossingTime:event.sourceCrossingTime||base.signalTime,sourcePriceBasis:event.signalPriceBasis||null,signalQuoteTime,marketSignalTime:event.marketSignalTime||signalQuoteTime,signalPriceSide:event.signalPriceSide||null,signalQuoteError:null,liveSignalPriceVersion:LIVE_SIGNAL_PRICE_VERSION,complete});
     await this.ctx.storage.put("state",state);
-    await this.write({type:"SIGNAL_PROVENANCE_REGISTERED",...record,message:record.complete?`${record.indicator} ${record.direction} executable-side signal price registered independently from OANDA fill price`:"Signal provenance registration is incomplete"},false);
+    await this.write({type:"SIGNAL_PROVENANCE_REGISTERED",...record,message:record.complete?`${record.indicator} ${record.direction} executable ${record.signalPriceSide} signal price registered at ${record.signalPrice}`:"Signal provenance registration is incomplete"},false);
     return record;
   }
 
   async execute(candidate,token,accountId,state){return super.execute(await enrichCandidateSignalPrice(candidate,token,accountId),token,accountId,state);}
   async executeIndicatorOnlyUnits(candidate,token,accountId,state){return super.executeIndicatorOnlyUnits(await enrichCandidateSignalPrice(candidate,token,accountId),token,accountId,state);}
 
-  async status(){const status=await super.status();return{...status,liveSignalPriceVersion:LIVE_SIGNAL_PRICE_VERSION,liveSignalPriceBasis:PRICE_BASIS,accountAuthorityVersion:status.accountAuthorityVersion||ACCOUNT_AUTHORITY_VERSION};}
+  async status(){const status=await super.status(),state=(await this.ctx.storage.get("state"))||{},recent=Array.isArray(state.executionSignalRegistry)?state.executionSignalRegistry.filter(record=>record?.liveSignalPriceVersion===LIVE_SIGNAL_PRICE_VERSION&&record?.sourcePriceBasis===PRICE_BASIS).slice(-96):[];return{...status,liveSignalPriceVersion:LIVE_SIGNAL_PRICE_VERSION,liveSignalPriceBasis:PRICE_BASIS,accountAuthorityVersion:status.accountAuthorityVersion||ACCOUNT_AUTHORITY_VERSION,recentExecutableSignals:recent};}
 }
 
-export const __liveSignalPriceTest=Object.freeze({LIVE_SIGNAL_PRICE_VERSION,PRICE_BASIS,executableSignalQuote,deduplicateLedgerPayload});
+export const __liveSignalPriceTest=Object.freeze({LIVE_SIGNAL_PRICE_VERSION,PRICE_BASIS,executableSignalQuote,deduplicateLedgerPayload,quoteUnavailable});
