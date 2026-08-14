@@ -1,7 +1,8 @@
 (function installRuntimeIntegrity(global){
   "use strict";
 
-  const VERSION="CTE_RUNTIME_INTEGRITY@1.2.0",REGRESSION_WINDOW=50,EXECUTABLE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION",ENGINE_SIGNAL_SYNC_VERSION="ENGINE_EXECUTABLE_SIGNAL_REGISTRY_SYNC@1.0.0",ENGINE_SIGNAL_WATCHDOG_MS=30000;
+  const VERSION="CTE_RUNTIME_INTEGRITY@1.3.0",REGRESSION_WINDOW=50,EXECUTABLE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION",ENGINE_SIGNAL_SYNC_VERSION="ENGINE_EXECUTABLE_SIGNAL_REGISTRY_SYNC@1.1.0",ENGINE_SIGNAL_WATCHDOG_MS=30000,CHART_STREAMING_VERSION="OANDA_SELECTED_CHART_FORMING_CANDLE@1.0.0";
+  const TF_MS=Object.freeze({S5:5000,S30:30000,M1:60000,M5:300000,M15:900000,M30:1800000,H1:3600000,H2:7200000,H4:14400000,D:86400000,W:604800000});
   const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
   const finite=value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value));
   let engineSignalSyncInFlight=null,engineSignalWatchdog=null;
@@ -63,6 +64,10 @@
     const prior=global.refreshOpenPositions;if(typeof prior!=="function"||prior.__cteExecutableSignalSync)return false;
     const wrapped=async function(...args){const result=await prior.apply(this,args);void refreshExecutableSignals("POSITION_TRUTH_REFRESH");return result;};Object.defineProperty(wrapped,"__cteExecutableSignalSync",{value:true});global.refreshOpenPositions=wrapped;try{refreshOpenPositions=wrapped;}catch{}return true;
   }
+  function installLedgerSignalHook(){
+    const prior=global.renderTradingLedger;if(typeof prior!=="function"||prior.__cteExecutableSignalSync)return false;
+    const wrapped=function(...args){const result=prior.apply(this,args);void refreshExecutableSignals("LEDGER_REFRESH");if(typeof global.drawChart==="function")global.drawChart();return result;};Object.defineProperty(wrapped,"__cteExecutableSignalSync",{value:true});global.renderTradingLedger=wrapped;try{renderTradingLedger=wrapped;}catch{}return true;
+  }
   function installSignalChartAuthority(){
     const chart=global.CTEUnifiedChart;if(!chart?.render||chart.__cteExecutableSignalAuthority)return false;
     const render=chart.render.bind(chart),wrapped=Object.freeze({...chart,__cteExecutableSignalAuthority:true,render:options=>{const context=chartContext(options?.canvas),live=context.pair&&context.timeframe?liveExecutableSignals(context.pair,context.timeframe):[];return render({...options,signals:live});}});
@@ -70,13 +75,28 @@
     queueMicrotask(()=>{try{if(typeof global.drawChart==="function")global.drawChart();}catch(error){console.error("Executable signal chart rerender failed:",error);}});
     return true;
   }
+
+  function streamingPrice(pair){const price=state?.positionPrices?.get?.(pair),bid=Number(price?.bid),ask=Number(price?.ask);if(!Number.isFinite(bid)||!Number.isFinite(ask))return null;return{mid:(bid+ask)/2,time:price?.time||new Date().toISOString(),bid,ask,priceBasis:price?.priceBasis||"LIVE_OANDA_BID_ASK"};}
+  function streamingBucketStart(lastCompletedTime,tickTime,timeframe){const step=TF_MS[String(timeframe||"").toUpperCase()],last=Date.parse(lastCompletedTime||""),tick=Date.parse(tickTime||"");if(!step||!Number.isFinite(last)||!Number.isFinite(tick)||tick<=last)return null;const intervals=Math.max(1,Math.floor((tick-last)/step));return last+(intervals*step);}
+  function streamingChartCandles(candles,pair,timeframe){
+    const data=Array.isArray(candles)?candles:[],last=data.at(-1),price=streamingPrice(pair);if(!last||!price||!finite(last.close))return data;
+    const bucket=streamingBucketStart(last.time,price.time,timeframe);if(bucket===null||bucket<=Date.parse(last.time||""))return data;
+    if(!(state.chartStreamingBars instanceof Map))state.chartStreamingBars=new Map();const key=`${pair}|${timeframe}|${bucket}`,prior=state.chartStreamingBars.get(key),open=prior?.open??Number(last.close),close=Number(price.mid),high=Math.max(Number(prior?.high??open),close),low=Math.min(Number(prior?.low??open),close),bar={time:new Date(bucket).toISOString(),open,high,low,close,volume:Number(prior?.volume||0),complete:false,streaming:true,bid:price.bid,ask:price.ask,priceBasis:"LIVE_OANDA_BID_ASK_MID",streamTime:price.time};state.chartStreamingBars.set(key,bar);
+    for(const storedKey of [...state.chartStreamingBars.keys()])if(storedKey.startsWith(`${pair}|${timeframe}|`)&&storedKey!==key)state.chartStreamingBars.delete(storedKey);
+    state.chartLiveCandle=bar;state.chartStreamingVersion=CHART_STREAMING_VERSION;state.chartStreamingAt=price.time;return[...data,bar];
+  }
+  function installStreamingChartAuthority(){
+    const prior=global.drawChart;if(typeof prior!=="function"||prior.__cteStreamingCandleAuthority)return false;
+    const wrapped=function(...args){const original=state.chartCandles,display=streamingChartCandles(original,state.selectedInstrument,state.selectedTimeframe);if(display===original)return prior.apply(this,args);state.chartDisplayCandles=display;state.chartCandles=display;try{return prior.apply(this,args);}finally{state.chartCandles=original;}};Object.defineProperty(wrapped,"__cteStreamingCandleAuthority",{value:true});global.drawChart=wrapped;try{drawChart=wrapped;}catch{}return true;
+  }
+
   function installExecutableSignalSync(){
-    void refreshExecutableSignals("BOOTSTRAP");installPositionSignalHook();if(typeof setTimeout==="function")setTimeout(installPositionSignalHook,0);
+    void refreshExecutableSignals("BOOTSTRAP");installPositionSignalHook();installLedgerSignalHook();if(typeof setTimeout==="function")setTimeout(()=>{installPositionSignalHook();installLedgerSignalHook();},0);
     if(typeof document!=="undefined"&&!engineSignalWatchdog)engineSignalWatchdog=setInterval(()=>{if(!document.hidden)void refreshExecutableSignals("WATCHDOG");},ENGINE_SIGNAL_WATCHDOG_MS);
     return true;
   }
 
-  function install(){installEvaluationGuard();installMentorGuard();installSignalChartAuthority();installExecutableSignalSync();if(Array.isArray(state?.evaluationTableData)&&state.evaluationTableData.length)repairEvaluationRows();}
-  global.CTERuntimeIntegrity=Object.freeze({VERSION,REGRESSION_WINDOW,EXECUTABLE_BASIS,ENGINE_SIGNAL_SYNC_VERSION,ENGINE_SIGNAL_WATCHDOG_MS,regressionPFromR2,repairEvaluationRows,mentorAlignment,chartContext,executableSignalFromRecord,liveLedgerSignals,liveEngineSignals,liveExecutableSignals,refreshExecutableSignals,installPositionSignalHook,installSignalChartAuthority,installExecutableSignalSync,install});
+  function install(){installEvaluationGuard();installMentorGuard();installSignalChartAuthority();installStreamingChartAuthority();installExecutableSignalSync();if(Array.isArray(state?.evaluationTableData)&&state.evaluationTableData.length)repairEvaluationRows();}
+  global.CTERuntimeIntegrity=Object.freeze({VERSION,REGRESSION_WINDOW,EXECUTABLE_BASIS,ENGINE_SIGNAL_SYNC_VERSION,ENGINE_SIGNAL_WATCHDOG_MS,CHART_STREAMING_VERSION,TF_MS,regressionPFromR2,repairEvaluationRows,mentorAlignment,chartContext,executableSignalFromRecord,liveLedgerSignals,liveEngineSignals,liveExecutableSignals,refreshExecutableSignals,installPositionSignalHook,installLedgerSignalHook,installSignalChartAuthority,streamingPrice,streamingBucketStart,streamingChartCandles,installStreamingChartAuthority,installExecutableSignalSync,install});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })(globalThis);
