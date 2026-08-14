@@ -4,7 +4,8 @@ import { candles, currentEvent } from "./horizon-platform-engine.js";
 import { STRATEGY_ENGINE_VERSION } from "./horizon-strategy-v1.js";
 import { REGISTERED_PERFORMANCE_VERSION } from "./horizon-registered-performance.js";
 
-const IO_DUAL_VERSION="INDICATOR_ONLY_DUAL@1.1.0";
+const IO_DUAL_VERSION="INDICATOR_ONLY_DUAL@1.2.0";
+const IO_STATE_HISTORY_BARS=5000;
 const TF_MS=Object.freeze({S5:5000,S30:30000,M1:60000,M5:300000,M15:900000,M30:1800000,H1:3600000,H4:14400000,D:86400000,W:604800000});
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
 
@@ -18,13 +19,14 @@ function normalizeTickets(value,state={}){
   return tickets;
 }
 function activeTickets(state){try{return normalizeTickets(state.indicatorOnlyTickets,state).filter(ticket=>ticket.enabled);}catch{return[];}}
+function indicatorOnlyStatus(state={}){const tickets=normalizeTickets(state.indicatorOnlyTickets,state),active=tickets.filter(ticket=>ticket.enabled),primary=active[0]||tickets[0];return{indicatorOnly:{...primary,enabled:active.length>0,ticketCount:active.length},indicatorOnlyTickets:tickets,indicatorOnlyTicketRuntime:state.indicatorOnlyTicketRuntime||{},indicatorOnlyDualVersion:IO_DUAL_VERSION,indicatorOnlyStateHistoryBars:IO_STATE_HISTORY_BARS};}
 function ticketCadenceMs(ticket){return __indicatorOnlyTest.indicatorOnlyCadenceMs(ticket.timeframe);}
 function ticketRuntime(state,slot){state.indicatorOnlyTicketRuntime=state.indicatorOnlyTicketRuntime||{};state.indicatorOnlyTicketRuntime[slot]=state.indicatorOnlyTicketRuntime[slot]||{engagedAt:new Date().toISOString(),lastEventId:null,lastExecutionEventId:null,lastDirection:0,lastCandle:null,lastSignalAt:null,nextDue:0};return state.indicatorOnlyTicketRuntime[slot];}
 function eventIsFresh(event){return Number(event?.bars)===1;}
 function eventObservedAt(event,timeframe){const start=Date.parse(event?.startTime||event?.crossingTime||"");return Number.isFinite(start)?new Date(start+(TF_MS[timeframe]||0)).toISOString():null;}
 function restoreTradingMode(runtime,state){if(runtime?.normalTradingMode)return runtime.normalTradingMode;if(runtime?.normalAutoRotateMode)return"AUTO_ROTATE";const pairs=Array.isArray(runtime?.normalSelectedPairs)?runtime.normalSelectedPairs:state.selectedPairs||[];return pairs.length===1?"MANUAL_1_PAIR":pairs.length?"MANUAL_MULTI":"ALL_PAIRS";}
 
-export const __indicatorOnlyDualTest=Object.freeze({IO_DUAL_VERSION,normalizeTicket,normalizeTickets,structuralFingerprint,eventIsFresh,eventObservedAt,ticketCadenceMs});
+export const __indicatorOnlyDualTest=Object.freeze({IO_DUAL_VERSION,IO_STATE_HISTORY_BARS,normalizeTicket,normalizeTickets,activeTickets,indicatorOnlyStatus,structuralFingerprint,eventIsFresh,eventObservedAt,ticketCadenceMs});
 
 export class HtlEngine extends IndicatorOnlyUnitsEngine{
   async fetch(request){
@@ -36,14 +38,19 @@ export class HtlEngine extends IndicatorOnlyUnitsEngine{
       if(activeTickets(state).length)return response({ok:false,error:"Indicator Only tickets are active. Disengage both IO tickets before changing normal automated pair selection.",indicatorOnlyTickets:normalizeTickets(state.indicatorOnlyTickets,state)},409);
     }
     if(path==="/control/indicatorOnly"&&request.method==="GET"){
-      const state=(await this.ctx.storage.get("state"))||{},tickets=normalizeTickets(state.indicatorOnlyTickets,state),active=tickets.filter(ticket=>ticket.enabled),primary=active[0]||tickets[0];
-      return response({indicatorOnly:{...primary,enabled:active.length>0,ticketCount:active.length},indicatorOnlyTickets:tickets,indicatorOnlyTicketRuntime:state.indicatorOnlyTicketRuntime||{}});
+      const state=(await this.ctx.storage.get("state"))||{},view=indicatorOnlyStatus(state);
+      return response({indicatorOnly:view.indicatorOnly,indicatorOnlyTickets:view.indicatorOnlyTickets,indicatorOnlyTicketRuntime:view.indicatorOnlyTicketRuntime,indicatorOnlyDualVersion:view.indicatorOnlyDualVersion,indicatorOnlyStateHistoryBars:view.indicatorOnlyStateHistoryBars});
     }
     if(path==="/control/status"&&request.method==="GET"){
-      const parent=await super.fetch(request),payload=await parent.clone().json().catch(()=>({})),state=(await this.ctx.storage.get("state"))||{},tickets=normalizeTickets(state.indicatorOnlyTickets,state),active=tickets.filter(ticket=>ticket.enabled),primary=active[0]||tickets[0];
-      return response({...payload,indicatorOnly:{...primary,enabled:active.length>0,ticketCount:active.length},indicatorOnlyTickets:tickets,indicatorOnlyTicketRuntime:state.indicatorOnlyTicketRuntime||{},indicatorOnlyDualVersion:IO_DUAL_VERSION},parent.status);
+      const parent=await super.fetch(request),payload=await parent.clone().json().catch(()=>({})),state=(await this.ctx.storage.get("state"))||{},view=indicatorOnlyStatus(state);
+      return response({...payload,...view},parent.status);
     }
     return super.fetch(request);
+  }
+
+  async status(){
+    const parent=await super.status(),state=(await this.ctx.storage.get("state"))||{};
+    return{...parent,...indicatorOnlyStatus(state)};
   }
 
   async configureIndicatorOnlyTickets(value){
@@ -60,7 +67,7 @@ export class HtlEngine extends IndicatorOnlyUnitsEngine{
       const runtime=state.indicatorOnlyDualRuntime||{};state.selectedPairs=Array.isArray(runtime.normalSelectedPairs)?runtime.normalSelectedPairs:state.selectedPairs;state.manualSelectMode=runtime.normalManualSelectMode!==undefined?runtime.normalManualSelectMode:state.manualSelectMode;state.autoRotateMode=runtime.normalAutoRotateMode!==undefined?runtime.normalAutoRotateMode:state.autoRotateMode;state.tradingMode=restoreTradingMode(runtime,state);state.indicatorOnlyDualRuntime={...runtime,disengagedAt:new Date().toISOString()};await this.ctx.storage.put("state",state);if(await this.ctx.storage.getAlarm()!==null)await this.ctx.storage.deleteAlarm();
     }
     await this.write({type:nextActive.length?"INDICATOR_ONLY_DUAL_ENGAGED":"INDICATOR_ONLY_DUAL_DISENGAGED",executionPolicy:IO_DUAL_VERSION,decisionMode:"INDICATOR_ONLY_DUAL",message:nextActive.length?`Indicator Only dual authority active · ${nextActive.map(ticket=>`${ticket.pair} ${ticket.timeframe} ${ticket.indicator} L${ticket.length} F${ticket.filter} U${ticket.units}`).join(" · ")}`:"Indicator Only dual authority disengaged · normal certified automation restored"},false);
-    return response({ok:true,indicatorOnly:{...(nextActive[0]||next[0]),enabled:nextActive.length>0,ticketCount:nextActive.length},indicatorOnlyTickets:next,tradingMode:state.tradingMode});
+    return response({ok:true,indicatorOnly:{...(nextActive[0]||next[0]),enabled:nextActive.length>0,ticketCount:nextActive.length},indicatorOnlyTickets:next,tradingMode:state.tradingMode,indicatorOnlyStateHistoryBars:IO_STATE_HISTORY_BARS});
   }
 
   async reconcile(requirements,token,accountId,state,config,positionsSnapshot=null,excludedPairs=new Set()){
@@ -71,11 +78,11 @@ export class HtlEngine extends IndicatorOnlyUnitsEngine{
   async tickTicket(state,ticket,token,accountId){
     const runtime=ticketRuntime(state,ticket.slot),now=Date.now();if(Number(runtime.nextDue)>now)return;
     runtime.nextDue=now+ticketCadenceMs(ticket);
-    const count=Math.max(650,Math.min(5000,ticket.length*3+100)),data=await candles(ticket.pair,token,ticket.timeframe,count),lastCandle=data.at(-1)?.time;state.lastScanAt=new Date().toISOString();
+    const data=await candles(ticket.pair,token,ticket.timeframe,IO_STATE_HISTORY_BARS),lastCandle=data.at(-1)?.time;state.lastScanAt=new Date().toISOString();runtime.historyBars=data.length;runtime.historyTarget=IO_STATE_HISTORY_BARS;
     if(!lastCandle){state.lastNoOrderReason=`IO Ticket ${ticket.slot} · no completed ${ticket.timeframe} candle for ${ticket.pair}`;return;}
     const settings=__indicatorOnlyTest.indicatorOnlySettings(ticket),event=currentEvent(data,ticket.pair,ticket.timeframe,ticket.indicator,settings),positions=await this.loadPositions(token,accountId),position=positions.find(item=>item.instrument===ticket.pair),existing=__indicatorOnlyTest.positionDirection(position),observedAt=eventObservedAt(event,ticket.timeframe),priorEventId=runtime.lastEventId||null,engagedMs=Date.parse(runtime.engagedAt||""),observedMs=Date.parse(observedAt||"");
     state.openPositionsCount=positions.length;runtime.lastCandle=lastCandle;runtime.lastDirection=Number(event?.direction||0);runtime.lastSignal=event?.direction>0?"BUY":event?.direction<0?"SELL":null;runtime.units=ticket.units;runtime.eventStartTime=event?.startTime||null;runtime.eventObservedAt=observedAt;runtime.eventBars=Number(event?.bars)||null;
-    if(!event?.direction){state.lastNoOrderReason=`IO Ticket ${ticket.slot} · ${ticket.pair} ${ticket.timeframe} ${ticket.indicator} has no registered BUY/SELL state`;return;}
+    if(!event?.direction){state.lastNoOrderReason=`IO Ticket ${ticket.slot} · no registered ${ticket.indicator} crossing found in ${data.length} completed ${ticket.timeframe} bars; no order fabricated.`;return;}
     if(!priorEventId&&Number.isFinite(observedMs)&&Number.isFinite(engagedMs)&&observedMs<=engagedMs){runtime.lastEventId=event.id;runtime.baselinedAt=new Date(now).toISOString();state.lastNoOrderReason=`IO Ticket ${ticket.slot} initialized on existing ${ticket.pair} ${ticket.timeframe} ${ticket.indicator} state; no pre-engagement order submitted.`;await this.write({type:"INDICATOR_ONLY_INITIALIZED",executionPolicy:IO_DUAL_VERSION,pair:ticket.pair,timeframe:ticket.timeframe,strategy:ticket.indicator,indicatorOnlyTicket:ticket.slot,event:event.id,message:state.lastNoOrderReason},false);return;}
     if(priorEventId===event.id){state.lastNoOrderReason=`IO Ticket ${ticket.slot} HOLD · awaiting next ${ticket.pair} ${ticket.timeframe} ${ticket.indicator} crossing`;return;}
     runtime.lastEventId=event.id;runtime.lastSignalAt=new Date(now).toISOString();
