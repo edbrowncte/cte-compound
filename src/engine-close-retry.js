@@ -1,4 +1,5 @@
 import { HtlEngine as DualIndicatorOnlyEngine } from "./engine-indicator-only-dual.js";
+import { PAIRS } from "./horizon-platform-engine.js";
 
 const API="https://api-fxtrade.oanda.com";
 const CLOSE_RETRY_VERSION="OANDA_CLOSE_RETRY_GUARD@1.0.0";
@@ -6,6 +7,7 @@ const MAX_CLOSE_ATTEMPTS=5;
 const CLOSE_RETRY_DELAYS_MS=Object.freeze([60_000,120_000,300_000,900_000]);
 const CLOSE_CIRCUIT_COOLDOWN_MS=3_600_000;
 const RETRY_KEY_PREFIX="close-retry:";
+const OPTIMIZER_PENDING_CODE="OPTIMIZER_CONFIGURATION_PENDING";
 
 function closeFailureTransaction(payload={}){
   return payload.longOrderCancelTransaction||payload.shortOrderCancelTransaction||payload.longOrderRejectTransaction||payload.shortOrderRejectTransaction||null;
@@ -16,6 +18,10 @@ function closeFailureReason(payload={},status=0,fallback=null){
 }
 function closeIntentFingerprint(pair,existing,event,message){return JSON.stringify({pair,direction:existing>0?"LONG":"SHORT",event:event||null,message:String(message||"")});}
 function nextRetryDelayMs(attempt){return Number(attempt)>=MAX_CLOSE_ATTEMPTS?CLOSE_CIRCUIT_COOLDOWN_MS:CLOSE_RETRY_DELAYS_MS[Math.max(0,Math.min(CLOSE_RETRY_DELAYS_MS.length-1,Number(attempt)-1))];}
+function indicatorOnlyActive(state={}){return Boolean(state?.indicatorOnly?.enabled)||Boolean(Array.isArray(state?.indicatorOnlyTickets)&&state.indicatorOnlyTickets.some(ticket=>ticket?.enabled));}
+function inheritedIndicatorOnlyBackoff(state={}){const lastError=String(state?.lastError||""),reason=String(state?.lastNoOrderReason||"");return !indicatorOnlyActive(state)&&(/Indicator Only scheduled backoff/i.test(lastError)||/Indicator Only account backoff/i.test(reason));}
+function selectedExecutionPairs(state={}){const selected=Array.isArray(state?.selectedPairs)?state.selectedPairs.filter(pair=>PAIRS.includes(pair)):[];return selected.length?selected:PAIRS;}
+function missingOptimizedPairs(state,config,timeframe,optimizer={}){if(config?.configurationSource!=="OPTIMIZED"||timeframe!==config?.timeframe)return[];return selectedExecutionPairs(state).filter(pair=>!optimizer?.[`${pair}|${timeframe}`]?.settings);}
 
 async function callOandaClose(path,token,init={}){
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15_000);
@@ -29,9 +35,29 @@ async function callOandaClose(path,token,init={}){
   }finally{clearTimeout(timeout);}
 }
 
-export const __closeRetryTest=Object.freeze({CLOSE_RETRY_VERSION,MAX_CLOSE_ATTEMPTS,CLOSE_RETRY_DELAYS_MS,CLOSE_CIRCUIT_COOLDOWN_MS,closeFailureTransaction,closeFailureReason,closeIntentFingerprint,nextRetryDelayMs});
+export const __closeRetryTest=Object.freeze({CLOSE_RETRY_VERSION,MAX_CLOSE_ATTEMPTS,CLOSE_RETRY_DELAYS_MS,CLOSE_CIRCUIT_COOLDOWN_MS,OPTIMIZER_PENDING_CODE,closeFailureTransaction,closeFailureReason,closeIntentFingerprint,nextRetryDelayMs,indicatorOnlyActive,inheritedIndicatorOnlyBackoff,selectedExecutionPairs,missingOptimizedPairs});
 
 export class HtlEngine extends DualIndicatorOnlyEngine{
+  async tick(){
+    const state=(await this.ctx.storage.get("state"))||{};
+    if(inheritedIndicatorOnlyBackoff(state)){
+      delete state.accountResolveError;delete state.backoffUntil;delete state.lastBackoffLogged;state.lastError=null;
+      if(/Indicator Only account backoff/i.test(String(state.lastNoOrderReason||"")))state.lastNoOrderReason="Indicator Only account backoff cleared · normal certified engine restored";
+      await this.ctx.storage.put("state",state);
+      await this.write({type:"ENGINE_STATE_RECOVERY",executionPolicy:OPTIMIZER_PENDING_CODE,message:"Cleared inherited Indicator Only account backoff before normal certified engine tick"},false);
+    }
+    return super.tick();
+  }
+
+  async scan(token,config,timeframe=config.timeframe,optimizer={}){
+    const state=(await this.ctx.storage.get("state"))||{},missing=missingOptimizedPairs(state,config,timeframe,optimizer);
+    if(missing.length){
+      const error=new Error(`Optimizer v8 configuration pending for ${missing.length} selected ${timeframe} pair${missing.length===1?"":"s"}: ${missing.join(", ")}`);
+      error.code=OPTIMIZER_PENDING_CODE;error.status=503;error.retryable=true;throw error;
+    }
+    return super.scan(token,config,timeframe,optimizer);
+  }
+
   async closePosition(pair,existing,longUnits,shortUnits,token,accountId,event,message,context={}){
     const retryKey=`${RETRY_KEY_PREFIX}${pair}`,fingerprint=closeIntentFingerprint(pair,existing,event,message),now=Date.now();
     let retry=(await this.ctx.storage.get(retryKey))||null;
