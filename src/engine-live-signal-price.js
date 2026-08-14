@@ -16,7 +16,7 @@ import {
 } from "./account-authority.js";
 
 const API="https://api-fxtrade.oanda.com";
-export const LIVE_SIGNAL_PRICE_VERSION="LIVE_EXECUTABLE_SIGNAL_PRICE@2.1.0";
+export const LIVE_SIGNAL_PRICE_VERSION="LIVE_EXECUTABLE_SIGNAL_PRICE@2.1.1";
 export const AUTOMATIC_SIGNAL_EXECUTION_VERSION="IMMEDIATE_ONE_ATTEMPT_SIGNAL_EXECUTION@1.0.0";
 const PRICE_BASIS="LIVE_OANDA_EXECUTABLE_SIDE_QUOTE_AT_REGISTRATION";
 const IO_MARKET_SCAN_MAX_MS=60_000;
@@ -47,8 +47,9 @@ async function callPricing(token,accountId,pair){
 }
 
 export function executableSignalQuote(price={},direction=0){
+  if(price?.tradeable===false)return null;
   const side=Math.sign(Number(direction));
-  const value=side>0?finiteNumber(price.asks?.[0]?.price??price.closeoutAsk):side<0?finiteNumber(price.bids?.[0]?.price??price.closeoutBid):null;
+  const value=side>0?finiteNumber(price.asks?.[0]?.price):side<0?finiteNumber(price.bids?.[0]?.price):null;
   return value===null?null:{price:value,time:price.time||new Date().toISOString(),side:side>0?"ASK":"BID",basis:PRICE_BASIS};
 }
 
@@ -61,7 +62,7 @@ async function enrichCandidateSignalPrice(candidate,token,accountId){
   const sourceCandleClose=finiteNumber(event.openPrice),sourceCrossingTime=event.startTime||event.crossingTime||null;
   try{
     const raw=await callPricing(token,accountId,pair),quote=executableSignalQuote(raw,direction);
-    if(!quote)throw quoteUnavailable(`Executable ${direction>0?"ASK":"BID"} signal quote is unavailable for ${pair}.`);
+    if(!quote)throw quoteUnavailable(`Executable tradeable ${direction>0?"ASK":"BID"} signal quote is unavailable for ${pair}.`);
     return{...candidate,event:{...event,sourceCandleClose,sourceCrossingTime,openPrice:quote.price,signalPrice:quote.price,signalQuoteTime:quote.time,marketSignalTime:quote.time,signalPriceSide:quote.side,signalPriceBasis:quote.basis}};
   }catch(error){
     if(error?.code==="LIVE_SIGNAL_QUOTE_UNAVAILABLE")throw error;
@@ -133,7 +134,9 @@ export class HtlEngine extends SignalProvenanceEngine{
     if(!priorEventId&&Number.isFinite(observedMs)&&Number.isFinite(engagedMs)&&observedMs<=engagedMs){runtime.lastEventId=event.id;runtime.baselinedAt=new Date(now).toISOString();state.lastNoOrderReason=`IO Ticket ${ticket.slot} initialized on existing ${ticket.pair} ${ticket.timeframe} ${ticket.indicator} state; no pre-engagement order submitted.`;await this.write({type:"INDICATOR_ONLY_INITIALIZED",executionPolicy:"INDICATOR_ONLY_DUAL@1.1.0",pair:ticket.pair,timeframe:ticket.timeframe,strategy:ticket.indicator,indicatorOnlyTicket:ticket.slot,event:event.id,message:state.lastNoOrderReason},false);return;}
     if(priorEventId===event.id){state.lastNoOrderReason=`IO Ticket ${ticket.slot} HOLD · awaiting next ${ticket.pair} ${ticket.timeframe} ${ticket.indicator} crossing`;return;}
     runtime.lastEventId=event.id;runtime.lastSignalAt=new Date(now).toISOString();
-    const executionEventId=`IO${ticket.slot}:${runtime.engagedAt||"session"}:${event.id}`,candidate={pair:ticket.pair,event:{...event,id:executionEventId},configuration:{primary:{length:ticket.length,filter:ticket.filter,score:null,trades:null,net:null,maxDrawdown:null,winRate:null},settings,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION},IO:{...ticket,version:"INDICATOR_ONLY_DUAL@1.1.0",ticket:ticket.slot}},attempt=beginSignalAttempt(state,candidate,"INDICATOR_ONLY");await this.ctx.storage.put("state",state);
+    const executionEventId=`IO${ticket.slot}:${runtime.engagedAt||"session"}:${event.id}`,candidate={pair:ticket.pair,event:{...event,id:executionEventId,sourceEventId:event.id},configuration:{primary:{length:ticket.length,filter:ticket.filter,score:null,trades:null,net:null,maxDrawdown:null,winRate:null},settings,strategyEngineVersion:STRATEGY_ENGINE_VERSION,performanceVersion:REGISTERED_PERFORMANCE_VERSION},IO:{...ticket,version:"INDICATOR_ONLY_DUAL@1.1.0",ticket:ticket.slot}},priorAttempt=priorSignalAttempt(state,executionEventId);
+    if(priorAttempt){state.lastNoOrderReason=`IO Ticket ${ticket.slot} signal ${executionEventId} was already attempted at ${priorAttempt.attemptedAt||"an earlier time"}; automatic replay is prohibited.`;await this.ctx.storage.put("state",state);return;}
+    const attempt=beginSignalAttempt(state,candidate,"INDICATOR_ONLY");await this.ctx.storage.put("state",state);
     let pricedCandidate;
     try{
       pricedCandidate=await enrichCandidateSignalPrice(candidate,token,accountId);if(attempt){attempt.signalPrice=pricedCandidate.event.signalPrice;attempt.signalQuoteTime=pricedCandidate.event.signalQuoteTime;attempt.signalPriceSide=pricedCandidate.event.signalPriceSide;}await this.persistSignalRegistration(pricedCandidate,{},state);

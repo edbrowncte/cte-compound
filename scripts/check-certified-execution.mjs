@@ -35,7 +35,8 @@ if(ioUnitsExport||ioDualExport||closeRetryExport||signalProvenanceExport||liveSi
 if(ioDualExport||closeRetryExport||signalProvenanceExport||liveSignalPriceExport){
   if(!/import \{ HtlEngine as IndicatorOnlyUnitsEngine/.test(indicatorOnlyDual))throw new Error("Dual IO wrapper must import the certified IO units wrapper");
   if(!/class HtlEngine extends IndicatorOnlyUnitsEngine/.test(indicatorOnlyDual))throw new Error("Dual IO Worker must extend the IO units wrapper");
-  if(!/if\(!eventIsFresh\(event\)\)/.test(indicatorOnlyDual))throw new Error("Dual IO must reject stale directional state before execution");
+  if(!/no pre-engagement order submitted/.test(indicatorOnlyDual)||!/priorEventId===event\.id/.test(indicatorOnlyDual)||!/runtime\.lastEventId=event\.id/.test(indicatorOnlyDual))throw new Error("Dual IO must baseline pre-engagement state and key execution authority to a newly observed event identity");
+  if(/STALE_SIGNAL|INDICATOR_ONLY_STALE_SIGNAL/.test(indicatorOnlyDual))throw new Error("Dual IO must not model an immutable signal as stale");
   if(!/if\(activeTickets\(state\)\.length\)return;/.test(indicatorOnlyDual))throw new Error("Dual IO active state must suppress normal reconciliation");
 }
 if(closeRetryExport||signalProvenanceExport||liveSignalPriceExport){
@@ -57,6 +58,8 @@ if(liveSignalPriceExport){
   if(!/sourceCandleClose/.test(liveSignalPrice)||!/signalPriceSide/.test(liveSignalPrice))throw new Error("Live signal-price wrapper must retain source-candle close while identifying BID/ASK signal side");
   if(!/persistSignalRegistration/.test(liveSignalPrice)||!/SIGNAL_PROVENANCE_REGISTERED/.test(liveSignalPrice))throw new Error("Live signal price must remain inside durable signal-provenance registration before order submission");
   if(!/resolveIndicatorOnlyAccount/.test(liveSignalPrice)||!/resolveExactAccountAuthority/.test(liveSignalPrice))throw new Error("Terminal IO execution must use exact configured-account authority");
+  if(!/price\.asks\?\.\[0\]\?\.price/.test(liveSignalPrice)||!/price\.bids\?\.\[0\]\?\.price/.test(liveSignalPrice)||/price\.asks\?\.\[0\]\?\.price\?\?price\.closeoutAsk|price\.bids\?\.\[0\]\?\.price\?\?price\.closeoutBid/.test(liveSignalPrice))throw new Error("Automatic signal price must require the live OANDA ask/bid bucket without closeout-price substitution");
+  if(!/IMMEDIATE_ONE_ATTEMPT_SIGNAL_EXECUTION/.test(liveSignalPrice)||!/priorSignalAttempt\(state,executionEventId\)/.test(liveSignalPrice)||!/automatic replay is prohibited/.test(liveSignalPrice))throw new Error("Automatic signal execution must be one-attempt and durably replay-protected");
 }
 
 const authorityWrapper=/engine-certified-execution-base\.js/.test(execution)&&/class HtlEngine extends CertifiedExecutionBase/.test(execution);
@@ -85,5 +88,5 @@ const required=[
 for(const[pattern,label]of required)if(!pattern.test(executionContract))throw new Error(`Missing ${label}`);
 if(!/SIX_INDEPENDENT_REGISTERED_HORIZON_STATE_MACHINES/.test(analytics))throw new Error("Certified six-strategy analytical contract is missing");
 if(/BLOCKED_PENDING_USER_DEPLOYMENT_APPROVAL/.test(executionContract))throw new Error("Private execution must not be deployment-blocked");
-const topology=liveSignalPriceExport?"live executable-side signal-price wrapper over exact cached OANDA account authority, durable signal provenance, execution-clock authority, bounded OANDA close retry, and dual exact-unit IO":signalProvenanceExport?"signal-provenance and execution-clock authority wrapper over bounded OANDA close retry and dual exact-unit IO":closeRetryExport?"bounded OANDA close retry wrapper over dual exact-unit IO":ioDualExport?"dual Indicator Only wrapper over exact-unit IO":ioUnitsExport?"Indicator Only units wrapper over exclusive IO":ioExport?"Indicator Only wrapper":"direct certified Worker";
+const topology=liveSignalPriceExport?"strict live ASK/BID immediate one-attempt signal-price wrapper over exact cached OANDA account authority, durable signal provenance, execution-clock authority, bounded OANDA close retry, and dual exact-unit IO":signalProvenanceExport?"signal-provenance and execution-clock authority wrapper over bounded OANDA close retry and dual exact-unit IO":closeRetryExport?"bounded OANDA close retry wrapper over dual exact-unit IO":ioDualExport?"dual Indicator Only wrapper over exact-unit IO":ioUnitsExport?"Indicator Only units wrapper over exclusive IO":ioExport?"Indicator Only wrapper":"direct certified Worker";
 console.log(`Certified analytical inheritance, AGE v2 Great Expectation reallocation, selected-reversal recovery, completed-candle boundaries, and ${topology} verified.`);
