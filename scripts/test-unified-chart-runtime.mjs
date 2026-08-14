@@ -10,7 +10,7 @@ const between=(start,end,label)=>{const from=html.indexOf(start),to=html.indexOf
 assert.doesNotMatch(html,/<script src="\/unified-chart\.js"><\/script>/,"static HTML retains its embedded fail-safe renderer");
 assert.match(html,/CTE_UNIFIED_EVALUATION_CHART@1\.0\.0/,"embedded fail-safe renderer must remain available");
 assert.match(html,/global\.CTEUnifiedChart=Object\.freeze\(\{VERSION,render\}\)/);
-assert.match(renderer,/CTE_UNIFIED_EVALUATION_CHART@1\.2\.0/);
+assert.match(renderer,/CTE_UNIFIED_EVALUATION_CHART@1\.2\.1/);
 assert.match(renderer,/const MAX_VISIBLE_BARS=5000/,"runtime renderer must expose the full 5,000-candle analytical viewport");
 assert.match(renderer,/maxVisibleBars=Math\.max\(30,Math\.min\(MAX_VISIBLE_BARS,candles\.length\)\)/,"runtime renderer maximum must be bounded by available candles, not 300");
 assert.doesNotMatch(renderer,/visibleBars=clamp\([^\n]*,30,300\)/,"runtime renderer must not retain the legacy 300-bar ceiling");
@@ -27,7 +27,8 @@ assert.match(renderer,/function drawSignals\(/);
 assert.match(renderer,/options\.signals/);
 assert.match(renderer,/\?"BUY":"SELL"/);
 assert.match(renderer,/BUY":"SELL"} @/);
-assert.match(renderer,/CROSS \$\{direction>0\?"BUY":"SELL"\}/);
+assert.doesNotMatch(renderer,/CROSS \$\{/);
+assert.match(renderer,/!isExecutableSignal\(signal\)\|\|!finite\(signal\?\.price\)\)continue/,"Unpriced analytical crossings must not render as signal arrows.");
 assert.match(renderer,/priceToY\(exactPrice\)/,"Executable BUY/SELL arrows must use the captured market price.");
 
 for(const id of ["chartStage","chartPanel","chart","oscillatorCanvas","weeklyCognitionCanvas"]){
@@ -49,7 +50,7 @@ assert.match(html,/count=\$\{MAX_ANALYTICAL_HISTORY\}/);
 const analytical=between("function drawChart()","// Canonical HTL series construction.","analytical draw");
 assert.match(analytical,/drawCapitalizationChartSurface\(/,"canonical chart must delegate to the unified renderer");
 assert.doesNotMatch(analytical,/getContext\(/,"canonical chart must not maintain a private price renderer");
-assert.match(analytical,/signals/,"canonical chart must provide causal crossing markers for later runtime reconciliation with executable signal provenance");
+assert.match(analytical,/signals/,"canonical chart may calculate analytical transitions, while runtime signal authority decides which priced executions render as arrows");
 assert.match(analytical,/unifiedIndicatorSet\(pair,timeframe,state\.chartCandles,length\)/);
 assert.match(html,/function indicatorSignalSeries\(candles,indicators,strategy,filter=0\)/);
 assert.match(analytical,/indicatorSignalSeries\(state\.chartCandles,indicators,strategy,filter\)/);
@@ -85,4 +86,4 @@ assert.match(renderer,/leftIndent/);
 assert.match(renderer,/priceLabel/);
 assert.match(renderer,/timeLabel/);
 assert.match(html,/function canonicalChartDefinition\(strategy\)/);
-console.log("Canonical chart runtime verified with a 5,000-bar renderer, analytical CROSS markers, executable bid/ask BUY/SELL price markers, attached crosshair labels, and synchronized analytical surfaces.");
+console.log("Canonical chart runtime verified with a 5,000-bar renderer, executable bid/ask BUY/SELL price markers only, attached crosshair labels, and synchronized analytical surfaces.");
