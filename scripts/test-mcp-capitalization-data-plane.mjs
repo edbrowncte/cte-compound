@@ -3,8 +3,8 @@ import fs from "node:fs";
 import {CAPITALIZATION_COMPLETED_BARS,CAPITALIZATION_REQUEST_BARS,COMPOUND_CAPITALIZATION_VERSION,buildCapitalizationEvaluationRow} from "../src/compound-capitalization.js";
 import {MAS_IM_TIMEFRAMES,timeframeHierarchy} from "../src/mas-im-calculator.js";
 
-assert.equal(CAPITALIZATION_COMPLETED_BARS,320);
-assert.equal(CAPITALIZATION_REQUEST_BARS,322);
+assert.equal(CAPITALIZATION_COMPLETED_BARS,600);
+assert.equal(CAPITALIZATION_REQUEST_BARS,602);
 assert.match(COMPOUND_CAPITALIZATION_VERSION,/MCP_CAPITALIZATION/);
 assert.deepEqual(timeframeHierarchy("H1"),["H1","H2","H4","D","W"]);
 
