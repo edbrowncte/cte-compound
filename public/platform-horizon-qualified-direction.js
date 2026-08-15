@@ -2,7 +2,32 @@
   "use strict";
   const strategies=root.CTE_HORIZON_STRATEGIES;
   if(!strategies)return;
-  root.causalDirection=function(indicators,index,strategy,filter=0){return strategies.directionAt(indicators,index,strategy,filter);};
+  const finite=value=>Number.isFinite(value);
+  const relation=(left,right,index,filter=0)=>{
+    const a=left?.[index],b=right?.[index],threshold=Math.max(0,Number(filter)||0);
+    return finite(a)&&finite(b)?a-b>threshold?1:a-b<-threshold?-1:0:0;
+  };
+  function chartDirection(indicators,index,strategy="ASSET",filter=0){
+    if(strategy==="ASSET")return relation(indicators?.asset,indicators?.inverse,index,filter);
+    if(strategy==="DARE")return relation(indicators?.assetMean||indicators?.meanAsset,indicators?.assetMeanInverse||indicators?.meanInverse,index,filter);
+    if(strategy==="DARE_N")return relation(indicators?.dareNAsset,indicators?.dareNInverse,index,filter);
+    if(strategy==="NAI")return relation(indicators?.naiAsset,indicators?.naiInverse,index,filter);
+    if(strategy==="APEX"){
+      const z=indicators?.zup?.[index],p=indicators?.puz?.[index],threshold=Math.max(0,Number(filter)||0);
+      return finite(z)&&finite(p)?z<=-threshold&&p>=threshold?1:z>=threshold&&p<=-threshold?-1:0:0;
+    }
+    if(strategy==="COMBO"){
+      const dare=chartDirection(indicators,index,"DARE",filter),nai=chartDirection(indicators,index,"NAI",filter);
+      return dare&&dare===nai?dare:0;
+    }
+    return 0;
+  }
+  function hasCanonicalQualification(indicators){
+    return Array.isArray(indicators?.asset)&&Array.isArray(indicators?.inverse)&&Array.isArray(indicators?.horizon?.crossings);
+  }
+  root.causalDirection=function(indicators,index,strategy,filter=0){
+    return hasCanonicalQualification(indicators)?strategies.directionAt(indicators,index,strategy,filter):chartDirection(indicators,index,strategy,filter);
+  };
   try{causalDirection=root.causalDirection;}catch{}
   const fields=root.CTE_HORIZON_PLATFORM?.FORENSIC_FIELDS;
   if(Array.isArray(fields)&&!fields.some(([,key])=>key==="qualificationVersion")){const index=Math.max(0,fields.findIndex(([,key])=>key==="calculationVersion")+1);fields.splice(index,0,["Qualification Version","qualificationVersion"]);}
@@ -26,6 +51,7 @@
   }
 
   const augment=()=>{const document=root.document;if(!document)return;const grid=document.getElementById("platformDiagnosticGrid");if(grid&&!grid.querySelector('[data-qualification-version]')){const card=document.createElement("div");card.className="diagnostic-card good";card.dataset.qualificationVersion=strategies.VERSION;card.innerHTML=`<span>Strategy qualification</span><strong>${strategies.VERSION} · one raw crossing clock</strong>`;grid.append(card);}reconcileExactAccountDiagnostic();};
+  root.CTEQualifiedDirection=Object.freeze({chartDirection,hasCanonicalQualification});
   root.CTEExactAccountDiagnostic={reconcile:reconcileExactAccountDiagnostic};
   augment();
   const document=root.document,Observer=root.MutationObserver;
