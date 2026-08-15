@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const ownership=fs.readFileSync(new URL("../public/chart-indicator-ownership.js",import.meta.url),"utf8");
+const qualifiedDirection=fs.readFileSync(new URL("../public/platform-horizon-qualified-direction.js",import.meta.url),"utf8");
 const worker=fs.readFileSync(new URL("../src/worker.js",import.meta.url),"utf8");
 
 assert.match(ownership,/CTE_CHART_INDICATOR_OWNERSHIP@1\.1\.0/);
@@ -38,6 +39,10 @@ assert.match(ownership,/applyChartDataset=function\(instrument,timeframe,candles
 assert.match(ownership,/replaceZoom\("zoomIn",\.8\);replaceZoom\("zoomOut",1\.25\)/,"zoom controls must operate across the expanded maximum-history viewport");
 assert.match(ownership,/stopImmediatePropagation\(\).*maximumVisibleBars/s,"wheel zoom must replace the legacy 300-bar cap");
 assert.match(ownership,/selected indicator exclusively owns its overlay and BUY\/SELL signals/,"visible chart copy must state the ownership contract");
+assert.match(qualifiedDirection,/function chartDirection\(indicators,index,strategy="ASSET",filter=0\)/,"chart-only indicator packages must retain a safe direction resolver");
+for(const strategy of ["ASSET","DARE","DARE_N","NAI","APEX","COMBO"])assert.match(qualifiedDirection,new RegExp(`strategy===["']${strategy}["']`),`${strategy} must participate in chart BUY/SELL direction resolution`);
+assert.match(qualifiedDirection,/hasCanonicalQualification\(indicators\)\?strategies\.directionAt\(indicators,index,strategy,filter\):chartDirection\(indicators,index,strategy,filter\)/,"complete canonical packages must retain qualified direction authority while chart-only packages use their displayed indicator crossings");
+assert.match(qualifiedDirection,/CTEQualifiedDirection=Object\.freeze\(\{chartDirection,hasCanonicalQualification\}\)/,"qualified chart direction behavior must be inspectable for runtime regression checks");
 assert.match(ownership,/function removeDuplicateChartMetadataRow\(\)/,"duplicate chart metadata strip must have an explicit removal path");
 for(const label of ["CURRENCY PAIR","TIMEFRAME","STRATEGY","LENGTH","FILTER"])assert.match(ownership,new RegExp(label),`duplicate metadata removal must identify ${label}`);
 assert.match(ownership,/node\.querySelector\("select,input,button,canvas"\)/,"interactive chart controls must never be removed with the duplicate strip");
