@@ -57,15 +57,17 @@
     return next;
   }
 
+  function applyPairVisibility(){
+    const pair=selectedPair(),label=pair===ALL_PAIRS?null:pairLabel(pair);
+    const evaluationBody=document.getElementById("evalTableBody");if(evaluationBody)for(const row of evaluationBody.querySelectorAll("tr")){const text=row.cells?.[0]?.textContent?.trim();row.hidden=Boolean(label&&text!==label);}
+    const rateBody=document.getElementById("rateFluctuationBody");if(rateBody)for(const row of rateBody.querySelectorAll("tr")){const text=row.cells?.[1]?.textContent?.trim();row.hidden=Boolean(label&&text!==label);}
+    return pair;
+  }
+
   function installRendererFilter(){
     if(rendererInstalled||typeof globalThis.renderEvaluationTable!=="function")return false;
     const prior=globalThis.renderEvaluationTable;if(prior.__cteCapitalizationPairFilter){rendererInstalled=true;return true;}
-    const wrapped=function(...args){
-      const original=state.evaluationTableData,pair=selectedPair();
-      if(pair===ALL_PAIRS||!Array.isArray(original))return prior.apply(this,args);
-      state.evaluationTableData=original.filter(row=>row?.pair===pair);
-      try{return prior.apply(this,args);}finally{state.evaluationTableData=original;}
-    };
+    const wrapped=function(...args){const result=prior.apply(this,args);applyPairVisibility();return result;};
     Object.defineProperty(wrapped,"__cteCapitalizationPairFilter",{value:true});globalThis.renderEvaluationTable=wrapped;try{renderEvaluationTable=wrapped;}catch{}rendererInstalled=true;return true;
   }
 
@@ -78,9 +80,9 @@
     if(!document.getElementById("rateFluctuationPairFilter")){const control=fieldSelect("rateFluctuationPairFilter","Currency Pair",pairOptions());rateControls.prepend(control.label);}
     if(!document.getElementById("rateFluctuationTimeframeFilter")){const control=fieldSelect("rateFluctuationTimeframeFilter","Timeframe",timeframeOptions());const pair=document.getElementById("rateFluctuationPairFilter")?.closest("label");pair?.insertAdjacentElement("afterend",control.label);}
     syncPairControls();syncTimeframeControls();
-    for(const id of ["evalTablePairFilter","rateFluctuationPairFilter"]){const select=document.getElementById(id);if(select&&!select.dataset.capitalizationBound){select.dataset.capitalizationBound="true";select.addEventListener("change",()=>{syncPairControls(select.value);if(typeof renderEvaluationTable==="function")renderEvaluationTable();});}}
+    for(const id of ["evalTablePairFilter","rateFluctuationPairFilter"]){const select=document.getElementById(id);if(select&&!select.dataset.capitalizationBound){select.dataset.capitalizationBound="true";select.addEventListener("change",()=>{syncPairControls(select.value);if(typeof renderEvaluationTable==="function")renderEvaluationTable();else applyPairVisibility();});}}
     for(const id of ["evalTableTfFilter","rateFluctuationTimeframeFilter"]){const select=document.getElementById(id);if(select&&!select.dataset.capitalizationBound){select.dataset.capitalizationBound="true";select.addEventListener("change",()=>{const timeframe=syncTimeframeControls(select.value);void loadSelected(timeframe,{force:true});});}}
-    controlsInstalled=true;installRendererFilter();return true;
+    controlsInstalled=true;installRendererFilter();applyPairVisibility();return true;
   }
 
   async function loadSelected(timeframe=selectedTimeframe(),{force=false}={}){
@@ -94,7 +96,7 @@
       const facilities=globalThis.CTEAnalyticalFacilities;
       if(typeof facilities?.hydrateRateFluctuationEventSupport==="function"){
         await facilities.hydrateRateFluctuationEventSupport(tf,{retryErrors:true});
-        if(typeof renderEvaluationTable==="function")renderEvaluationTable();
+        if(typeof renderEvaluationTable==="function")renderEvaluationTable();else applyPairVisibility();
       }
       return payload;
     }catch(error){
@@ -125,6 +127,6 @@
     scheduleReadyLoad(0);return true;
   }
 
-  globalThis.CTECompoundMcpCapitalization=Object.freeze({version:VERSION,ALL_PAIRS,prime,publish,loadSelected,installControls,syncPairControls,syncTimeframeControls,status:()=>({version:VERSION,loadedAt:loadedAt?new Date(loadedAt).toISOString():null,key,coverage:Number(snapshot?.coverage)||0,total:Number(snapshot?.total)||0,failures:Number(snapshot?.failureCount)||0,pair:selectedPair(),timeframe:selectedTimeframe(),controlsInstalled})});
+  globalThis.CTECompoundMcpCapitalization=Object.freeze({version:VERSION,ALL_PAIRS,prime,publish,loadSelected,installControls,applyPairVisibility,syncPairControls,syncTimeframeControls,status:()=>({version:VERSION,loadedAt:loadedAt?new Date(loadedAt).toISOString():null,key,coverage:Number(snapshot?.coverage)||0,total:Number(snapshot?.total)||0,failures:Number(snapshot?.failureCount)||0,pair:selectedPair(),timeframe:selectedTimeframe(),controlsInstalled})});
   if(typeof document!=="undefined"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else queueMicrotask(install);}
 })();
