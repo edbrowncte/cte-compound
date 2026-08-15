@@ -2,8 +2,8 @@ import { calculateMASIMPressure, timeframeHierarchy } from "./mas-im-calculator.
 import { evaluateStrategyWindow, normalizeStrategyId, normalizeStrategySettings } from "./horizon-strategy-v1.js";
 
 export const COMPOUND_CAPITALIZATION_VERSION="COMPOUND_MCP_CAPITALIZATION@1.0.0";
-export const CAPITALIZATION_COMPLETED_BARS=320;
-export const CAPITALIZATION_REQUEST_BARS=322;
+export const CAPITALIZATION_COMPLETED_BARS=600;
+export const CAPITALIZATION_REQUEST_BARS=602;
 
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
